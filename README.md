@@ -45,7 +45,7 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 |------|------|------|
 | LOCAL | ML Kit 离线 | 响应最快，需 Google Play Services |
 | CLOUD | Papago / 百度 / DeepL / Azure / Google | 多语种覆盖广，需 API Key |
-| AI | 7 家 LLM Provider | 上下文感知 + 智能润色 + 助手 |
+| AI |  LLM Provider | 上下文感知 + 智能润色 + 助手 |
 
 不支持语种时上层静默跳过，不弹错误。
 
