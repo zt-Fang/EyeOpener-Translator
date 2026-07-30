@@ -112,23 +112,6 @@ Translation Engine (ML Kit / Cloud / LLM)
 - VAD：Silero VAD（32ms / 512 samples 窗口，assets 内置）
 - 音频输入：麦克风 / AudioPlaybackCapture（Android 10+）
 
-## 悬浮字幕
-
-- 拖拽：非按钮区域
-- 缩放：右下角 24dp×24dp 热区
-- 初始尺寸：宽 × 60%，高 × 20%
-- 最小尺寸：宽 × 25%，高 × 20%
-- 显示模式：仅原文 / 仅译文 / 双语
-- 左侧边栏：蓝绿渐变（#4DD0E1 → #81C784）
-
-## 设置
-
-- **API 设置**：Provider / Key / Base URL / 模型 / 连接测试
-- **本地模型**：X-ASR / Nemotron 3.5 / BN Vosk / Vosk 各语种，下载/删除/进度
-- **个性化**：显示模式、字号、透明度、强调色、深色模式
-- **历史记录**：查看/收藏/导出/清除
-- **音频源**：麦克风 / 应用内声音
-
 ## 关键设计决策
 
 1. **ML Kit 翻译模型不由 App 管理** — Google Play Services 管理，未下载时跳过
@@ -172,9 +155,12 @@ Translation Engine (ML Kit / Cloud / LLM)
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — 端侧实时语音识别（Apache-2.0）
 - [Vosk](https://alphacephei.com/vosk/) — 多语种离线语音识别（Apache-2.0）
 - [Silero VAD](https://github.com/snakers4/silero-vad) — 语音活动检测（MIT）
-- [ML Kit](https://developers.google.com/ml-kit) — 端侧机器翻译
 - [X-ASR](https://github.com/Gilgamesh-J/X-ASR) — 中英混说 ASR（Apache-2.0）
 - [Nemotron 3.5 ASR](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b) — 多语种 ASR（OpenMDW-1.1）
+
+第三方 SDK：
+
+- [ML Kit](https://developers.google.com/ml-kit) — Google 端侧机器翻译（闭源，需 Google Play Services）
 
 ## 开源协议
 
