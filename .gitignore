@@ -49,3 +49,6 @@ code_review_report.md
 # docs/screenshots/ 保留：README 演示图公开
 # docs/screenshots/
 
+# ===== 非核心 / 附加代码（不公开到 GitHub）=====
+eyeopener-website/
+
