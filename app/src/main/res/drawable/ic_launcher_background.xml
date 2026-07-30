@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  启动器图标背景:蓝→紫→粉对角渐变,顶部白色柔光高光。
+  覆盖 108x108 全幅,launcher 会按 squircle mask 裁切。
+  配合 ic_launcher_foreground 构成 Adaptive Icon。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 蓝紫粉对角渐变(主色调) -->
+    <path android:pathData="M0,0 L108,0 L108,108 L0,108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item android:offset="0.0" android:color="#4F8AFF" />
+                <item android:offset="0.55" android:color="#8B7FD8" />
+                <item android:offset="1.0" android:color="#F0A6CA" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 顶部柔光高光(白色淡出) -->
+    <path android:pathData="M0,0 L108,0 L108,60 L0,60 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="0"
+                android:endX="54"
+                android:endY="60">
+                <item android:offset="0.0" android:color="#66FFFFFF" />
+                <item android:offset="1.0" android:color="#00FFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

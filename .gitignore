@@ -1,0 +1,41 @@
+# ===== Android / Gradle 常规忽略 =====
+*.iml
+.gradle/
+.kotlin/
+/build
+**/build/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# ===== 签名密钥（绝不可提交到公开仓库）=====
+keystore/
+*.jks
+*.keystore
+*.pfx
+*.p12
+
+# ===== 发布产物 / 安装包 =====
+*.apk
+*.aar
+*.aab
+*.ap_
+app/release/
+output-metadata.json
+
+# ===== 日志与缓存 =====
+*.log
+logs/
+
+# ===== 工具 / 工作区内部目录 =====
+.workbuddy/
+.uploads/
+
+# ===== IntelliJ / Android Studio（保留 .idea/.gitignore）=====
+.idea/
+!.idea/.gitignore
+
+# ===== 系统文件 =====
+.DS_Store
+

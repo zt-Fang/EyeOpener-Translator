@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  通用 eye 标志(24dp):白色椭圆形轮廓 + 透明圆环 + 白色中心。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 白色杏仁眼形(两端尖锐,中间挖空圆环) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M6.4,12 Q8.3,9.6 12,9.5 Q15.7,9.6 17.6,12 Q15.7,14.4 12,14.5 Q8.3,14.4 6.4,12 Z M12,12 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+
+    <!-- 瞳孔中心(白色实心) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,12 m-1,0 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0" />
+</vector>

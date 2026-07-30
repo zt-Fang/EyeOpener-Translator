@@ -1,0 +1,261 @@
+<resources>
+    <string name="app_name">EyeOpener</string>
+    <string name="app_tagline">Real-time Translation</string>
+
+    <!-- Bottom Navigation -->
+    <string name="tab_subtitle">Subtitle</string>
+    <string name="tab_assistant">Assistant</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Subtitle Screen - Overlay Toggle -->
+    <string name="overlay_toggle_title">Floating Subtitle</string>
+    <string name="overlay_toggle_hint">Show translation over any app</string>
+    <string name="overlay_status_running">Running</string>
+    <string name="overlay_status_stopped">Off</string>
+
+    <!-- Subtitle Screen - Translation Engine -->
+    <string name="engine_section_title">Translation Engine</string>
+    <string name="engine_local_title">Local</string>
+    <string name="engine_local_subtitle">Google offline, fastest</string>
+    <string name="engine_cloud_title">Cloud</string>
+    <string name="engine_cloud_subtitle">Papago/Baidu/DeepL/Azure</string>
+    <string name="engine_ai_title">AI</string>
+    <string name="engine_ai_subtitle">Context-aware, complex semantics</string>
+
+    <!-- Subtitle Screen - Language -->
+    <string name="language_source_label">Source</string>
+    <string name="language_target_label">Target</string>
+    <string name="language_swap_cd">Swap languages</string>
+    <string name="language_search_hint">Search</string>
+    <string name="language_tip_network">Local translation needs Google services to download models.</string>
+    <string name="language_tip_fast_mode">Recognition works better with short phrases.</string>
+    <string name="language_tip_audio_permission">In-app audio needs screen recording permission each time.</string>
+
+    <!-- Assistant Screen -->
+    <string name="assistant_title">AI Assistant</string>
+    <string name="assistant_clear">Clear</string>
+    <string name="assistant_input_hint">Say something…</string>
+    <string name="assistant_send_cd">Send</string>
+    <string name="assistant_voice_cd">Voice input</string>
+    <string name="assistant_stop_cd">Stop recording</string>
+    <string name="assistant_avatar_ai">AI</string>
+    <string name="assistant_avatar_user">Me</string>
+    <string name="assistant_read_receipt_cd">Read</string>
+    <string name="assistant_online_status">Online</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_screen_title">Settings</string>
+    <string name="settings_screen_subtitle">Personalize &amp; configure</string>
+    <string name="settings_row_interface_language">Language</string>
+    <string name="settings_row_local">Model Download</string>
+    <string name="settings_row_api">AI Translation</string>
+    <string name="settings_row_cloud">Cloud Translation</string>
+    <string name="settings_row_history">History</string>
+    <string name="settings_row_share">Share</string>
+    <string name="settings_row_feedback">Feedback</string>
+    <string name="settings_row_check_update">Check Update</string>
+
+    <!-- Cloud Translation Settings -->
+    <string name="cloud_title">Cloud Translation</string>
+    <string name="cloud_back_cd">Back</string>
+    <string name="cloud_tip">Refer to official docs for each provider\'s supported languages</string>
+    <string name="cloud_provider_label">Provider</string>
+    <string name="cloud_provider_format">Provider: %1$s</string>
+    <string name="cloud_provider_papago">Papago</string>
+    <string name="cloud_provider_baidu">Baidu Translate</string>
+    <string name="cloud_provider_deepl">DeepL</string>
+    <string name="cloud_provider_azure">Azure AI</string>
+    <string name="cloud_provider_google">Google Cloud</string>
+    <string name="cloud_api_key_label">API Key</string>
+    <string name="cloud_api_key_hint_papago">clientId:clientSecret</string>
+    <string name="cloud_api_key_hint_baidu">appid:secretKey</string>
+    <string name="cloud_api_key_hint_deepl">DeepL AuthKey (Free ends with :fx)</string>
+    <string name="cloud_api_key_hint_azure">key or region:key</string>
+    <string name="cloud_api_key_hint_google">Google Cloud Translation API Key</string>
+    <string name="cloud_api_key_already_configured">Configured (leave blank to clear)</string>
+    <string name="cloud_enter_key">Please enter API Key</string>
+    <string name="cloud_testing">Verifying…</string>
+    <string name="cloud_saved">Saved ✓</string>
+    <string name="cloud_verify_failed">Verify failed: %1$s</string>
+    <string name="cloud_save">Save</string>
+    <string name="cloud_clear_config">Clear Config</string>
+    <string name="cloud_cleared">Cleared</string>
+    <string name="cloud_config_tip">Switch provider then re-enter API Key. Papago: client id+secret; Baidu: appid+secret; DeepL: AuthKey only; Azure: optional region; Google: API Key only.</string>
+    <string name="cloud_not_configured_title">Cloud Translation Not Configured</string>
+    <string name="cloud_not_configured_msg">Cloud translation engine requires a provider API Key. Please configure it in Cloud Translation settings first.</string>
+    <string name="cloud_go_config">Configure</string>
+    <string name="cloud_cancel">Cancel</string>
+
+    <!-- Personalization -->
+    <string name="personalization_title">Personalization</string>
+    <string name="personalization_back_cd">Back</string>
+    <string name="personalization_entry">Personalization</string>
+    <string name="personalization_section_color">Accent Color</string>
+    <string name="personalization_section_transparency">Background</string>
+    <string name="personalization_section_font_size">Font Size</string>
+    <string name="personalization_font_size_small">Small</string>
+    <string name="personalization_font_size_large">Large</string>
+    <string name="personalization_section_display_mode">Display</string>
+    <string name="personalization_section_audio_source">Audio Source</string>
+    <string name="personalization_audio_source_mic">Microphone</string>
+    <string name="personalization_audio_source_mic_desc">Record external sound</string>
+    <string name="personalization_audio_source_internal">In-app Audio</string>
+    <string name="personalization_audio_source_internal_desc">Capture audio from other apps</string>
+    <string name="personalization_color_purple">Purple</string>
+    <string name="personalization_color_blue">Blue</string>
+    <string name="personalization_color_green">Green</string>
+    <string name="personalization_color_orange">Orange</string>
+    <string name="personalization_color_red">Red</string>
+    <string name="personalization_color_black">White</string>
+    <string name="personalization_color_selected_cd">Selected: %1$s</string>
+    <string name="personalization_percent_value">%1$d%%</string>
+
+    <string name="personalization_mode_source">Original</string>
+    <string name="personalization_mode_source_desc">Recognized text only</string>
+    <string name="personalization_mode_target">Translation</string>
+    <string name="personalization_mode_target_desc">Translated text only</string>
+    <string name="personalization_mode_dual">Bilingual</string>
+    <string name="personalization_mode_dual_desc">Both original &amp; translation</string>
+
+    <!-- Floating Subtitle -->
+    <string name="floating_translating">Translating…</string>
+    <string name="floating_btn_settings">Settings</string>
+    <string name="floating_btn_back">Back</string>
+    <string name="floating_btn_cancel">Cancel</string>
+
+    <!-- Model Download -->
+    <string name="local_model_action_download">Download</string>
+    <string name="local_model_action_delete">Delete</string>
+    <string name="local_model_huggingface_tip">Bengali and multilingual models require HuggingFace access. Please check your network.</string>
+    <string name="local_model_x_asr_name">Chinese-English</string>
+    <string name="local_model_nemotron_name">Multilingual (26)</string>
+    <string name="asr_model_not_downloaded_title">ASR Model Not Downloaded</string>
+    <string name="asr_model_not_downloaded_msg">The ASR model for the current language is not downloaded. Please go to the model download page.</string>
+    <string name="asr_model_go_download">Download</string>
+
+    <!-- History -->
+    <string name="history_title">History</string>
+    <string name="history_back_cd">Back</string>
+    <string name="history_empty">No history yet</string>
+    <string name="history_copy">Copy</string>
+    <string name="history_export">Export</string>
+    <string name="history_delete">Delete</string>
+    <string name="history_favorite">Favorite</string>
+    <string name="history_filter_all">All</string>
+    <string name="history_filter_favorite">Favorites</string>
+
+    <!-- AI Translation (formerly API Settings) -->
+    <string name="api_title">AI Translation</string>
+    <string name="api_back_cd">Back</string>
+    <string name="api_key_label">API Key</string>
+    <string name="api_key_hint">Enter your API key</string>
+    <string name="api_url_label">URL</string>
+    <string name="api_url_hint">https://api.example.com/v1/chat/completions</string>
+    <string name="api_model_label">Model</string>
+    <string name="api_model_hint">gpt-4 / claude-3-sonnet / deepseek-chat</string>
+    <string name="api_save">Save</string>
+    <string name="api_provider">Provider: %1$s</string>
+    <string name="api_enter_key">Please enter API Key</string>
+    <string name="api_enter_url">Please enter Base URL</string>
+    <string name="api_enter_model">Please enter model name</string>
+    <string name="api_testing">Verifying API connection…</string>
+    <string name="api_saved">Saved ✓</string>
+    <string name="api_verify_failed">Verification failed: %1$s</string>
+    <string name="api_config_tip">Config is saved locally. Uninstalling or clearing data will erase it. To reconfigure, overwrite and save, or clear below and refill.</string>
+    <string name="api_cleared">Cleared. Please re-enter.</string>
+    <string name="api_clear_config">Clear current config</string>
+    <string name="api_key_already_configured">API Key already configured for current provider, editing will overwrite</string>
+
+    <!-- Share -->
+    <string name="share_title">Share with friends</string>
+    <string name="share_intro">Try %1$s —</string>
+    <string name="share_desc">Real-time translation subtitles with multilingual speech recognition for effortless cross-language communication.</string>
+    <string name="share_github">GitHub download</string>
+    <string name="share_lanzou">Lanzou download</string>
+    <string name="share_link">Link: </string>
+    <string name="share_password">Password: </string>
+
+    <!-- Tips / Toast -->
+    <string name="tip_mic_permission_required">Microphone permission required</string>
+    <string name="tip_mic_permission_granted">Microphone permission granted</string>
+    <string name="tip_mic_permission_denied">Microphone permission denied. Voice input unavailable</string>
+    <string name="tip_mic_permission_please">Please grant microphone permission</string>
+    <string name="tip_screen_record_denied">Screen recording not authorized. In-app audio mode cannot start</string>
+    <string name="tip_screen_record_unsupported">In-app audio capture unsupported</string>
+
+    <!-- Common Dialogs -->
+    <string name="common_tips_title">Quick Tips</string>
+    <string name="api_not_configured_title">AI Translation Not Configured</string>
+    <string name="api_not_configured_msg">AI translation engine requires API Key and URL. Please configure in AI Translation first.</string>
+    <string name="api_go_config">Configure</string>
+    <string name="common_cancel">Cancel</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_get_started">Get Started</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_start_using">Start Using</string>
+    <string name="onboarding_skip">Skip</string>
+
+    <!-- Onboarding - Welcome Page -->
+    <string name="onboarding_welcome_title">Welcome to %1$s</string>
+    <string name="onboarding_welcome_subtitle">Real-time Voice Translation Subtitles</string>
+    <string name="onboarding_feature_subtitles_title">Real-time Subtitles</string>
+    <string name="onboarding_feature_subtitles_desc">Translate as you watch. Real-time speech-to-text and translation in any app</string>
+    <string name="onboarding_feature_engines_title">Multiple Engines</string>
+    <string name="onboarding_feature_engines_desc">Local (offline) / Cloud / AI translation, switch as needed</string>
+    <string name="onboarding_feature_langs_title">Multi-language Support</string>
+    <string name="onboarding_feature_langs_desc">Supports Chinese, English, Japanese, Korean and dozens more languages</string>
+
+    <!-- Onboarding - Language Selection -->
+    <string name="onboarding_lang_title">Language Selection</string>
+    <string name="onboarding_lang_subtitle">Choose your source and target languages</string>
+    <string name="onboarding_lang_source">Source (Recognition)</string>
+    <string name="onboarding_lang_target">Target (Translation)</string>
+    <string name="onboarding_lang_tip_title">Quick Tips for Translation Engines</string>
+    <string name="onboarding_lang_tip_local">Local: requires Google Play Services to download offline models on first use</string>
+    <string name="onboarding_lang_tip_cloud">Cloud: choose from Papago / Baidu / DeepL / Azure, API Key required</string>
+    <string name="onboarding_lang_tip_ai">AI: context-aware with smart polishing, configure LLM Key in AI Translation</string>
+    <string name="onboarding_lang_tip_asr">ASR models can be downloaded in Settings → Model Download</string>
+
+    <!-- Onboarding - Floating Subtitle -->
+    <string name="onboarding_overlay_title">Floating Subtitles</string>
+    <string name="onboarding_overlay_subtitle">One tap to start, translate as you watch</string>
+    <string name="onboarding_overlay_step1_title">Enable Floating Subtitles</string>
+    <string name="onboarding_overlay_step1_desc">Tap the big switch on the home screen. Grant overlay and mic permissions to start real-time subtitle translation</string>
+    <string name="onboarding_overlay_step2_title">Drag &amp; Resize</string>
+    <string name="onboarding_overlay_step2_desc">Drag the top bar to move, drag the bottom-right corner to resize the subtitle window</string>
+    <string name="onboarding_overlay_step3_title">Settings &amp; Personalization</string>
+    <string name="onboarding_overlay_step3_desc">Tap the settings icon on the top-right of the floating window to adjust color, font size, transparency and more</string>
+    <string name="onboarding_overlay_step4_title">Switch Engines</string>
+    <string name="onboarding_overlay_step4_desc">Local (fast offline) / Cloud (multilingual) / AI (smart polishing + context)</string>
+    <string name="onboarding_overlay_cta_title">Enjoy Real-time Translation</string>
+    <string name="onboarding_overlay_cta_desc">All settings can be adjusted anytime in Settings. You can also customize subtitle appearance in Personalization.</string>
+
+    <!-- Permission Rationale -->
+    <string name="permission_rationale_record_audio">Microphone permission is required for real-time speech recognition and subtitle generation</string>
+    <string name="permission_rationale_post_notifications">Notification permission is required to show subtitle status in the status bar (Android 13+)</string>
+    <string name="permission_rationale_generic">Authorization required</string>
+
+    <!-- App Update -->
+    <string name="update_no_notes">No release notes available</string>
+    <string name="update_already_latest">You\'re already on the latest version</string>
+    <string name="update_check_failed">Update check failed. Please check your network.</string>
+    <string name="update_notification_title">EyeOpener Update</string>
+    <string name="update_notification_desc">Downloading new version...</string>
+    <string name="update_downloading">Downloading %1$d%%</string>
+    <string name="update_tap_install">Tap to install</string>
+    <string name="update_download_failed_retry">Download failed, retry</string>
+    <string name="update_checking">Checking...</string>
+    <string name="update_latest">✓ Up to date</string>
+    <string name="update_check_error">Check failed</string>
+    <string name="update_new_version">New version %1$s</string>
+    <string name="update_dialog_title">New Version Available</string>
+    <string name="update_dialog_latest">Latest: %1$s</string>
+    <string name="update_dialog_current">Current: v%1$s</string>
+    <string name="update_dialog_notes_label">What\'s new:</string>
+    <string name="update_action_update_now">Update Now</string>
+
+    <!-- App Language -->
+    <string name="lang_zh">简体中文</string>
+    <string name="lang_en">English</string>
+</resources>

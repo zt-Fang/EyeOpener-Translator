@@ -1,0 +1,261 @@
+<resources>
+    <string name="app_name">EyeOpener</string>
+    <string name="app_tagline">实时翻译 · 看见世界</string>
+
+    <!-- 底部导航 -->
+    <string name="tab_subtitle">字幕</string>
+    <string name="tab_assistant">助手</string>
+    <string name="tab_settings">设置</string>
+
+    <!-- 字幕主屏 - 悬浮开关 -->
+    <string name="overlay_toggle_title">实时翻译字幕</string>
+    <string name="overlay_toggle_hint">开启后可在任意 App 上方显示翻译</string>
+    <string name="overlay_status_running">运行中</string>
+    <string name="overlay_status_stopped">已关闭</string>
+
+    <!-- 字幕主屏 - 翻译引擎 -->
+    <string name="engine_section_title">翻译引擎</string>
+    <string name="engine_local_title">本地翻译</string>
+    <string name="engine_local_subtitle">Google离线，响应最快</string>
+    <string name="engine_cloud_title">云端翻译</string>
+    <string name="engine_cloud_subtitle">在线翻译， 质量更好</string>
+    <string name="engine_ai_title">AI 翻译</string>
+    <string name="engine_ai_subtitle">上下文理解，复杂语义</string>
+
+    <!-- 字幕主屏 - 语言 -->
+    <string name="language_source_label">源语言</string>
+    <string name="language_target_label">目标语言</string>
+    <string name="language_swap_cd">交换源语言和目标语言</string>
+    <string name="language_search_hint">搜索语言</string>
+    <string name="language_tip_network">本地翻译首次需访问 Google 下载模型，请检查网络环境</string>
+    <string name="language_tip_fast_mode">语音识别在说话简短有停顿场景下效果更好</string>
+    <string name="language_tip_audio_permission">因为Android权限限制，应用内声音每次开启都需要重新授予屏幕录制权限</string>
+
+    <!-- 助手屏 -->
+    <string name="assistant_title">AI 助手</string>
+    <string name="assistant_clear">清空</string>
+    <string name="assistant_input_hint">说点什么…</string>
+    <string name="assistant_send_cd">发送</string>
+    <string name="assistant_voice_cd">语音输入</string>
+    <string name="assistant_stop_cd">停止识别</string>
+    <string name="assistant_avatar_ai">AI</string>
+    <string name="assistant_avatar_user">我</string>
+    <string name="assistant_read_receipt_cd">已读</string>
+    <string name="assistant_online_status">在线</string>
+
+    <!-- 设置屏 -->
+    <string name="settings_screen_title">设置</string>
+    <string name="settings_screen_subtitle">个性化与引擎配置</string>
+    <string name="settings_row_interface_language">界面语言</string>
+    <string name="settings_row_local">模型下载</string>
+    <string name="settings_row_api">AI 翻译</string>
+    <string name="settings_row_cloud">云端翻译</string>
+    <string name="settings_row_history">历史记录</string>
+    <string name="settings_row_share">分享给朋友</string>
+    <string name="settings_row_feedback">意见反馈</string>
+    <string name="settings_row_check_update">检查更新</string>
+
+    <!-- 云端翻译设置 -->
+    <string name="cloud_title">云端翻译</string>
+    <string name="cloud_back_cd">返回</string>
+    <string name="cloud_tip">各云端翻译支持语言以官方文档为准</string>
+    <string name="cloud_provider_label">服务提供商</string>
+    <string name="cloud_provider_format">服务商：%1$s</string>
+    <string name="cloud_provider_papago">Papago</string>
+    <string name="cloud_provider_baidu">百度翻译</string>
+    <string name="cloud_provider_deepl">DeepL</string>
+    <string name="cloud_provider_azure">Azure AI</string>
+    <string name="cloud_provider_google">Google Cloud</string>
+    <string name="cloud_api_key_label">API Key</string>
+    <string name="cloud_api_key_hint_papago">clientId:clientSecret</string>
+    <string name="cloud_api_key_hint_baidu">appid:secretKey</string>
+    <string name="cloud_api_key_hint_deepl">DeepL AuthKey（Free 以 :fx 结尾）</string>
+    <string name="cloud_api_key_hint_azure">key 或 region:key</string>
+    <string name="cloud_api_key_hint_google">Google Cloud Translation API Key</string>
+    <string name="cloud_api_key_already_configured">已配置（留空保存将清除）</string>
+    <string name="cloud_enter_key">请输入 API Key</string>
+    <string name="cloud_testing">验证中…</string>
+    <string name="cloud_saved">已保存 ✓</string>
+    <string name="cloud_verify_failed">验证失败：%1$s</string>
+    <string name="cloud_save">保存</string>
+    <string name="cloud_clear_config">清除配置</string>
+    <string name="cloud_cleared">已清除</string>
+    <string name="cloud_config_tip">切换服务商后需重新填写对应 API Key。Papago 需 client id+secret；百度需 appid+secret；DeepL 仅 AuthKey；Azure 可选 region；Google 仅 API Key。</string>
+    <string name="cloud_not_configured_title">云端翻译未配置</string>
+    <string name="cloud_not_configured_msg">使用云端翻译引擎需要先配置对应服务商的 API Key，请前往云端翻译设置完成配置。</string>
+    <string name="cloud_go_config">前往配置</string>
+    <string name="cloud_cancel">取消</string>
+
+    <!-- 个性化设置 -->
+    <string name="personalization_title">个性化设置</string>
+    <string name="personalization_back_cd">返回</string>
+    <string name="personalization_entry">个性化设置</string>
+    <string name="personalization_section_color">字体颜色</string>
+    <string name="personalization_section_transparency">背景透明度</string>
+    <string name="personalization_section_font_size">字体大小</string>
+    <string name="personalization_font_size_small">小</string>
+    <string name="personalization_font_size_large">大</string>
+    <string name="personalization_section_display_mode">结果显示</string>
+    <string name="personalization_section_audio_source">音频输入源</string>
+    <string name="personalization_audio_source_mic">麦克风声音</string>
+    <string name="personalization_audio_source_mic_desc">通过麦克风录制外部声音</string>
+    <string name="personalization_audio_source_internal">应用内声音</string>
+    <string name="personalization_audio_source_internal_desc">捕获手机内其他应用播放的音频（Android 10+）</string>
+    <string name="personalization_color_purple">紫色</string>
+    <string name="personalization_color_blue">蓝色</string>
+    <string name="personalization_color_green">绿色</string>
+    <string name="personalization_color_orange">橙色</string>
+    <string name="personalization_color_red">红色</string>
+    <string name="personalization_color_black">白色</string>
+    <string name="personalization_color_selected_cd">已选中:%1$s</string>
+    <string name="personalization_percent_value">%1$d%%</string>
+
+    <string name="personalization_mode_source">仅原文</string>
+    <string name="personalization_mode_source_desc">只显示识别到的原始文本</string>
+    <string name="personalization_mode_target">仅译文</string>
+    <string name="personalization_mode_target_desc">只显示翻译后的文本</string>
+    <string name="personalization_mode_dual">双语对照</string>
+    <string name="personalization_mode_dual_desc">原文与译文同时显示</string>
+
+    <!-- 悬浮字幕 -->
+    <string name="floating_translating">实时翻译中</string>
+    <string name="floating_btn_settings">设置</string>
+    <string name="floating_btn_back">返回</string>
+    <string name="floating_btn_cancel">取消</string>
+
+    <!-- 模型下载 -->
+    <string name="local_model_action_download">开始下载</string>
+    <string name="local_model_action_delete">删除</string>
+    <string name="local_model_huggingface_tip">孟加拉语和多语种模型需访问 HuggingFace 官网，请检查网络环境</string>
+    <string name="local_model_x_asr_name">中英文</string>
+    <string name="local_model_nemotron_name">多语种(26)</string>
+    <string name="asr_model_not_downloaded_title">语音识别模型未下载</string>
+    <string name="asr_model_not_downloaded_msg">当前语言的语音识别模型未下载，请前往模型下载界面下载。</string>
+    <string name="asr_model_go_download">下载</string>
+
+    <!-- 历史记录 -->
+    <string name="history_title">历史记录</string>
+    <string name="history_back_cd">返回</string>
+    <string name="history_empty">暂无历史记录</string>
+    <string name="history_copy">复制</string>
+    <string name="history_export">导出</string>
+    <string name="history_delete">删除</string>
+    <string name="history_favorite">收藏</string>
+    <string name="history_filter_all">全部</string>
+    <string name="history_filter_favorite">收藏</string>
+
+    <!-- API 设置 -->
+    <string name="api_title">API 设置</string>
+    <string name="api_back_cd">返回</string>
+    <string name="api_key_label">API Key</string>
+    <string name="api_key_hint">请输入 API 密钥</string>
+    <string name="api_url_label">URL</string>
+    <string name="api_url_hint">https://api.example.com/v1/chat/completions</string>
+    <string name="api_model_label">模型名称</string>
+    <string name="api_model_hint">gpt-4 / claude-3-sonnet / deepseek-chat</string>
+    <string name="api_save">保存</string>
+    <string name="api_provider">服务商：%1$s</string>
+    <string name="api_enter_key">请输入 API Key</string>
+    <string name="api_enter_url">请输入 Base URL</string>
+    <string name="api_enter_model">请输入模型名称</string>
+    <string name="api_testing">正在验证 API 连接…</string>
+    <string name="api_saved">已保存 ✓</string>
+    <string name="api_verify_failed">验证失败：%1$s</string>
+    <string name="api_config_tip">配置保存在本地，卸载或清除数据会丢失。需重新配置时，直接覆盖保存，或点击下方清空后重新填写。</string>
+    <string name="api_cleared">已清空，请重新输入。</string>
+    <string name="api_clear_config">清除当前配置</string>
+    <string name="api_key_already_configured">当前服务商 API Key 已配置，编辑将覆盖</string>
+
+    <!-- 分享 -->
+    <string name="share_title">分享给朋友</string>
+    <string name="share_intro">推荐你使用 %1$s ——</string>
+    <string name="share_desc">实时翻译字幕，支持多语种语音识别，轻松跨语言沟通。</string>
+    <string name="share_github">GitHub下载</string>
+    <string name="share_lanzou">蓝奏云下载</string>
+    <string name="share_link">链接：</string>
+    <string name="share_password">密码：</string>
+
+    <!-- 提示/Toast -->
+    <string name="tip_mic_permission_required">请先授予麦克风权限</string>
+    <string name="tip_mic_permission_granted">麦克风权限已开启</string>
+    <string name="tip_mic_permission_denied">麦克风权限被拒绝，无法使用语音输入</string>
+    <string name="tip_mic_permission_please">请先授予麦克风权限</string>
+    <string name="tip_screen_record_denied">未授权屏幕录制，无法开启应用内声音模式</string>
+    <string name="tip_screen_record_unsupported">系统不支持应用内声音捕获</string>
+
+    <!-- 通用弹窗 -->
+    <string name="common_tips_title">温馨提示</string>
+    <string name="api_not_configured_title">AI 翻译未配置</string>
+    <string name="api_not_configured_msg">使用 AI 翻译引擎需要先配置 API Key 和 URL，请前往 AI 翻译页面完成配置。</string>
+    <string name="api_go_config">前往配置</string>
+    <string name="common_cancel">取消</string>
+
+    <!-- 引导页 -->
+    <string name="onboarding_get_started">开始了解</string>
+    <string name="onboarding_next">下一步</string>
+    <string name="onboarding_start_using">开始使用</string>
+    <string name="onboarding_skip">跳过</string>
+
+    <!-- 引导页 - 欢迎页 -->
+    <string name="onboarding_welcome_title">欢迎使用 %1$s</string>
+    <string name="onboarding_welcome_subtitle">实时语音翻译字幕</string>
+    <string name="onboarding_feature_subtitles_title">实时翻译字幕</string>
+    <string name="onboarding_feature_subtitles_desc">边看边译，支持任意应用的语音实时转写与翻译</string>
+    <string name="onboarding_feature_engines_title">多引擎可选</string>
+    <string name="onboarding_feature_engines_desc">本地翻译（离线）/ 云端翻译 / AI 翻译，按需切换</string>
+    <string name="onboarding_feature_langs_title">多语言支持</string>
+    <string name="onboarding_feature_langs_desc">支持中文、英语、日语、韩语等几十种语言识别与翻译</string>
+
+    <!-- 引导页 - 语言选择 -->
+    <string name="onboarding_lang_title">语言选择</string>
+    <string name="onboarding_lang_subtitle">选择你要识别的语言和翻译目标</string>
+    <string name="onboarding_lang_source">源语言（识别）</string>
+    <string name="onboarding_lang_target">目标语言（翻译）</string>
+    <string name="onboarding_lang_tip_title">翻译引擎小提示</string>
+    <string name="onboarding_lang_tip_local">本地翻译：首次使用需 Google Play Services 下载离线模型</string>
+    <string name="onboarding_lang_tip_cloud">云端翻译：Papago / 百度 / DeepL / Azure 任选，需配置 API Key</string>
+    <string name="onboarding_lang_tip_ai">AI 翻译：上下文感知+智能润色，需在 AI 翻译中配置 LLM Key</string>
+    <string name="onboarding_lang_tip_asr">语音识别模型可在「设置 → 模型下载」按需下载</string>
+
+    <!-- 引导页 - 悬浮字幕 -->
+    <string name="onboarding_overlay_title">悬浮字幕</string>
+    <string name="onboarding_overlay_subtitle">一键开启，边看边译</string>
+    <string name="onboarding_overlay_step1_title">开启悬浮字幕</string>
+    <string name="onboarding_overlay_step1_desc">在首页点击大开关，授予悬浮窗和麦克风权限后即可开始实时字幕翻译</string>
+    <string name="onboarding_overlay_step2_title">拖拽与缩放</string>
+    <string name="onboarding_overlay_step2_desc">按住顶部横条拖动位置，按住右下角斜拉可调整字幕窗口大小</string>
+    <string name="onboarding_overlay_step3_title">设置与个性化</string>
+    <string name="onboarding_overlay_step3_desc">点击悬浮窗右上角设置图标，可调整颜色、字体大小、透明度等样式</string>
+    <string name="onboarding_overlay_step4_title">切换引擎</string>
+    <string name="onboarding_overlay_step4_desc">本地翻译（离线快）/ 云端翻译（多语种）/ AI 翻译（智能润色+上下文）</string>
+    <string name="onboarding_overlay_cta_title">享受实时翻译吧</string>
+    <string name="onboarding_overlay_cta_desc">所有设置随时可以在「设置」页面调整，也可以在「个性化」中定制字幕外观。</string>
+
+    <!-- 权限说明 -->
+    <string name="permission_rationale_record_audio">需要麦克风权限以实时识别语音并生成字幕</string>
+    <string name="permission_rationale_post_notifications">需要通知权限以在状态栏显示字幕运行状态（Android 13+ 必填）</string>
+    <string name="permission_rationale_generic">需要授权</string>
+
+    <!-- 检查更新 -->
+    <string name="update_no_notes">暂无更新说明</string>
+    <string name="update_already_latest">当前已是最新版本</string>
+    <string name="update_check_failed">检查更新失败，请检查网络</string>
+    <string name="update_notification_title">EyeOpener 更新</string>
+    <string name="update_notification_desc">正在下载新版本...</string>
+    <string name="update_downloading">下载中 %1$d%%</string>
+    <string name="update_tap_install">点击安装</string>
+    <string name="update_download_failed_retry">下载失败，重试</string>
+    <string name="update_checking">检查中...</string>
+    <string name="update_latest">✓ 当前最新</string>
+    <string name="update_check_error">检查失败</string>
+    <string name="update_new_version">新版本 %1$s</string>
+    <string name="update_dialog_title">发现新版本</string>
+    <string name="update_dialog_latest">最新版本：%1$s</string>
+    <string name="update_dialog_current">当前版本：v%1$s</string>
+    <string name="update_dialog_notes_label">更新内容：</string>
+    <string name="update_action_update_now">立即更新</string>
+
+    <!-- 界面语言 -->
+    <string name="lang_zh">简体中文</string>
+    <string name="lang_en">English</string>
+</resources>

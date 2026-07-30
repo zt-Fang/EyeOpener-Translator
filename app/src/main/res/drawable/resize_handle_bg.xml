@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 右下角缩放柄:灰白色实心方框 + 深灰双角指示,与玻璃态背景形成对比 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#B0D9DEE6" />
+            <corners
+                android:topLeftRadius="14dp"
+                android:topRightRadius="0dp"
+                android:bottomLeftRadius="0dp"
+                android:bottomRightRadius="14dp" />
+        </shape>
+    </item>
+    <item
+        android:gravity="bottom|end"
+        android:width="32dp"
+        android:height="32dp"
+        android:bottom="8dp"
+        android:right="8dp">
+        <vector android:viewportWidth="24" android:viewportHeight="24"
+            android:width="32dp" android:height="32dp">
+            <path
+                android:strokeColor="#607080"
+                android:strokeWidth="2"
+                android:fillColor="#00000000"
+                android:pathData="M20,20 L14,20 M20,14 L20,20" />
+            <path
+                android:strokeColor="#607080"
+                android:strokeWidth="2"
+                android:fillColor="#00000000"
+                android:pathData="M22,22 L10,22 M22,10 L22,22" />
+        </vector>
+    </item>
+</layer-list>

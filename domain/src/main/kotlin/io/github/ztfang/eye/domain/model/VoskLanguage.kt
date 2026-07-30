@@ -1,0 +1,299 @@
+package io.github.ztfang.eye.domain.model
+
+/**
+ * Vosk ASR 支持的语言枚举。
+ *
+ * 每个枚举值对应一个 Vosk small 模型：
+ * - [code] 用于模型目录名（filesDir/models/vosk/<code>/）和语言匹配
+ * - [modelName] 是 Vosk 官方模型名（zip 内顶层目录名）
+ * - [modelUrl] 是 alphacephei.com 的下载地址
+ * - [mlkitSupported] 标记是否同时被 ML Kit 翻译支持
+ *
+ * 切换语种时同一时刻只加载一个模型，先 release 旧的再加载新的。
+ */
+enum class VoskLanguage(
+    val code: String,
+    val displayName: String,
+    val modelName: String,
+    val modelUrl: String,
+    val sizeBytes: Long,
+    val mlkitSupported: Boolean,
+) {
+    CHINESE(
+        code = "zh",
+        displayName = "中文",
+        modelName = "vosk-model-small-cn-0.22",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip",
+        sizeBytes = 42 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    ENGLISH(
+        code = "en",
+        displayName = "English",
+        modelName = "vosk-model-small-en-us-0.15",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    ENGLISH_INDIA(
+        code = "en-in",
+        displayName = "English (India)",
+        modelName = "vosk-model-small-en-in-0.4",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-en-in-0.4.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    GERMAN(
+        code = "de",
+        displayName = "Deutsch",
+        modelName = "vosk-model-small-de-0.15",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-de-0.15.zip",
+        sizeBytes = 45 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    FRENCH(
+        code = "fr",
+        displayName = "Français",
+        modelName = "vosk-model-small-fr-0.22",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-fr-0.22.zip",
+        sizeBytes = 41 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    SPANISH(
+        code = "es",
+        displayName = "Español",
+        modelName = "vosk-model-small-es-0.42",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip",
+        sizeBytes = 39 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    PORTUGUESE(
+        code = "pt",
+        displayName = "Português",
+        modelName = "vosk-model-small-pt-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip",
+        sizeBytes = 38 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    RUSSIAN(
+        code = "ru",
+        displayName = "Русский",
+        modelName = "vosk-model-small-ru-0.22",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip",
+        sizeBytes = 45 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    TURKISH(
+        code = "tr",
+        displayName = "Türkçe",
+        modelName = "vosk-model-small-tr-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    VIETNAMESE(
+        code = "vi",
+        displayName = "Tiếng Việt",
+        modelName = "vosk-model-small-vn-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-vn-0.3.zip",
+        sizeBytes = 38 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    ITALIAN(
+        code = "it",
+        displayName = "Italiano",
+        modelName = "vosk-model-small-it-0.22",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip",
+        sizeBytes = 43 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    DUTCH(
+        code = "nl",
+        displayName = "Nederlands",
+        modelName = "vosk-model-small-nl-0.22",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-nl-0.22.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    CATALAN(
+        code = "ca",
+        displayName = "Català",
+        modelName = "vosk-model-small-ca-0.4",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ca-0.4.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    ARABIC(
+        code = "ar",
+        displayName = "العربية",
+        modelName = "vosk-model-small-ar-mgb2-0.4",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ar-mgb2-0.4.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    GREEK(
+        code = "el",
+        displayName = "Ελληνικά",
+        modelName = "vosk-model-small-el-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-el-0.3.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    PERSIAN(
+        code = "fa",
+        displayName = "فارسی",
+        modelName = "vosk-model-small-fa-0.5",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.5.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    FILIPINO(
+        code = "fil",
+        displayName = "Filipino",
+        modelName = "vosk-model-small-ph-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ph-0.3.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    UKRAINIAN(
+        code = "uk",
+        displayName = "Українська",
+        modelName = "vosk-model-small-uk-v3-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-uk-v3-0.3.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    KAZAKH(
+        code = "kk",
+        displayName = "Қазақша",
+        modelName = "vosk-model-small-kz-0.15",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-kz-0.15.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    SWEDISH(
+        code = "sv",
+        displayName = "Svenska",
+        modelName = "vosk-model-small-sv-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-sv-0.3.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    JAPANESE(
+        code = "ja",
+        displayName = "日本語",
+        modelName = "vosk-model-small-ja-0.22",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ja-0.22.zip",
+        sizeBytes = 48 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    ESPERANTO(
+        code = "eo",
+        displayName = "Esperanto",
+        modelName = "vosk-model-small-eo-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-eo-0.3.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = false,
+    ),
+    HINDI(
+        code = "hi",
+        displayName = "हिन्दी",
+        modelName = "vosk-model-small-hi-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-hi-0.3.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    CZECH(
+        code = "cs",
+        displayName = "Čeština",
+        modelName = "vosk-model-small-cs-0.4",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-cs-0.4.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    POLISH(
+        code = "pl",
+        displayName = "Polski",
+        modelName = "vosk-model-small-pl-0.6",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-pl-0.6.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    UZBEK(
+        code = "uz",
+        displayName = "O'zbekcha",
+        modelName = "vosk-model-small-uz-0.4",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-uz-0.4.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    KOREAN(
+        code = "ko",
+        displayName = "한국어",
+        modelName = "vosk-model-small-ko-0.22",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ko-0.22.zip",
+        sizeBytes = 82 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    TAJIK(
+        code = "tg",
+        displayName = "Тоҷикӣ",
+        modelName = "vosk-model-small-tg-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-tg-0.3.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = false,
+    ),
+    KYRGYZ(
+        code = "ky",
+        displayName = "Кыргызча",
+        modelName = "vosk-model-small-ky-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ky-0.3.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = false,
+    ),
+    GEORGIAN(
+        code = "ka",
+        displayName = "ქართული",
+        modelName = "vosk-model-small-ka-0.3",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ka-0.3.zip",
+        sizeBytes = 40 * 1024 * 1024,
+        mlkitSupported = false,
+    ),
+    BRETON(
+        code = "br",
+        displayName = "Brezhoneg",
+        modelName = "vosk-model-br-0.8",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-br-0.8.zip",
+        // 官方数据 70M（非 small 模型，但移动端可接受）
+        sizeBytes = 70 * 1024 * 1024,
+        mlkitSupported = false,
+    ),
+    GUJARATI(
+        code = "gu",
+        displayName = "ગુજરાતી",
+        modelName = "vosk-model-small-gu-0.42",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-gu-0.42.zip",
+        // 官方数据 100M
+        sizeBytes = 100 * 1024 * 1024,
+        mlkitSupported = true,
+    ),
+    TELUGU(
+        code = "te",
+        displayName = "తెలుగు",
+        modelName = "vosk-model-small-te-0.42",
+        modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-te-0.42.zip",
+        // 官方数据 58M
+        sizeBytes = 58 * 1024 * 1024,
+        mlkitSupported = true,
+    );
+
+    companion object {
+        /** 按语言代码查找枚举（不区分大小写） */
+        fun fromCode(code: String): VoskLanguage? {
+            return entries.find { it.code.equals(code, ignoreCase = true) }
+        }
+
+        /** 获取全部支持的语言列表 */
+        fun getAll(): List<VoskLanguage> = entries.toList()
+    }
+}

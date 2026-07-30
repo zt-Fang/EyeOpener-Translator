@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 路径配置：允许分享应用专属下载目录下的 APK 文件 -->
+<paths>
+    <!-- 对应 Context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) -->
+    <external-files-path name="apk_download" path="Download/" />
+</paths>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  启动器图标前景:白色椭圆形轮廓 + 透明圆环(透出背景) + 白色中心。
+  使用 evenOdd fillType 实现挖空效果。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 白色杏仁眼形(两端尖锐,中间挖空圆环) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M29,54 Q37,44 54,43 Q71,44 79,54 Q71,64 54,65 Q37,64 29,54 Z M54,54 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0" />
+
+    <!-- 瞳孔中心(白色实心) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+</vector>

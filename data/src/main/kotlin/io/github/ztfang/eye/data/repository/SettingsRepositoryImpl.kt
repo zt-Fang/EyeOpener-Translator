@@ -1,0 +1,125 @@
+package io.github.ztfang.eye.data.repository
+
+import io.github.ztfang.eye.data.local.datastore.SettingsDataStore
+import io.github.ztfang.eye.domain.model.CloudTranslationProvider
+import io.github.ztfang.eye.domain.model.DisplayMode
+import io.github.ztfang.eye.domain.model.TranslationEngine
+import io.github.ztfang.eye.domain.repository.SettingsRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+
+/**
+ * 设置仓库实现。
+ * 将 DataStore 的字符串/基本类型映射为领域层的枚举类型。
+ * 提供类型安全的配置读写能力。
+ */
+class SettingsRepositoryImpl @Inject constructor(
+    private val dataStore: SettingsDataStore
+) : SettingsRepository {
+
+    /** 显示模式（字符串 → 枚举转换） */
+    override val displayMode: Flow<DisplayMode> = dataStore.displayMode.map { mode ->
+        when (mode) {
+            "DUAL" -> DisplayMode.BILINGUAL
+            "TARGET_ONLY" -> DisplayMode.TRANSLATION_ONLY
+            else -> try { DisplayMode.valueOf(mode) } catch (_: Exception) { DisplayMode.BILINGUAL }
+        }
+    }
+    override suspend fun setDisplayMode(mode: DisplayMode) = dataStore.setDisplayMode(mode.name)
+
+    // ============ 悬浮窗位置和大小 ============
+    override val overlayX: Flow<Int> = dataStore.overlayX
+    override val overlayY: Flow<Int> = dataStore.overlayY
+    override val overlayWidth: Flow<Int> = dataStore.overlayWidth
+    override val overlayHeight: Flow<Int> = dataStore.overlayHeight
+    override suspend fun setOverlayX(x: Int) = dataStore.setOverlayX(x)
+    override suspend fun setOverlayY(y: Int) = dataStore.setOverlayY(y)
+    override suspend fun setOverlayWidth(width: Int) = dataStore.setOverlayWidth(width)
+    override suspend fun setOverlayHeight(height: Int) = dataStore.setOverlayHeight(height)
+
+    // ============ 语言设置 ============
+    override val sourceLanguage: Flow<String> = dataStore.sourceLanguage
+    override val targetLanguage: Flow<String> = dataStore.targetLanguage
+    override suspend fun setSourceLanguage(code: String) = dataStore.setSourceLang(code)
+    override suspend fun setTargetLanguage(code: String) = dataStore.setTargetLang(code)
+
+    /** 翻译引擎（字符串 → 枚举转换，旧值 FAST/HIGH_QUALITY 兼容映射为 LOCAL） */
+    override val translationEngine: Flow<TranslationEngine> = dataStore.translationEngine.map { engine ->
+        when (engine) {
+            "FAST", "HIGH_QUALITY" -> TranslationEngine.LOCAL  // 旧版本兼容
+            else -> try { TranslationEngine.valueOf(engine) } catch (_: Exception) { TranslationEngine.LOCAL }
+        }
+    }
+    override suspend fun setTranslationEngine(engine: TranslationEngine) =
+        dataStore.setTranslationEngine(engine.name)
+
+    /** 云端翻译服务商（字符串 → 枚举转换） */
+    override val cloudTranslationProvider: Flow<CloudTranslationProvider> =
+        dataStore.cloudTranslationProvider.map { provider ->
+            try { CloudTranslationProvider.valueOf(provider) } catch (_: Exception) {
+                CloudTranslationProvider.PAPAGO
+            }
+        }
+    override suspend fun setCloudTranslationProvider(provider: CloudTranslationProvider) =
+        dataStore.setCloudTranslationProvider(provider.name)
+
+    /** 云端翻译 API Key（已加密存储） */
+    override val cloudTranslationApiKey: Flow<String> = dataStore.cloudTranslationApiKey
+    override suspend fun setCloudTranslationApiKey(key: String) =
+        dataStore.setCloudTranslationApiKey(key)
+
+    // ============ API Key（已加密存储） ============
+    override val openAiKey: Flow<String> = dataStore.openAiKey
+    override val claudeKey: Flow<String> = dataStore.claudeKey
+    override val openAiKeyProvider: Flow<String> = dataStore.openAiKeyProvider
+    override suspend fun setOpenAiKey(key: String) = dataStore.setOpenAiKey(key)
+    override suspend fun setClaudeKey(key: String) = dataStore.setClaudeKey(key)
+    override suspend fun setOpenAiKeyProvider(provider: String) = dataStore.setOpenAiKeyProvider(provider)
+
+    // ============ 个性化设置 ============
+    override val accentColorIndex: Flow<Int> = dataStore.accentColorIndex
+    override val backgroundTransparency: Flow<Float> = dataStore.backgroundTransparency
+    override val fontSize: Flow<Float> = dataStore.fontSize
+    override suspend fun setAccentColorIndex(index: Int) = dataStore.setAccentColorIndex(index)
+    override suspend fun setBackgroundTransparency(value: Float) = dataStore.setBackgroundTransparency(value)
+    override suspend fun setFontSize(value: Float) = dataStore.setFontSize(value)
+
+    // ============ 音频源 ============
+    override val audioSource: Flow<Int> = dataStore.audioSource
+    override suspend fun setAudioSource(source: Int) = dataStore.setAudioSource(source)
+
+    // ============ LLM 自定义设置 ============
+    override val llmUrl: Flow<String> = dataStore.llmUrl
+    override val llmModel: Flow<String> = dataStore.llmModel
+    override val llmProvider: Flow<String> = dataStore.llmProvider
+    /**
+     * LLM 配置是否就绪：根据当前 provider 判断对应 API Key 和 URL 是否都不为空。
+     * 用于 UI 层判断点击 AI 模式时是否需要弹配置提示。
+     */
+    override val isLlmConfigReady: Flow<Boolean> = kotlinx.coroutines.flow.combine(
+        dataStore.llmProvider,
+        dataStore.llmUrl,
+        dataStore.openAiKey,
+        dataStore.claudeKey
+    ) { provider, url, openAi, claude ->
+        val apiKey = when (provider.uppercase()) {
+            "CLAUDE" -> claude
+            else -> openAi  // OPEN_AI, QWEN, MINIMAX, MIMO, GEMINI, AGNES, DEEP_SEEK 共用 openAiKey
+        }
+        url.isNotBlank() && apiKey.isNotBlank()
+    }.distinctUntilChanged()
+    override suspend fun setLlmUrl(url: String) = dataStore.setLlmUrl(url)
+    override suspend fun setLlmModel(model: String) = dataStore.setLlmModel(model)
+    override suspend fun setLlmProvider(provider: String) = dataStore.setLlmProvider(provider)
+
+    /** 引导开关 */
+    override val showOnboarding: Flow<Boolean> = dataStore.showOnboarding
+    override suspend fun setShowOnboarding(show: Boolean) = dataStore.setShowOnboarding(show)
+
+    /** 界面语言 */
+    override val interfaceLanguage: Flow<String> = dataStore.interfaceLanguage
+    override suspend fun setInterfaceLanguage(language: String) = dataStore.setInterfaceLanguage(language)
+}

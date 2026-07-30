@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>操作指南 - EyeOpener</title>
+    <style id="theme-vars">
+/* Source: structured-spec */
+/* Brand profile: google / dashboard / clean / analytical / modern */
+/* Theme mode: light-dark */
+/* Alias layer: enabled */
+
+/* Light mode source tokens */
+:root {
+  /* Core surface colors */
+  --background: #ffffff;
+  --foreground: #0e1115;
+  --card: #ffffff;
+  --card-foreground: #0e1115;
+  --popover: #f9f9fa;
+  --popover-foreground: #0e1115;
+
+  /* Semantic action colors */
+  --primary: #4285f4;
+  --primary-foreground: #ffffff;
+  --secondary: #dbeafe;
+  --secondary-foreground: #333942;
+  --muted: #eff1f4;
+  --muted-foreground: #7f8d9f;
+  --accent: #dbeafe;
+  --accent-foreground: #003e8f;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Borders, inputs, focus */
+  --border: #ebebeb;
+  --input: #e2e3e4;
+  --ring: #4285f4;
+
+  /* Data visualization */
+  --chart-1: #4285f4;
+  --chart-2: #ea4335;
+  --chart-3: #fbbc05;
+  --chart-4: #0043ad;
+  --chart-5: #34a853;
+
+  /* Sidebar */
+  --sidebar: #f0f6ff;
+  --sidebar-foreground: #0e1115;
+  --sidebar-primary: #4285f4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #dbeafe;
+  --sidebar-accent-foreground: #003e8f;
+  --sidebar-border: #e7eaef;
+  --sidebar-ring: #4285f4;
+
+  /* Typography */
+  --font-sans: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-mono: JetBrains Mono, monospace;
+
+  /* Radius */
+  --radius: 0.5rem;
+
+  /* Shadow primitives */
+  --shadow-x: 0;
+  --shadow-y: 3px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0;
+  --shadow-color: #0e1115;
+
+  /* Elevation */
+  --shadow-2xs: 0 3px 0px 0px rgba(14, 17, 21, 0);
+  --shadow-xs: 0 3px 0px 0px rgba(14, 17, 21, 0);
+  --shadow-sm: 0 3px 0px 0px rgba(14, 17, 21, 0), 0 1px 2px -1px rgba(14, 17, 21, 0);
+  --shadow: 0 3px 0px 0px rgba(14, 17, 21, 0), 0 1px 2px -1px rgba(14, 17, 21, 0);
+  --shadow-md: 0 3px 0px 0px rgba(14, 17, 21, 0), 0 2px 4px -1px rgba(14, 17, 21, 0);
+  --shadow-lg: 0 3px 0px 0px rgba(14, 17, 21, 0), 0 4px 6px -1px rgba(14, 17, 21, 0);
+  --shadow-xl: 0 3px 0px 0px rgba(14, 17, 21, 0), 0 8px 10px -1px rgba(14, 17, 21, 0);
+  --shadow-2xl: 0 3px 0px 0px rgba(14, 17, 21, 0);
+
+  /* Rhythm */
+  --tracking-normal: 0em;
+  --spacing: 0.24rem;
+}
+
+/* Dark mode source tokens */
+.dark {
+  /* Core surface colors */
+  --background: #161616;
+  --foreground: #eff1f4;
+  --card: #1d1d1c;
+  --card-foreground: #eff1f4;
+  --popover: #2e2e2e;
+  --popover-foreground: #e5e5e5;
+
+  /* Semantic action colors */
+  --primary: #fc2c50;
+  --primary-foreground: #ffffff;
+  --secondary: #383838;
+  --secondary-foreground: #e5e5e5;
+  --muted: #383838;
+  --muted-foreground: #949494;
+  --accent: #4a2026;
+  --accent-foreground: #fc2c50;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Borders, inputs, focus */
+  --border: #1d1d1c;
+  --input: #000000;
+  --ring: #ffffff;
+
+  /* Data visualization */
+  --chart-1: #2dccd3;
+  --chart-2: #f1204a;
+  --chart-3: #edbbe8;
+  --chart-4: #fbeb35;
+  --chart-5: #baf6f0;
+
+  /* Sidebar */
+  --sidebar: #171717;
+  --sidebar-foreground: #e5e5e5;
+  --sidebar-primary: #0065fd;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #00266b;
+  --sidebar-accent-foreground: #bfdbfe;
+  --sidebar-border: #404040;
+  --sidebar-ring: #00266b;
+
+  /* Typography */
+  --font-sans: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-mono: JetBrains Mono, monospace;
+
+  /* Radius */
+  --radius: 0.5rem;
+
+  /* Shadow primitives */
+  --shadow-x: 0;
+  --shadow-y: 3px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0;
+  --shadow-color: #000000;
+
+  /* Elevation */
+  --shadow-2xs: 0 3px 0px 0px rgba(0, 0, 0, 0);
+  --shadow-xs: 0 3px 0px 0px rgba(0, 0, 0, 0);
+  --shadow-sm: 0 3px 0px 0px rgba(0, 0, 0, 0), 0 1px 2px -1px rgba(0, 0, 0, 0);
+  --shadow: 0 3px 0px 0px rgba(0, 0, 0, 0), 0 1px 2px -1px rgba(0, 0, 0, 0);
+  --shadow-md: 0 3px 0px 0px rgba(0, 0, 0, 0), 0 2px 4px -1px rgba(0, 0, 0, 0);
+  --shadow-lg: 0 3px 0px 0px rgba(0, 0, 0, 0), 0 4px 6px -1px rgba(0, 0, 0, 0);
+  --shadow-xl: 0 3px 0px 0px rgba(0, 0, 0, 0), 0 8px 10px -1px rgba(0, 0, 0, 0);
+  --shadow-2xl: 0 3px 0px 0px rgba(0, 0, 0, 0);
+}
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  }
+  @layer base {
+    body { background: var(--background); color: var(--foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body class="min-h-screen antialiased" style="font-family: var(--font-sans);">
+    <main>
+
+      <!-- ========== 1. Header/Nav ========== -->
+      <header class="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--background)]/95 backdrop-blur">
+        <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <!-- Logo -->
+          <a data-dom-id="nav-home" href="index.html" class="flex items-center gap-2 whitespace-nowrap">
+            <i data-lucide="eye" class="h-5 w-5" style="color: var(--primary);"></i>
+            <span class="text-base font-semibold tracking-tight" style="color: var(--foreground);">EyeOpener</span>
+          </a>
+          <!-- Desktop Nav -->
+          <nav class="hidden items-center gap-1 sm:flex">
+            <a href="index.html#features" class="rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors hover:bg-[var(--muted)]" style="color: var(--muted-foreground);">产品特性</a>
+            <a href="index.html#engines" class="rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors hover:bg-[var(--muted)]" style="color: var(--muted-foreground);">翻译引擎</a>
+            <a href="guide.html" class="rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors" style="color: var(--primary); background: var(--secondary);">操作指南</a>
+          </nav>
+          <!-- Mobile hamburger -->
+          <button class="inline-flex h-9 w-9 items-center justify-center rounded-lg sm:hidden" style="color: var(--foreground);" aria-label="菜单" id="mobileMenuBtn">
+            <i data-lucide="menu" class="h-5 w-5"></i>
+          </button>
+        </div>
+        <!-- Mobile menu panel -->
+        <div class="hidden border-t border-[var(--border)] bg-[var(--background)] px-4 pb-3 pt-2 sm:hidden" id="mobileMenu">
+          <a href="index.html#features" class="block rounded-lg px-3 py-2 text-sm" style="color: var(--muted-foreground);">产品特性</a>
+          <a href="index.html#engines" class="block rounded-lg px-3 py-2 text-sm" style="color: var(--muted-foreground);">翻译引擎</a>
+          <a href="guide.html" class="block rounded-lg px-3 py-2 text-sm font-medium" style="color: var(--primary); background: var(--secondary);">操作指南</a>
+        </div>
+      </header>
+
+      <!-- ========== 2. Guide Hero ========== -->
+      <section style="background: linear-gradient(180deg, #F8FAFC 0%, #EEF2FF 50%, #ECFDF5 100%);">
+        <div class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+          <div class="text-center">
+            <h1 class="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl" style="color: var(--foreground); text-wrap: balance; word-break: keep-all; overflow-wrap: break-word;">快速上手指南</h1>
+            <p class="mx-auto mt-4 max-w-xl text-base sm:text-lg" style="color: var(--muted-foreground);">跟随引导完成 3 步配置，即可开启实时字幕翻译体验</p>
+            <!-- 步骤指示器 -->
+            <div class="mt-8 flex items-center justify-center gap-2">
+              <div class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold" style="background: var(--primary); color: var(--primary-foreground);">1</div>
+              <div class="h-0.5 w-8 sm:w-12" style="background: var(--border);"></div>
+              <div class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold" style="background: var(--primary); color: var(--primary-foreground);">2</div>
+              <div class="h-0.5 w-8 sm:w-12" style="background: var(--border);"></div>
+              <div class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold" style="background: var(--primary); color: var(--primary-foreground);">3</div>
+            </div>
+            <div class="mt-3 flex items-center justify-center gap-6 text-xs" style="color: var(--muted-foreground);">
+              <span>欢迎</span>
+              <span>语言选择</span>
+              <span>悬浮字幕</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 3. Step Flow — 引导流程 ========== -->
+      <section class="bg-[var(--background)]">
+        <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
+          <h2 class="mb-12 text-center text-2xl font-bold tracking-tight sm:text-3xl" style="color: var(--foreground);">引导流程</h2>
+
+          <div class="relative mx-auto max-w-2xl">
+
+            <!-- Step 1 — 欢迎页 -->
+            <div class="flex gap-5 sm:gap-6">
+              <div class="flex shrink-0 flex-col items-center">
+                <div class="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold" style="background: var(--primary); color: var(--primary-foreground);">1</div>
+                <div class="w-0.5 flex-1 min-h-[24px]" style="background: var(--border);"></div>
+              </div>
+              <div class="flex-1 pb-8">
+                <h3 class="mb-2 text-lg font-semibold" style="color: var(--foreground);">欢迎页</h3>
+                <p class="text-sm leading-relaxed" style="color: var(--muted-foreground);">
+                  打开 EyeOpener 后，你会看到欢迎页面，展示三大核心功能亮点。点击"开始了解"即可进入配置流程，也可选择跳过直接进入主界面。
+                </p>
+                <div class="mt-3 flex items-start gap-2 rounded-lg p-3" style="background: var(--secondary);">
+                  <i data-lucide="lightbulb" class="mt-0.5 h-4 w-4 shrink-0" style="color: var(--chart-3);"></i>
+                  <span class="text-xs leading-relaxed" style="color: var(--secondary-foreground);">首次使用建议跟随引导完成基本配置</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2 — 语言选择 -->
+            <div class="flex gap-5 sm:gap-6">
+              <div class="flex shrink-0 flex-col items-center">
+                <div class="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold" style="background: var(--primary); color: var(--primary-foreground);">2</div>
+                <div class="w-0.5 flex-1 min-h-[24px]" style="background: var(--border);"></div>
+              </div>
+              <div class="flex-1 pb-8">
+                <h3 class="mb-2 text-lg font-semibold" style="color: var(--foreground);">语言选择</h3>
+                <p class="text-sm leading-relaxed" style="color: var(--muted-foreground);">
+                  选择源语言（识别）和目标语言（翻译）。点击语言卡片即可选择，再次点击确认。
+                </p>
+                <!-- 路径分支 -->
+                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div class="rounded-lg border-2 p-4" style="border-color: var(--chart-5); background: var(--card);">
+                    <div class="flex items-center gap-2 mb-2">
+                      <div class="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold" style="background: var(--chart-5); color: var(--primary-foreground);">A</div>
+                      <span class="text-sm font-semibold" style="color: var(--foreground);">可以访问 Google</span>
+                    </div>
+                    <p class="text-xs" style="color: var(--muted-foreground);">极速翻译模式，设备端引擎，速度快延迟低</p>
+                  </div>
+                  <div class="rounded-lg border-2 p-4" style="border-color: var(--chart-1); background: var(--card);">
+                    <div class="flex items-center gap-2 mb-2">
+                      <div class="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold" style="background: var(--chart-1); color: var(--primary-foreground);">B</div>
+                      <span class="text-sm font-semibold" style="color: var(--foreground);">无法访问 Google</span>
+                    </div>
+                    <p class="text-xs" style="color: var(--muted-foreground);">AI 智能模式，需前往「设置 → API 设置」配置大模型</p>
+                  </div>
+                </div>
+                <div class="mt-4 flex flex-wrap items-center gap-3">
+                  <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium" style="background: var(--accent); color: var(--accent-foreground);">
+                    <i data-lucide="check-circle" class="h-3 w-3"></i>
+                    30+ 种语言离线识别
+                  </span>
+                  <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium" style="background: var(--accent); color: var(--accent-foreground);">
+                    <i data-lucide="check-circle" class="h-3 w-3"></i>
+                    70+ 种语言翻译对
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3 — 开启悬浮字幕 -->
+            <div class="flex gap-5 sm:gap-6">
+              <div class="flex shrink-0 flex-col items-center">
+                <div class="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold" style="background: var(--chart-5); color: var(--primary-foreground);">3</div>
+              </div>
+              <div class="flex-1">
+                <h3 class="mb-2 text-lg font-semibold" style="color: var(--foreground);">开启悬浮字幕</h3>
+                <p class="text-sm leading-relaxed" style="color: var(--muted-foreground);">
+                  完成语言配置后，在首页点击大开关，授予悬浮窗和麦克风权限即可开始实时字幕翻译。悬浮窗支持拖拽移动、缩放调节，可随时在右上角设置中个性化字幕外观。
+                </p>
+                <!-- 悬浮翻译效果图 -->
+                <div class="mt-6 overflow-hidden rounded-lg border border-[var(--border)]">
+                  <img src="../assets/overlay-demo.png" alt="EyeOpener 悬浮翻译效果示意" class="block w-full" style="max-height: 400px; object-fit: contain; background: var(--muted);">
+                </div>
+                <p class="mt-2 text-center text-xs" style="color: var(--muted-foreground);">EyeOpener 悬浮翻译效果示意</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 4. 熟悉主界面 ========== -->
+      <section class="bg-[var(--muted)]">
+        <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
+          <h2 class="mb-10 text-center text-2xl font-bold tracking-tight sm:text-3xl" style="color: var(--foreground);">熟悉主界面</h2>
+          <div class="grid gap-6 md:grid-cols-3">
+
+            <!-- Card 1: 字幕 -->
+            <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
+              <div class="mb-4 flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg" style="background: var(--secondary);">
+                  <i data-lucide="subtitles" class="h-5 w-5" style="color: var(--primary);"></i>
+                </div>
+                <h3 class="text-lg font-semibold" style="color: var(--foreground);">字幕</h3>
+              </div>
+              <p class="text-sm leading-relaxed" style="color: var(--muted-foreground);">
+                主功能页，包含悬浮字幕开关、语言切换、翻译引擎选择。打开开关即可启动实时翻译。
+              </p>
+              <div class="mt-4 space-y-2">
+                <div class="flex items-center gap-2 text-xs" style="color: var(--muted-foreground);">
+                  <i data-lucide="toggle-right" class="h-3.5 w-3.5" style="color: var(--primary);"></i>
+                  <span>悬浮字幕开关</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs" style="color: var(--muted-foreground);">
+                  <i data-lucide="repeat" class="h-3.5 w-3.5" style="color: var(--primary);"></i>
+                  <span>语言切换</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs" style="color: var(--muted-foreground);">
+                  <i data-lucide="cpu" class="h-3.5 w-3.5" style="color: var(--primary);"></i>
+                  <span>极速 / 精确 / AI 引擎</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: 助手 -->
+            <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
+              <div class="mb-4 flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg" style="background: var(--secondary);">
+                  <i data-lucide="message-circle" class="h-5 w-5" style="color: var(--primary);"></i>
+                </div>
+                <h3 class="text-lg font-semibold" style="color: var(--foreground);">助手</h3>
+              </div>
+              <p class="text-sm leading-relaxed" style="color: var(--muted-foreground);">
+                AI 对话助手，支持语音输入，可直接发起翻译请求。语音识别结果自动填入输入框，确认后即可翻译。
+              </p>
+              <div class="mt-4 space-y-2">
+                <div class="flex items-center gap-2 text-xs" style="color: var(--muted-foreground);">
+                  <i data-lucide="mic" class="h-3.5 w-3.5" style="color: var(--primary);"></i>
+                  <span>语音输入</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs" style="color: var(--muted-foreground);">
+                  <i data-lucide="message-square" class="h-3.5 w-3.5" style="color: var(--primary);"></i>
+                  <span>对话式翻译</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3: 设置 -->
+            <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
+              <div class="mb-4 flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg" style="background: var(--secondary);">
+                  <i data-lucide="settings" class="h-5 w-5" style="color: var(--primary);"></i>
+                </div>
+                <h3 class="text-lg font-semibold" style="color: var(--foreground);">设置</h3>
+              </div>
+              <p class="text-sm leading-relaxed" style="color: var(--muted-foreground);">
+                管理本地模型、API 配置、个性化设置、历史记录。所有深层配置集中于此。
+              </p>
+              <div class="mt-4 space-y-2">
+                <div class="flex items-center gap-2 text-xs" style="color: var(--muted-foreground);">
+                  <i data-lucide="database" class="h-3.5 w-3.5" style="color: var(--primary);"></i>
+                  <span>本地模型</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs" style="color: var(--muted-foreground);">
+                  <i data-lucide="key-round" class="h-3.5 w-3.5" style="color: var(--primary);"></i>
+                  <span>API 设置</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs" style="color: var(--muted-foreground);">
+                  <i data-lucide="palette" class="h-3.5 w-3.5" style="color: var(--primary);"></i>
+                  <span>个性化</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs" style="color: var(--muted-foreground);">
+                  <i data-lucide="history" class="h-3.5 w-3.5" style="color: var(--primary);"></i>
+                  <span>历史记录</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 7. 设置入口 ========== -->
+      <section class="bg-[var(--background)]">
+        <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
+          <h2 class="mb-10 text-center text-2xl font-bold tracking-tight sm:text-3xl" style="color: var(--foreground);">设置入口</h2>
+          <div class="grid gap-6 sm:grid-cols-2">
+
+            <!-- 本地模型 -->
+            <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
+              <div class="mb-3 flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg" style="background: var(--secondary);">
+                  <i data-lucide="database" class="h-5 w-5" style="color: var(--primary);"></i>
+                </div>
+                <h3 class="text-lg font-semibold" style="color: var(--foreground);">本地模型</h3>
+              </div>
+              <p class="text-sm leading-relaxed" style="color: var(--muted-foreground);">
+                下载和管理语音识别模型（30+ 种语言）及高质量翻译模型。首次使用需联网下载。
+              </p>
+            </div>
+
+            <!-- API 设置 -->
+            <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
+              <div class="mb-3 flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg" style="background: var(--secondary);">
+                  <i data-lucide="key-round" class="h-5 w-5" style="color: var(--primary);"></i>
+                </div>
+                <h3 class="text-lg font-semibold" style="color: var(--foreground);">API 设置</h3>
+              </div>
+              <p class="text-sm leading-relaxed" style="color: var(--muted-foreground);">
+                配置 AI 翻译的大模型服务商、API Key、Base URL 等参数。用于 AI 智能翻译模式。
+              </p>
+            </div>
+
+            <!-- 个性化设置 -->
+            <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
+              <div class="mb-3 flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg" style="background: var(--secondary);">
+                  <i data-lucide="palette" class="h-5 w-5" style="color: var(--primary);"></i>
+                </div>
+                <h3 class="text-lg font-semibold" style="color: var(--foreground);">个性化设置</h3>
+              </div>
+              <p class="text-sm leading-relaxed" style="color: var(--muted-foreground);">
+                字幕颜色、字体大小、透明度、显示模式等视觉定制。让字幕适应你的阅读偏好。
+              </p>
+            </div>
+
+            <!-- 历史记录 -->
+            <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
+              <div class="mb-3 flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg" style="background: var(--secondary);">
+                  <i data-lucide="history" class="h-5 w-5" style="color: var(--primary);"></i>
+                </div>
+                <h3 class="text-lg font-semibold" style="color: var(--foreground);">历史记录</h3>
+              </div>
+              <p class="text-sm leading-relaxed" style="color: var(--muted-foreground);">
+                查看、收藏、删除、导出翻译历史。支持按时间浏览和快速搜索。
+              </p>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 8. 使用技巧 ========== -->
+      <section class="bg-[var(--muted)]">
+        <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
+          <h2 class="mb-10 text-center text-2xl font-bold tracking-tight sm:text-3xl" style="color: var(--foreground);">使用技巧</h2>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+            <!-- Tip 1: 翻译保护 -->
+            <div class="flex items-start gap-3 rounded-xl border border-[var(--border)] p-4" style="background: var(--card);">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background: var(--accent);">
+                <i data-lucide="shield-check" class="h-4 w-4" style="color: var(--accent-foreground);"></i>
+              </div>
+              <div class="min-w-0">
+                <h4 class="text-sm font-semibold" style="color: var(--foreground);">翻译保护</h4>
+                <p class="mt-1 text-xs leading-relaxed" style="color: var(--muted-foreground);">
+                  翻译进行中无法删除模型 — 系统保护机制，请先停止翻译再管理模型
+                </p>
+              </div>
+            </div>
+
+            <!-- Tip 2: VAD 语音检测 -->
+            <div class="flex items-start gap-3 rounded-xl border border-[var(--border)] p-4" style="background: var(--card);">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background: var(--accent);">
+                <i data-lucide="audio-lines" class="h-4 w-4" style="color: var(--accent-foreground);"></i>
+              </div>
+              <div class="min-w-0">
+                <h4 class="text-sm font-semibold" style="color: var(--foreground);">VAD 语音检测</h4>
+                <p class="mt-1 text-xs leading-relaxed" style="color: var(--muted-foreground);">
+                  3 秒无声音时会出现提示，表示正在等待语音输入
+                </p>
+              </div>
+            </div>
+
+            <!-- Tip 3: 离线翻译 -->
+            <div class="flex items-start gap-3 rounded-xl border border-[var(--border)] p-4" style="background: var(--card);">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background: var(--accent);">
+                <i data-lucide="wifi-off" class="h-4 w-4" style="color: var(--accent-foreground);"></i>
+              </div>
+              <div class="min-w-0">
+                <h4 class="text-sm font-semibold" style="color: var(--foreground);">离线翻译</h4>
+                <p class="mt-1 text-xs leading-relaxed" style="color: var(--muted-foreground);">
+                  下载模型后无需网络即可使用识别和翻译功能
+                </p>
+              </div>
+            </div>
+
+            <!-- Tip 4: 降级策略 -->
+            <div class="flex items-start gap-3 rounded-xl border border-[var(--border)] p-4" style="background: var(--card);">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background: var(--accent);">
+                <i data-lucide="arrow-down-left" class="h-4 w-4" style="color: var(--accent-foreground);"></i>
+              </div>
+              <div class="min-w-0">
+                <h4 class="text-sm font-semibold" style="color: var(--foreground);">降级策略</h4>
+                <p class="mt-1 text-xs leading-relaxed" style="color: var(--muted-foreground);">
+                  当前引擎超时或网络异常时自动切换到极速模式
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 9. Footer ========== -->
+      <footer class="border-t border-[var(--border)] bg-[var(--background)]">
+        <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+          <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <div class="flex items-center gap-2">
+              <i data-lucide="eye" class="h-5 w-5" style="color: var(--primary);"></i>
+              <span class="text-sm font-semibold" style="color: var(--foreground);">EyeOpener</span>
+            </div>
+            <nav class="flex items-center gap-4">
+              <a href="index.html#features" class="text-sm whitespace-nowrap transition-colors hover:underline" style="color: var(--muted-foreground);">产品特性</a>
+              <a href="index.html#engines" class="text-sm whitespace-nowrap transition-colors hover:underline" style="color: var(--muted-foreground);">翻译引擎</a>
+              <a href="guide.html" class="text-sm whitespace-nowrap transition-colors hover:underline" style="color: var(--muted-foreground);">操作指南</a>
+            </nav>
+            <p class="text-xs whitespace-nowrap" style="color: var(--muted-foreground);">&copy; 2025 EyeOpener. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
+
+    </main>
+    <script>
+      // 移动端汉堡菜单切换
+      document.getElementById('mobileMenuBtn').addEventListener('click', function() {
+        var menu = document.getElementById('mobileMenu');
+        menu.classList.toggle('hidden');
+      });
+    </script>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

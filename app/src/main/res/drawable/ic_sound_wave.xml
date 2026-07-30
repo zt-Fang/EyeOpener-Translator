@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 实时翻译中图标:绿色声波柱状图 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="16dp"
+    android:height="16dp"
+    android:viewportWidth="20"
+    android:viewportHeight="20">
+    <path
+        android:fillColor="#2EB89A"
+        android:pathData="M2,8 h1.4 v4 h-1.4 z M5,5 h1.4 v10 h-1.4 z M8,2 h1.4 v16 h-1.4 z M11,5 h1.4 v10 h-1.4 z M14,8 h1.4 v4 h-1.4 z" />
+</vector>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 悬浮字幕外壳:深色半透明 + 右下角浅白灰缩放区(视觉指示) -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#A6000000" />
+            <corners android:radius="20dp" />
+        </shape>
+    </item>
+    <!-- 右下角浅白灰缩放区,与背景形成对比 -->
+    <item
+        android:gravity="bottom|end"
+        android:width="24dp"
+        android:height="24dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#40FFFFFF" />
+            <corners
+                android:topLeftRadius="20dp"
+                android:bottomRightRadius="20dp" />
+        </shape>
+    </item>
+</layer-list>
