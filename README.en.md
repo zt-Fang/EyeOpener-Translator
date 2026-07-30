@@ -14,7 +14,7 @@ Android app for real-time speech translation: global floating subtitle + multi-e
 ## Features
 
 - 🎙️ **Global floating subtitle** — Real-time original + translated text over any app; draggable & resizable
-- 🌐 **41 languages** — X-ASR (zh/en) + Nemotron 3.5 multilingual + Vosk fallback
+- 🌐 **41 languages** — X-ASR (zh/en) + Nemotron 3.5 multilingual + Vosk
 - 🔄 **3 translation tiers** — Local (ML Kit offline) / Cloud (Papago/Baidu/DeepL/Azure/Google) / AI (LLM)
 - 🤖 **AI assistant** — 7 LLM providers (OpenAI / Claude / DeepSeek / Qwen / MiniMax / MiMo / Gemini)
 - 📱 **Responsive layout** — Phone / foldable / tablet / overlay
@@ -73,16 +73,16 @@ Floating window (source + translation, scroll up keeping 10 lines)
 | Sherpa-ONNX X-ASR | zh / en (code-switch) | 161 MB | 960 ms streaming, CER ~9.59%, punctuated |
 | Sherpa-ONNX Nemotron 3.5 | 26 langs | 685 MB | 320 ms streaming, per-stream language switch |
 | Sherpa-ONNX BN Vosk | bn | 87 MB | Bengali Zipformer streaming |
-| Vosk Small | 33 langs (incl. en-in variant) | 38–100 MB | 100–300 ms true streaming, lightweight fallback |
+| Vosk Small | 33 langs (incl. en-in variant) | 38–100 MB | 100–300 ms true streaming, lightweight offline |
 
-**ASR/Translation decoupling** — ASR is decided solely by source language; all translation engines share the same ASR routing:
+**ASR/Translation decoupling** — ASR is decided **solely by source language, with no fallback** — if the model is not downloaded, the app prompts you to download it instead of switching engines automatically. All translation engines share the same ASR routing:
 
-| Source | ASR Engine | Fallback |
-|--------|------------|----------|
-| zh / en | X-ASR | Vosk |
-| bn | BN Vosk | Vosk |
-| Nemotron 26 langs | Nemotron 3.5 | Vosk (silent) |
-| Others | Vosk | — |
+| Source | ASR Engine |
+|--------|------------|
+| zh / en | X-ASR |
+| bn | BN Vosk |
+| Nemotron 26 langs | Nemotron 3.5 |
+| Others | Vosk |
 
 **Nemotron-only 9** (require Nemotron 3.5 model): Danish, Norwegian (Bokmål), Bulgarian, Finnish, Croatian, Slovak, Hungarian, Romanian, Estonian.
 

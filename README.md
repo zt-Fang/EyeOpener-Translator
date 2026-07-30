@@ -28,16 +28,16 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 | Sherpa-ONNX X-ASR | zh / en（含混说） | 161 MB | 960ms 流式，CER ~9.59%，自带标点 |
 | Sherpa-ONNX Nemotron 3.5 | 26 语种 | 685 MB | 320ms 流式，per-stream 动态切语种 |
 | Sherpa-ONNX BN Vosk | bn | 87 MB | 孟加拉语 Zipformer 流式 |
-| Vosk Small | 33 语种（含 en-in 变体） | 38–100 MB | 100–300ms 真流式，轻量兜底 |
+| Vosk Small | 33 语种（含 en-in 变体） | 38–100 MB | 100–300ms 真流式，轻量离线 |
 
-**ASR 引擎与翻译引擎解耦**：ASR 仅由源语言决定，所有翻译引擎共用同一套 ASR 分流逻辑：
+**ASR 引擎与翻译引擎解耦**：ASR 仅由源语言**唯一决定，不做 fallback** —— 模型未下载时提示去下载，不会自动切换引擎。所有翻译引擎共用同一套 ASR 分流逻辑：
 
-| 源语言 | ASR 引擎 | 兜底 |
-|--------|----------|------|
-| zh / en | X-ASR | Vosk |
-| bn | BN Vosk | Vosk |
-| Nemotron 26 语种 | Nemotron 3.5 | Vosk（静默） |
-| 其他 | Vosk | — |
+| 源语言 | ASR 引擎 |
+|--------|----------|
+| zh / en | X-ASR |
+| bn | BN Vosk |
+| Nemotron 26 语种 | Nemotron 3.5 |
+| 其他 | Vosk |
 
 ### 翻译引擎
 
