@@ -1,0 +1,44 @@
+---
+name: Bug Report
+about: 报告 Bug 帮助改进
+title: "[BUG] "
+labels: bug
+---
+
+## Bug 描述
+<!-- 简要描述问题 -->
+
+## 复现步骤
+1.
+2.
+3.
+
+## 期望行为
+<!-- 应该发生什么 -->
+
+## 实际行为
+<!-- 实际发生了什么 -->
+
+## 环境
+- 设备型号：
+- Android 版本：
+- 应用版本：
+- ASR 引擎：[X-ASR / Nemotron 3.5 / Vosk / BN Vosk]
+- 翻译引擎：[LOCAL / CLOUD / AI]
+- 源语言 → 目标语言：
+
+## Logcat
+<!-- 强烈建议附上 logcat，方便定位问题 -->
+```
+cd D:\software\Android\eye
+powershell -File scripts\dump_logs.ps1
+```
+<details><summary>展开日志</summary>
+
+```
+<!-- 粘贴日志 -->
+```
+</details>
+
+## 截图/录屏
+<!-- 可选 -->

@@ -1,0 +1,29 @@
+# 自动识别文本文件，统一规范为 LF（跨平台一致，避免 Windows CRLF 噪音）
+* text=auto eol=lf
+
+# Windows 脚本保留 CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制文件（不合并、不转换）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.apk binary
+*.aab binary
+*.jar binary
+*.so binary
+*.onnx binary
+*.bin binary
+*.keystore binary
+*.key binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+*.ttf binary
+*.wav binary
+*.mp3 binary

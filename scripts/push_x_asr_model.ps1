@@ -8,7 +8,7 @@ param(
     # 本地 X-ASR 960ms 模型目录（含 encoder/decoder/joiner/tokens 4 文件）
     [string]$localModelDir = "D:\models\X-ASR-zh-en\deployment\models\chunk-960ms-model",
     # 应用包名
-    [string]$packageName = "com.example.eye",
+    [string]$packageName = "io.github.ztfang.eye",
     # 设备端模型目录名（与 SherpaOnnxModel.X_ASR_ZH_EN_960MS.modelId 一致）
     [string]$deviceModelId = "x-asr-zh-en-960ms"
 )

@@ -9,24 +9,12 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 
-/**
- * Tar.Bz2 解压工具。
- * 用于 Sherpa-ONNX 模型下载后解压（模型以 tar.bz2 格式发布）。
- *
- * 依赖：Apache Commons Compress
- */
+/** tar.bz2 解压（Sherpa-ONNX 模型包），依赖 Apache Commons Compress */
 object TarBzipExtractor {
 
     private const val TAG = "TarBzipExtractor"
 
-    /**
-     * 解压 tar.bz2 文件到目标目录。
-     *
-     * @param tarBzFile tar.bz2 文件
-     * @param destDir 目标目录（解压后文件的父目录）
-     * @param stripTopLevelDir 是否去掉 tar 内的顶层目录
-     * @return 成功返回 Result.success，失败返回 Result.failure
-     */
+    /** 解压 tar.bz2 到 destDir；stripTopLevelDir=true 时去掉 tar 内顶层目录 */
     fun extract(tarBzFile: File, destDir: File, stripTopLevelDir: Boolean = true): Result<Unit> {
         return runCatching {
             if (!tarBzFile.exists()) {
@@ -40,7 +28,6 @@ object TarBzipExtractor {
                         TarArchiveInputStream(bzIn).use { tarIn ->
                             var entry = tarIn.nextTarEntry
                             while (entry != null) {
-                                // 计算目标路径，可选去除顶层目录
                                 val entryName = if (stripTopLevelDir) {
                                     val slashIdx = entry.name.indexOf('/')
                                     if (slashIdx > 0 && slashIdx < entry.name.length - 1)

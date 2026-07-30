@@ -11,16 +11,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
-/**
- * 设置仓库实现。
- * 将 DataStore 的字符串/基本类型映射为领域层的枚举类型。
- * 提供类型安全的配置读写能力。
- */
+/** 设置仓库实现：DataStore 基本类型 → 领域层枚举 */
 class SettingsRepositoryImpl @Inject constructor(
     private val dataStore: SettingsDataStore
 ) : SettingsRepository {
 
-    /** 显示模式（字符串 → 枚举转换） */
+    /** DUAL/TARGET_ONLY 为旧版本枚举名，做兼容映射 */
     override val displayMode: Flow<DisplayMode> = dataStore.displayMode.map { mode ->
         when (mode) {
             "DUAL" -> DisplayMode.BILINGUAL
@@ -46,17 +42,16 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setSourceLanguage(code: String) = dataStore.setSourceLang(code)
     override suspend fun setTargetLanguage(code: String) = dataStore.setTargetLang(code)
 
-    /** 翻译引擎（字符串 → 枚举转换，旧值 FAST/HIGH_QUALITY 兼容映射为 LOCAL） */
+    /** 旧值 FAST/HIGH_QUALITY 兼容映射为 LOCAL */
     override val translationEngine: Flow<TranslationEngine> = dataStore.translationEngine.map { engine ->
         when (engine) {
-            "FAST", "HIGH_QUALITY" -> TranslationEngine.LOCAL  // 旧版本兼容
+            "FAST", "HIGH_QUALITY" -> TranslationEngine.LOCAL
             else -> try { TranslationEngine.valueOf(engine) } catch (_: Exception) { TranslationEngine.LOCAL }
         }
     }
     override suspend fun setTranslationEngine(engine: TranslationEngine) =
         dataStore.setTranslationEngine(engine.name)
 
-    /** 云端翻译服务商（字符串 → 枚举转换） */
     override val cloudTranslationProvider: Flow<CloudTranslationProvider> =
         dataStore.cloudTranslationProvider.map { provider ->
             try { CloudTranslationProvider.valueOf(provider) } catch (_: Exception) {
@@ -66,7 +61,6 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setCloudTranslationProvider(provider: CloudTranslationProvider) =
         dataStore.setCloudTranslationProvider(provider.name)
 
-    /** 云端翻译 API Key（已加密存储） */
     override val cloudTranslationApiKey: Flow<String> = dataStore.cloudTranslationApiKey
     override suspend fun setCloudTranslationApiKey(key: String) =
         dataStore.setCloudTranslationApiKey(key)
@@ -95,10 +89,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override val llmUrl: Flow<String> = dataStore.llmUrl
     override val llmModel: Flow<String> = dataStore.llmModel
     override val llmProvider: Flow<String> = dataStore.llmProvider
-    /**
-     * LLM 配置是否就绪：根据当前 provider 判断对应 API Key 和 URL 是否都不为空。
-     * 用于 UI 层判断点击 AI 模式时是否需要弹配置提示。
-     */
+    /** LLM 配置是否就绪：当前 provider 对应的 API Key 和 URL 均非空（UI 据此弹配置提示） */
     override val isLlmConfigReady: Flow<Boolean> = kotlinx.coroutines.flow.combine(
         dataStore.llmProvider,
         dataStore.llmUrl,
@@ -115,11 +106,9 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setLlmModel(model: String) = dataStore.setLlmModel(model)
     override suspend fun setLlmProvider(provider: String) = dataStore.setLlmProvider(provider)
 
-    /** 引导开关 */
     override val showOnboarding: Flow<Boolean> = dataStore.showOnboarding
     override suspend fun setShowOnboarding(show: Boolean) = dataStore.setShowOnboarding(show)
 
-    /** 界面语言 */
     override val interfaceLanguage: Flow<String> = dataStore.interfaceLanguage
     override suspend fun setInterfaceLanguage(language: String) = dataStore.setInterfaceLanguage(language)
 }

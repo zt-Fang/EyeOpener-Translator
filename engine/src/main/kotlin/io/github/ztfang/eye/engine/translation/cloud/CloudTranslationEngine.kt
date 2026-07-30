@@ -15,17 +15,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 云端翻译引擎路由器。
- *
- * - 实现 [TranslationEngine] 接口，注册到 [io.github.ztfang.eye.domain.usecase.translation.TranslateUseCase] 的 Map 中
- * - 根据 [SettingsRepository.cloudTranslationProvider] 路由到具体云服务商实现
- * - API Key 统一存储在 [SettingsRepository.cloudTranslationApiKey]，各 provider 按自身格式解析：
- *   - Papago: `clientId:clientSecret`
- *   - 百度: `appid:secretKey`
- *   - DeepL: 仅 AuthKey（Free Key 以 `:fx` 结尾）
- *   - Azure: `key` 或 `region:key`
- *   - Google: 仅 API Key
- * - 语言对不支持时返回 UnsupportedOperationException（静默跳过，由 UseCase 不响应）
+ * 云端翻译路由：按 [SettingsRepository.cloudTranslationProvider] 分发到具体 Provider。
+ * API Key 格式：Papago=clientId:clientSecret / 百度=appid:secretKey / DeepL=AuthKey / Azure=key[:region] / Google=key。
  */
 @Singleton
 class CloudTranslationEngine @Inject constructor(

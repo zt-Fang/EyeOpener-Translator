@@ -17,14 +17,10 @@ import kotlinx.coroutines.flow.map
 /** DataStore 实例，存储在 filesDir/eye_opener_settings.preferences_pb */
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "eye_opener_settings")
 
-/**
- * 设置数据存储。
- * 基于 DataStore Preferences 实现，提供应用配置的持久化存储。
- * API Key 等敏感字段通过 [CryptoManager] 加密后存储。
- */
+/** 设置持久化存储；API Key 等敏感字段经 [CryptoManager] 加密后存入 */
 class SettingsDataStore(private val context: Context) {
 
-    /** AES/GCM 加密器 — API Key 等敏感字段在存入 DataStore 前加密 */
+    /** 敏感字段加密器 */
     private val crypto = CryptoManager()
 
     // ============ 显示模式 ============
@@ -50,7 +46,6 @@ class SettingsDataStore(private val context: Context) {
     val cloudTranslationApiKey: Flow<String> = context.dataStore.data.map { crypto.decrypt(it[CLOUD_TRANSLATION_API_KEY] ?: "") }
 
     // ============ API Key（读取时自动解密） ============
-    // DataStore 里存的是 Base64(IV + ciphertext + tag)
     val openAiKey: Flow<String> = context.dataStore.data.map { crypto.decrypt(it[OPENAI_KEY] ?: "") }
     val claudeKey: Flow<String> = context.dataStore.data.map { crypto.decrypt(it[CLAUDE_KEY] ?: "") }
     // 记录哪个服务商配置了 openAiKey，用于显示时判断是否回显
@@ -87,7 +82,6 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
-    /** API Key 存入前加密 */
     suspend fun setOpenAiKey(key: String) {
         context.dataStore.edit { it[OPENAI_KEY] = if (key.isBlank()) "" else crypto.encrypt(key) }
     }
@@ -155,7 +149,6 @@ class SettingsDataStore(private val context: Context) {
 
     companion object {
         private const val TAG = "SettingsDataStore"
-        // DataStore 键定义
         private val DISPLAY_MODE = stringPreferencesKey("display_mode")
         private val OVERLAY_X = intPreferencesKey("overlay_x")
         private val OVERLAY_Y = intPreferencesKey("overlay_y")

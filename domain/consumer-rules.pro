@@ -5,8 +5,8 @@
 # ==============================
 # 模型层数据类（Room/JSON 序列化依赖名称匹配，必须保留
 # ==============================
--keep class com.example.eye.domain.model.** { *; }
--keep enum com.example.eye.domain.model.** {
+-keep class io.github.ztfang.eye.domain.model.** { *; }
+-keep enum io.github.ztfang.eye.domain.model.** {
     <fields>;
     public *;
     public static **[] values();
@@ -14,7 +14,7 @@
 }
 
 # 保留 data class 的 componentN、copy、toString 等方法（避免 R8 可能误移除）
--keepclassmembers class com.example.eye.domain.model.** {
+-keepclassmembers class io.github.ztfang.eye.domain.model.** {
     public ** component1();
     public ** component2();
     public ** component3();

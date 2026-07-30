@@ -113,11 +113,7 @@ class VoskAsrEngine @Inject constructor() : AsrEngine {
         loadedModelPath = null
     }
 
-    /**
-     * 直接将音频数据送入 Vosk 识别器（无中间缓冲层）。
-     * acceptWaveForm 是轻量操作（仅更新内部状态），不会阻塞录音线程。
-     * 每次 feed 同时取出 partial/final 结果，通过 Flow 发射。
-     */
+    /** 直送 Vosk 识别器；acceptWaveForm 轻量不阻塞录音线程，partial/final 经 Flow 发射 */
     override fun feedAudio(samples: ShortArray) {
         // 跳过过小帧，防止Kaldi特征提取断言崩溃（ExtractWindow/BestPathEnd等）
         if (samples.size < MIN_FRAME_SAMPLES) return

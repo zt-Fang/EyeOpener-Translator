@@ -1,19 +1,6 @@
 /**
- * 字幕 ViewModel 模块 —— SubtitleManager
- *
- * 职责：
- * - 统一管理字幕状态（原文/译文/显示模式/语言对）
- * - 调度音频采集 -> VAD(仅UI状态) -> Vosk 多语种真流式 ASR -> UI -> 翻译
- * - 维护悬浮窗位置/激活状态，对接 Overlay Service
- * - 监听 SettingsRepository 配置变更并同步到 UI 状态
- * - 源语种变化时动态加载对应 Vosk 模型
- *
- * 核心改造（Vosk 真流式）：
- * 1. 音频实时送入 VoskAsrEngine.feedAudio(ShortArray)，无需转换 float
- * 2. Vosk 内部自动处理 getPartialResult/getResult，通过 Flow 推送结果
- * 3. partial 结果实时更新 UI（半透明），final 结果触发翻译（不透明）
- * 4. 源语种切换时调用 modelPreparer.prepareAsr(lang) 加载对应模型
- * 5. VAD Debounce：speech start/end 稳定化，避免误判（仅 UI 状态）
+ * 字幕核心管理器：音频采集 → VAD(仅UI) → ASR → 翻译 → 悬浮窗状态。
+ * partial 实时显示，final 触发翻译；源语种切换动态加载模型。
  */
 package io.github.ztfang.eye.viewmodel
 
@@ -118,14 +105,8 @@ class SubtitleManager @Inject constructor(
     private val inputFinalBuffer = StringBuilder()
 
     /**
-     * 启动语音输入模式（助手界面对应麦克风按住）。
-     * 复用 ASR 引擎和音频采集，识别结果写入 voiceInputText，不触发翻译。
-     * ASR 引擎仅由源语言决定（与字幕模式共用唯一映射规则），**不做 fallback**：
-     * - zh/en → X-ASR
-     * - Nemotron 支持语种 → Nemotron 3.5
-     * - bn → BN 专用
-     * - 其他 → Vosk
-     * 未下载时提示应下载的模型名，避免用错引擎导致乱码或崩。
+     * 启动语音输入模式：复用 ASR + 音频采集，结果写 voiceInputText，不触发翻译。
+     * ASR 引擎由源语言唯一决定，不做 fallback，未下载提示模型名。
      */
     fun startVoiceInput() {
         if (isInputMode) return
@@ -195,17 +176,7 @@ class SubtitleManager @Inject constructor(
         return result.trim()
     }
 
-    /**
-     * 对语音输入文本进行轻量润色。
-     * - 去掉语气词和口头禅
-     * - 修正标点和断句
-     * - 修正常见 ASR 同音字错误
-     *
-     * 如果 LLM 未配置或润色失败，返回原始文本。
-     *
-     * @param originalText 原始ASR识别文本
-     * @return 润色后的文本
-     */
+    /** 语音输入文本轻量润色：去语气词/修正标点/修同音字；LLM 未配置或失败时返回原文。 */
     suspend fun polishVoiceInput(originalText: String): String = withContext(Dispatchers.IO) {
         if (originalText.isBlank()) return@withContext ""
         if (!isLlmConfigReady.value) return@withContext originalText
@@ -383,15 +354,7 @@ class SubtitleManager @Inject constructor(
         Log.i(LOG_TAG, "[RESOLVE] lang=$sourceLanguage → force engine=$eng")
     }
 
-    /**
-     * 根据源语言代码解析对应的 Sherpa-ONNX 模型 ID。
-     *
-     * 分流：
-     * - zh/en → X-ASR-zh-en-960ms（中英混说优化，自带标点）
-     * - bn → BN Vosk 2026-02-09（孟加拉语专用）
-     * - Nemotron 支持语种 → Nemotron 3.5 320ms int8（per-stream language）
-     * - 其他 → null（Vosk 独有语言，不走 Sherpa-ONNX）
-     */
+    /** 解析 Sherpa-ONNX 模型 ID：zh/en→X-ASR, bn→BN Vosk, Nemotron 语种→Nemotron 3.5, 其他→null(Vosk) */
     private fun resolveSherpaModelId(languageCode: String): String? = when (languageCode) {
         "zh", "en" -> SherpaOnnxModel.X_ASR_ZH_EN_960MS.modelId
         "bn" -> SherpaOnnxModel.BN_VOSK_2026_02_09.modelId
@@ -401,15 +364,8 @@ class SubtitleManager @Inject constructor(
     }
 
     /**
-     * 根据源语言代码获取 Nemotron per-stream language 代码。
-     *
-     * sherpa-onnx 官方文档(HuggingFace csukuangfj2 模型卡):
-     * > "Use per-stream language strings such as 'en', 'ja', or 'auto'."
-     *
-     * 即 sherpa-onnx 接受 ISO 639-1 bare code, 内部会映射到 NVIDIA locale。
-     * 无需手动转 locale("en" 不需要转 "en-US", sherpa-onnx 自动处理)。
-     *
-     * 注: 中文 zh 实际不会走到此(zh 走 X-ASR), 保留传 "zh" 作为防御。
+     * Nemotron per-stream language 代码：sherpa-onnx 接受 ISO 639-1 bare code（'en'/'ja'/'auto'），
+     * 内部自动映射 locale，无需转 'en-US'。zh 实际走 X-ASR，传 'zh' 仅为防御。
      */
     private fun resolveNemotronLanguage(languageCode: String): String = languageCode
 
@@ -514,13 +470,9 @@ class SubtitleManager @Inject constructor(
     /**
      * 监听模型下载状态变化。
      *
-     * 场景1：用户在 LocalModelsScreen 下载完模型后，SubtitleManager 需感知到
-     *        状态变 AVAILABLE。若之前因"模型未下载"导致 ASR 启动失败，则清除错误并
-     *        重启音频采集以加载新下载的模型。
-     *
-     * 场景2：每次 Flow 推送时同步更新 [cachedModelStates] 快照，供 [resolveAsrEngine]
-     *        在非挂起调用中判断"理想引擎的模型是否已下载"，未下载则静默回退 Vosk，
-     *        避免悬浮窗误报"模型未下载"。
+     * 场景1：模型下载变 AVAILABLE 后清除"未下载"错误并重启采集加载新模型。
+     * 场景2：同步 [cachedModelStates] 快照，供 [resolveAsrEngine] 非挂起判断模型是否就绪，
+     *        未就绪静默回退 Vosk，避免悬浮窗误报。
      */
     private fun observeModelDownloads() {
         scope.launch {
@@ -702,13 +654,7 @@ class SubtitleManager @Inject constructor(
     @Volatile
     private var lastPartialTranslateLength = 0
 
-    /**
-     * 多行滚动 + 滑动窗口 partial translation 策略：
-     * - 每个 final 句子是独立一行，自动向上滚动
-     * - partial：实时更新最后一行原文，达到滑动窗口步长时触发轻量预览翻译
-     * - final：替换最后一行为 final 状态，触发正式翻译
-     * - 历史行保留 MAX_HISTORY_LINES 条，可滑动查看
-     */
+    /** 多行滚动+滑动窗口：final 独立成行向上滚动，partial 达步长触发预览翻译，历史保留 MAX_HISTORY_LINES 条。 */
     fun updateSourceText(text: String, isFinal: Boolean) {
         val current = _subtitleState.value
 
@@ -820,17 +766,8 @@ class SubtitleManager @Inject constructor(
     private val translationVersion = AtomicLong(0)
 
     /**
-     * 调度翻译任务（并发模型 + 版本号管理）
-     *
-     * AI 引擎链路（方案 C+D+E）：
-     * ASR 原文 → 上下文感知 + 润色 + 翻译（一次 LLM 流式调用）→ 逐字显示译文
-     *
-     * LOCAL/CLOUD 引擎链路：ASR 原文 → 显示原文 → 翻译 → 显示译文
-     *
-     * 并发策略：
-     * - 不 cancel 旧翻译任务，让其在后台自然完成（历史记录仍保存）
-     * - 新翻译递增版本号，翻译返回时校验版本，仅最新版本更新 UI
-     * - 避免连读场景下新句取消旧句翻译导致旧句译文永远丢失
+     * 调度翻译：不 cancel 旧任务，递增版本号，仅最新版本更新 UI（避免连读场景旧句译文丢失）。
+     * AI 链路：ASR→LLM 流式（润色+翻译）；LOCAL/CLOUD：ASR→显示原文→翻译→显示译文。
      */
     fun translate(text: String) {
         // 递增版本号，停止录音时用于使在途结果失效

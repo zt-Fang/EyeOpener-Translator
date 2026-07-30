@@ -6,22 +6,12 @@ import java.io.FileInputStream
 import java.io.IOException
 import java.util.zip.ZipInputStream
 
-/**
- * Zip 解压工具。
- * 用于 Vosk 模型下载后解压到目标目录。
- */
+/** zip 解压（Vosk 模型包） */
 object ZipExtractor {
 
     private const val TAG = "ZipExtractor"
 
-    /**
-     * 解压 zip 文件到目标目录。
-     *
-     * @param zipFile zip 文件
-     * @param destDir 目标目录（解压后文件的父目录）
-     * @param stripTopLevelDir 是否去掉 zip 内的顶层目录（Vosk 模型 zip 通常包一层目录）
-     * @return 成功返回 true，失败返回 false
-     */
+    /** 解压 zip 到 destDir；stripTopLevelDir=true 时去掉 zip 内顶层目录（Vosk zip 通常包一层） */
     fun extract(zipFile: File, destDir: File, stripTopLevelDir: Boolean = true): Result<Unit> {
         return runCatching {
             if (!zipFile.exists()) {
@@ -59,7 +49,7 @@ object ZipExtractor {
                 }
             }
             Log.i(TAG, "Extracted ${zipFile.name} to ${destDir.absolutePath}")
-            Unit // runCatching 需要显式 Unit 确保返回 Result<Unit>
+            Unit
         }.onFailure {
             Log.e(TAG, "Extract failed: ${it.message}", it)
         }

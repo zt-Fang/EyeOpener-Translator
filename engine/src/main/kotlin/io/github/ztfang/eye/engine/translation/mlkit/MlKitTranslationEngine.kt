@@ -145,16 +145,8 @@ class MlKitTranslationEngine @Inject constructor(
         }
 
     /**
-     * 执行翻译。
-     * 流程：
-     * 1. 源语言==目标语言：直接返回原文，避免ML Kit无意义推理+下载校验被墙超时
-     * 2. 将自定义语言代码转换为 ML Kit 语言代码
-     * 3. 获取或创建对应语言对的 Translator（LRU 缓存）
-     * 4. 先用 isModelDownloaded 本地检查两个语言模型：都存在则跳过downloadModelIfNeeded（避免国内无Google服务时下载校验超时）
-     * 5. 模型缺失时才调用 downloadModelIfNeeded（国内网络环境需要VPN/GMS，短超时防止卡死）
-     * 6. 执行翻译并封装结果（带超时）
-     *
-     * @return 成功返回 [TranslationResult]，失败返回 [Result.failure]
+     * 翻译流程：同语种短路 → 代码转换 → LRU 取 Translator → isModelDownloaded 本地校验
+     * → 缺失才 downloadModelIfNeeded（短超时防国内无 GMS 卡死）→ 翻译（带超时）。
      */
     override suspend fun translate(
         text: String, sourceLanguage: String, targetLanguage: String

@@ -24,33 +24,23 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 模型仓库实现。
- *
- * 目录约定（与 [ModelPreparer] 保持完全一致，否则下载后 prepareAsr 找不到文件）：
- * - Vosk 模型实际文件：[Context.filesDir]/models/vosk/<languageCode>/ (am/conf/graph)
- * - Sherpa-ONNX 模型实际文件：[Context.filesDir]/models/sherpa-onnx/<modelId>/
- *   (encoder/decoder/joiner/tokens 四个 onnx/txt)
- * - 模型状态 state.json：[Context.filesDir]/models/{modelName}/state.json
- *   (modelName = "VOSK_ASR_ZH" / "SHERPA_ONNX_ASR_<modelId>"，用于 UI 列表展示 key)
- *
- * 下载完成 → 把 {modelName}/ 里刚下好的文件移动到 ModelPreparer 真实目录，
- * 然后 ModelState.localPath 改为真实路径（getModelPath 才返回非 null）。
+ * 模型仓库实现。目录约定（须与 [ModelPreparer] 一致，否则下载后找不到文件）：
+ * - Vosk：filesDir/models/vosk/<lang>/（am/conf/graph）
+ * - Sherpa-ONNX：filesDir/models/sherpa-onnx/<modelId>/（encoder/decoder/joiner/tokens）
+ * - 状态：filesDir/models/{modelName}/state.json
+ * 下载完成后把 {modelName}/ 暂存目录迁移到上述真实目录，localPath 指向真实路径。
  */
 class ModelRepositoryImpl(private val context: Context) : ModelRepository {
 
-    /** 模型存储根目录 */
     private val modelsBaseDir: File get() = File(context.filesDir, "models")
 
-    /** Vosk 模型实际存放根目录（与 ModelPreparer.asrModelDir 完全一致） */
+    /** 与 ModelPreparer.asrModelDir 一致 */
     private val voskModelsRoot: File get() = File(modelsBaseDir, "vosk")
 
-    /** Sherpa-ONNX 模型实际存放根目录（与 ModelPreparer.sherpaOnnxModelDir 完全一致） */
+    /** 与 ModelPreparer.sherpaOnnxModelDir 一致 */
     private val sherpaOnnxModelsRoot: File get() = File(modelsBaseDir, "sherpa-onnx")
 
-    /**
-     * 从 modelName("VOSK_ASR_ZH"/"SHERPA_ONNX_ASR_xxx") 推出【ModelPreparer 真实读取目录】。
-     * 返回：null = 其他模型（不迁移），否则 = 真实目标目录
-     */
+    /** modelName → ModelPreparer 真实读取目录；null = 其他模型（不迁移） */
     private fun resolveRealAsrDirFor(modelName: String): File? = when {
         modelName.startsWith("SHERPA_ONNX_ASR_") -> {
             val modelId = modelName.substringAfter("SHERPA_ONNX_ASR_")
@@ -64,17 +54,11 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
     }
 
     /**
-     * 下载完成后把 stageDir(= {modelsBaseDir}/{modelName}/) 内的【除 state.json
-     * 以外的所有文件/子目录】搬到 realDir(= vosk/<lang>/ 或 sherpa-onnx/<modelId>/)。
-     * 搬完返回：真实目录绝对路径；任何失败返回 null（上层会走 ERROR）。
-     *
-     * 注：若调用方传的 targetDir 本身就是 realDir（同一路径），则直接短路返回 realDir
-     * 的绝对路径，避免「dest = File(realDir, f.name) 与 f 是同文件 → dest.deleteRecursively()
-     * 把刚下好的文件自己删了 → 目录瞬间变空」的Bug。
+     * 把 stageDir 内除 state.json 外的文件搬到 realDir，返回真实目录路径；失败返回 null。
+     * stageDir == realDir 时短路返回：否则 dest 与源同文件，deleteRecursively 会自删。
      */
     private fun moveDownloadedFilesToRealAsrDir(stageDir: File, realDir: File): String? {
         return runCatching {
-            // 同路径短路：stageDir == realDir，不需要移动，直接返回
             val sameDir = runCatching {
                 stageDir.canonicalPath == realDir.canonicalPath
             }.getOrDefault(false) || stageDir.absolutePath == realDir.absolutePath
@@ -103,18 +87,15 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         }.getOrNull()
     }
 
-    /** 模型状态流，内存中维护最新状态 */
+    /** 内存中维护最新模型状态 */
     private val _modelsFlow = MutableStateFlow<Map<String, ModelState>>(emptyMap())
 
-    /** 观察单个模型的状态变化 */
     override fun observeModel(modelName: String): Flow<ModelState> =
         _modelsFlow.map { it[modelName] ?: ModelState(modelName, ModelStatus.NOT_EXIST) }
 
-    /** 观察所有模型的状态变化 */
     override fun observeAllModels(): Flow<List<ModelState>> =
         _modelsFlow.map { it.values.toList() }
 
-    /** 下载单文件模型（便捷包装） */
     override suspend fun downloadModel(
         modelName: String, downloadUrl: String,
         onProgress: (DownloadProgress) -> Unit
@@ -129,10 +110,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         onProgress = onProgress
     )
 
-    /**
-     * 下载多文件模型。
-     * 聚合所有文件的下载进度，通过 onProgress 回调报告。
-     */
+    /** 下载多文件模型，聚合进度经 onProgress 上报 */
     override suspend fun downloadModelFiles(
         modelName: String,
         files: List<ModelFileSpec>,
@@ -152,24 +130,22 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         // 预计算总大小用于准确进度报告
         val totalSizeAllFiles: Long = files.sumOf { it.sizeBytes }
         val sizesByFile: Map<String, Long> = files.associate { it.relativePath to it.sizeBytes }
-        var aggregateDownloaded: Long = 0L  // 只累加已【实际完成】文件的真实字节数（target.length()），不做预期值重置
+        var aggregateDownloaded: Long = 0L  // 只累加已完成文件的真实字节数（target.length()）
         val startedAt = System.currentTimeMillis()
         var lastEmit = 0L
-        var lastEmittedBytes: Long = -1L   // 非递减保证：防止 100%→90% 跳动
+        var lastEmittedBytes: Long = -1L   // 进度非递减：防止 100%→90% 跳动
 
-        /** 发送进度更新（限制频率 ~5Hz，最终值不节流；保证 bytes 非递减） */
+        /** 进度上报（~5Hz 节流，最终值不节流；bytes 非递减） */
         fun emit(currentFileName: String, currentFileRead: Long, currentFileSize: Long, isFinal: Boolean = false) {
             val total = if (totalSizeAllFiles > 0) totalSizeAllFiles
             else (aggregateDownloaded + (sizesByFile[currentFileName] ?: 0L))
             val now = System.currentTimeMillis()
             val elapsed = (now - startedAt).coerceAtLeast(1L) / 1000L
             val bytes = aggregateDownloaded + currentFileRead
-            // 非递减保证：新进度小于已发射的则丢弃
             if (lastEmittedBytes >= 0 && bytes < lastEmittedBytes) {
                 Log.w(TAG, "[PROGRESS_GUARD] $modelName: 丢弃回退进度 emit bytes=$bytes < last=$lastEmittedBytes, file=$currentFileName")
                 return
             }
-            // ~5Hz 节流，但最终 emit 不节流
             if (!isFinal && now - lastEmit < 200 && currentFileRead != currentFileSize) return
             lastEmittedBytes = bytes
             onProgress(
@@ -184,10 +160,8 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         }
 
         try {
-            // 更新为下载中状态
             updateState(modelName, ModelStatus.DOWNLOADING, downloadUrl = files.first().url)
 
-            // 逐个下载文件
             for ((index, spec) in files.withIndex()) {
                 val target = File(dir, spec.relativePath)
                 target.parentFile?.mkdirs()
@@ -196,9 +170,6 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                     spec = spec,
                     target = target,
                     onBytes = { fileRead, fileSize ->
-                        // 关键修复：不再用 files.take(index) 的【预期大小】重置 aggregateDownloaded，
-                        // 因为 aggregateDownloaded 已在文件完成时 += target.length()，记录的是真实值。
-                        // 这里仅在当前文件基础上累加 fileRead。
                         emit(spec.relativePath, fileRead, fileSize)
                     }
                 )
@@ -209,10 +180,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                 emit(spec.relativePath, actualFileBytes, actualFileBytes, isFinal = true)
             }
 
-            // 下载完成，更新为可用状态
-            // === 关键修复：把 stageDir 中除 state.json 外的文件迁移到 ModelPreparer
-            // 真实读取目录（sherpa-onnx/<modelId> 或 vosk/<lang>），否则
-            // SubtitleManager → prepareAsr 永远找不到已下载文件。 ===
+            // 迁移暂存目录 → ModelPreparer 真实读取目录，否则 prepareAsr 找不到文件
             val realDir = resolveRealAsrDirFor(modelName)
             val realPath = if (realDir != null) {
                 moveDownloadedFilesToRealAsrDir(stageDir = dir, realDir = realDir)
@@ -246,16 +214,12 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         } catch (e: Exception) {
             Log.e(TAG, "Download failed for $modelName: ${e.message}", e)
             updateState(modelName, ModelStatus.ERROR, errorMessage = e.message ?: "Unknown error")
-            // 保留 .part 文件用于断点续传，不删除目录
+            // 保留 .part 文件用于断点续传
             Result.failure(e)
         }
     }
 
-    /**
-     * 下载多文件到指定目录（不解压）。
-     * 用于 Sherpa-ONNX X-ASR 等无 tar.bz2 直链的模型，逐个下载原始文件到 targetDir。
-     * 进度聚合逻辑与 downloadModelFiles 一致，区别仅在于目标目录可控。
-     */
+    /** 下载多文件到 targetDir（不解压）；进度逻辑同 downloadModelFiles */
     override suspend fun downloadFilesToDir(
         modelName: String,
         files: List<ModelFileSpec>,
@@ -272,27 +236,24 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
 
         Log.i(TAG, "多文件下载开始: model=$modelName, files=${files.size}, totalSize=${files.sumOf { it.sizeBytes } / 1024 / 1024}MB, dir=${dir.absolutePath}")
 
-        // 预计算总大小用于准确进度报告
         val totalSizeAllFiles: Long = files.sumOf { it.sizeBytes }
         val sizesByFile: Map<String, Long> = files.associate { it.relativePath to it.sizeBytes }
-        var aggregateDownloaded: Long = 0L  // 只累加已【实际完成】文件的真实字节数，不做预期值重置
+        var aggregateDownloaded: Long = 0L
         val startedAt = System.currentTimeMillis()
         var lastEmit = 0L
-        var lastEmittedBytes: Long = -1L   // 非递减保证
+        var lastEmittedBytes: Long = -1L
 
-        /** 发送进度更新（限制频率 ~5Hz，最终值不节流；保证 bytes 非递减） */
+        /** 进度上报（~5Hz 节流，最终值不节流；bytes 非递减） */
         fun emit(currentFileName: String, currentFileRead: Long, currentFileSize: Long, isFinal: Boolean = false) {
             val total = if (totalSizeAllFiles > 0) totalSizeAllFiles
             else (aggregateDownloaded + (sizesByFile[currentFileName] ?: 0L))
             val now = System.currentTimeMillis()
             val elapsed = (now - startedAt).coerceAtLeast(1L) / 1000L
             val bytes = aggregateDownloaded + currentFileRead
-            // 非递减保证
             if (lastEmittedBytes >= 0 && bytes < lastEmittedBytes) {
                 Log.w(TAG, "[PROGRESS_GUARD] $modelName: 丢弃回退进度 emit bytes=$bytes < last=$lastEmittedBytes, file=$currentFileName")
                 return
             }
-            // ~5Hz 节流，但最终 emit 不节流
             if (!isFinal && now - lastEmit < 200 && currentFileRead != currentFileSize) return
             lastEmittedBytes = bytes
             onProgress(
@@ -317,7 +278,6 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                     spec = spec,
                     target = target,
                     onBytes = { fileRead, fileSize ->
-                        // 关键修复：不再用预期大小重置 aggregateDownloaded
                         emit(spec.relativePath, fileRead, fileSize)
                     }
                 )
@@ -327,7 +287,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                 emit(spec.relativePath, actualFileBytes, actualFileBytes, isFinal = true)
             }
 
-            // 所有文件下载完，最后再跑一次完整性校验（防止损坏）
+            // 全部下完后做完整性校验
             val allOK = isSherpaOnnxModelComplete(dir)
             if (!allOK) {
                 Log.w(TAG, "[DL_INTEGRITY_FAIL] $modelName: 所有文件下载完成但完整性校验失败！dir=${dir.absolutePath}, files=${dir.listFiles()?.map { it.name to it.length() }}")
@@ -342,7 +302,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                 updateState(errState)
                 Result.failure(IllegalStateException("Integrity check failed: $modelName"))
             } else {
-                // 关键修复：同步把 stageDir 文件 → ASR 真实目录，localPath 改为真实目录
+                // 迁移暂存目录 → ASR 真实目录
                 val realDir = resolveRealAsrDirFor(modelName)
                 val realPath = if (realDir != null) {
                     moveDownloadedFilesToRealAsrDir(stageDir = dir, realDir = realDir)
@@ -380,12 +340,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         }
     }
 
-    /**
-     * 下载单个文件（支持断点续传 + 魔数校验）。
-     *
-     * 断点续传：使用 .part 临时文件，中断后下次从断点继续（Range header）。
-     * 魔数校验：下载完成后校验文件头，防止 HTML 错误页或损坏文件被误用。
-     */
+    /** 下载单个文件：.part 临时文件 + Range 断点续传 */
     private fun downloadOneFile(
         spec: ModelFileSpec,
         target: File,
@@ -396,7 +351,6 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             throw SecurityException("Refusing to download from non-whitelisted host: $host")
         }
 
-        // 使用 .part 临时文件支持断点续传
         val partFile = File(target.parentFile, "${target.name}.part")
         val existingBytes = if (partFile.exists()) partFile.length() else 0L
 
@@ -405,7 +359,6 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             readTimeout = 30_000
             instanceFollowRedirects = true
             requestMethod = "GET"
-            // 断点续传：已有部分数据时请求剩余部分
             if (existingBytes > 0) {
                 setRequestProperty("Range", "bytes=$existingBytes-")
             }
@@ -432,14 +385,13 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             else -> -1L
         }
 
-        // 非续传时清空 .part 文件（从头下载）
+        // 非续传时清空 .part 从头下载
         if (!isResume && existingBytes > 0) {
             partFile.delete()
         }
 
         val input = conn.inputStream
         try {
-            // append 模式：续传时追加写入，全新下载时覆盖
             val appendMode = isResume
             FileOutputStream(partFile, appendMode).use { output ->
                 val buffer = ByteArray(64 * 1024)
@@ -457,18 +409,14 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             conn.disconnect()
         }
 
-        // 完整性校验：仅文件大小（HTTP 2xx + 达到预期大小 95% 以上即视为成功）。
-        // 用户要求取消魔数校验——历史上 ONNX ir_version 范围限制、tokens.txt 首字符'<'误判
-        // HTML、zip/tar 头等反复产生 .part/.corrupted 垃圾文件，甚至触发 INIT 自愈删除用户已
-        // 下载的完整 161MB 模型。文件格式正确性由 ASR 引擎在 init() 时再验证，这里只保证"
-        // 下载完了"，不再拦。
+        // 只校验大小（≥95% 视为成功）；不做魔数校验——曾反复误判（tokens.txt 首字符'<'、
+        // zip/tar 头等）并触发自愈误删完整模型。格式正确性由 ASR 引擎 init() 验证。
         val verifyTotal = if (fullSize > 0) fullSize else spec.sizeBytes
         if (verifyTotal > 0 && partFile.length() < verifyTotal * 95 / 100) {
             partFile.delete()
             throw IOException("Truncated file for ${spec.relativePath}: got ${partFile.length()} of $verifyTotal")
         }
 
-        // 校验通过，rename .part → target。不再保留 .corrupted 样本。
         if (target.exists()) target.delete()
         if (!partFile.renameTo(target)) {
             partFile.copyTo(target, overwrite = true)
@@ -476,10 +424,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         }
     }
 
-    /**
-     * 解析 Content-Range header 中的完整文件大小。
-     * 格式：bytes 0-1023/2048 → 返回 2048
-     */
+    /** 解析 Content-Range 中的总大小（bytes 0-1023/2048 → 2048） */
     private fun parseContentRangeTotal(contentRange: String?): Long? {
         if (contentRange == null) return null
         val slashIndex = contentRange.lastIndexOf('/')
@@ -487,7 +432,6 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         return contentRange.substring(slashIndex + 1).toLongOrNull()
     }
 
-    /** 删除模型 */
     override suspend fun deleteModel(modelName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             Log.i(TAG, "deleteModel: 开始删除 $modelName")
@@ -495,14 +439,14 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             val dir = File(modelsBaseDir, modelName)
             Log.i(TAG, "deleteModel: state.json 目录=${dir.absolutePath}, exists=${dir.exists()}")
             if (dir.exists()) dir.deleteRecursively()
-            // Vosk 模型：同时删除实际模型文件（models/vosk/<lang>/）
+            // 同时删除实际模型文件 models/vosk/<lang>/
             if (modelName.startsWith("VOSK_ASR_")) {
                 val langCode = modelName.substringAfter("VOSK_ASR_").lowercase()
                 val voskLangDir = File(modelsBaseDir, "vosk/$langCode")
                 Log.i(TAG, "deleteModel: Vosk 模型目录=${voskLangDir.absolutePath}, exists=${voskLangDir.exists()}")
                 if (voskLangDir.exists()) voskLangDir.deleteRecursively()
             }
-            // Sherpa-ONNX 模型：同时删除实际模型文件（models/sherpa-onnx/<modelId>/）
+            // 同时删除实际模型文件 models/sherpa-onnx/<modelId>/
             if (modelName.startsWith("SHERPA_ONNX_ASR_")) {
                 val modelId = modelName.substringAfter("SHERPA_ONNX_ASR_")
                 val sherpaDir = File(modelsBaseDir, "sherpa-onnx/$modelId")
@@ -515,9 +459,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         }
     }
 
-    /** 获取模型本地路径 */
     override fun getModelPath(modelName: String): String? {
-        // Sherpa-ONNX 模型：检查实际模型目录 models/sherpa-onnx/<modelId>/
         if (modelName.startsWith("SHERPA_ONNX_ASR_")) {
             val modelId = modelName.substringAfter("SHERPA_ONNX_ASR_")
             val sherpaDir = File(modelsBaseDir, "sherpa-onnx/$modelId")
@@ -525,7 +467,6 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             Log.d(TAG, "getModelPath: $modelName, dir=${sherpaDir.absolutePath}, available=$exists")
             return if (exists) sherpaDir.absolutePath else null
         }
-        // Vosk 模型：检查实际模型目录 models/vosk/<lang>/
         if (modelName.startsWith("VOSK_ASR_")) {
             val langCode = modelName.substringAfter("VOSK_ASR_").lowercase()
             val voskDir = File(modelsBaseDir, "vosk/$langCode")
@@ -533,19 +474,13 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             Log.d(TAG, "getModelPath: $modelName, dir=${voskDir.absolutePath}, available=$exists")
             return if (exists) voskDir.absolutePath else null
         }
-        // 其他模型：检查默认目录
         val dir = File(modelsBaseDir, modelName)
         val exists = dir.exists() && dir.listFiles()?.isNotEmpty() == true
         Log.d(TAG, "getModelPath: $modelName, dir=${dir.absolutePath}, available=$exists")
         return if (exists) dir.absolutePath else null
     }
 
-    /**
-     * 下载 zip 模型并解压到指定目录。
-     * Vosk 等模型以 zip 形式发布，需解压后才能使用。
-     *
-     * 流程：下载 zip 到临时位置 → 解压到 extractDir → 校验关键文件 → 更新状态
-     */
+    /** 下载 zip → 解压到 extractDir → 更新状态 */
     override suspend fun downloadAndExtractZip(
         modelName: String,
         zipSpec: ModelFileSpec,
@@ -555,19 +490,17 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         val destDir = File(extractDir)
         val zipFile = File(modelsBaseDir, "${modelName}_tmp.zip")
         val startedAt = System.currentTimeMillis()
-        var lastEmittedBytes: Long = -1L   // 非递减保证
+        var lastEmittedBytes: Long = -1L
 
         runCatching {
             updateState(modelName, ModelStatus.DOWNLOADING, downloadUrl = zipSpec.url)
 
-            // 1. 下载 zip 文件
             downloadOneFile(
                 spec = zipSpec,
                 target = zipFile,
                 onBytes = { read, total ->
                     val elapsed = (System.currentTimeMillis() - startedAt).coerceAtLeast(1L) / 1000L
                     val clampedRead = read.coerceAtMost(if (total > 0) total else Long.MAX_VALUE)
-                    // 非递减保证
                     if (lastEmittedBytes >= 0 && clampedRead < lastEmittedBytes) {
                         Log.w(TAG, "[PROGRESS_GUARD] $modelName(zip): 丢弃回退 read=$clampedRead < last=$lastEmittedBytes")
                         return@downloadOneFile
@@ -585,7 +518,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             )
             Log.i(TAG, "Zip download complete: ${zipFile.absolutePath}")
 
-            // 发送最终下载进度（确保 100%，非递减保护）
+            // 最终进度（确保 100%）
             val finalBytes = zipSpec.sizeBytes.coerceAtLeast(lastEmittedBytes)
             lastEmittedBytes = finalBytes
             onProgress(
@@ -597,19 +530,15 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                 )
             )
 
-            // 2. 解压
             destDir.parentFile?.mkdirs()
-            // 先清空目标目录，避免旧文件残留
             if (destDir.exists()) destDir.deleteRecursively()
             destDir.mkdirs()
 
             ZipExtractor.extract(zipFile, destDir, stripTopLevelDir = true).getOrThrow()
             Log.i(TAG, "Zip extracted to: ${destDir.absolutePath}")
 
-            // 3. 删除临时 zip 文件
             zipFile.delete()
 
-            // 4. 更新状态
             val state = ModelState(
                 modelName = modelName,
                 status = ModelStatus.AVAILABLE,
@@ -628,12 +557,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         }
     }
 
-    /**
-     * 下载 tar.bz2 模型并解压到指定目录。
-     * Sherpa-ONNX 等模型以 tar.bz2 形式发布。
-     *
-     * 流程：下载 tar.bz2 到临时位置 → 解压到 extractDir → 校验 → 更新状态
-     */
+    /** 下载 tar.bz2 → 解压到 extractDir → 更新状态 */
     override suspend fun downloadAndExtractTarBz2(
         modelName: String,
         tarSpec: ModelFileSpec,
@@ -643,19 +567,17 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         val destDir = File(extractDir)
         val tarFile = File(modelsBaseDir, "${modelName}_tmp.tar.bz2")
         val startedAt = System.currentTimeMillis()
-        var lastEmittedBytes: Long = -1L   // 非递减保证
+        var lastEmittedBytes: Long = -1L
 
         runCatching {
             updateState(modelName, ModelStatus.DOWNLOADING, downloadUrl = tarSpec.url)
 
-            // 1. 下载 tar.bz2 文件
             downloadOneFile(
                 spec = tarSpec,
                 target = tarFile,
                 onBytes = { read, total ->
                     val elapsed = (System.currentTimeMillis() - startedAt).coerceAtLeast(1L) / 1000L
                     val clampedRead = read.coerceAtMost(if (total > 0) total else Long.MAX_VALUE)
-                    // 非递减保证
                     if (lastEmittedBytes >= 0 && clampedRead < lastEmittedBytes) {
                         Log.w(TAG, "[PROGRESS_GUARD] $modelName(tar): 丢弃回退 read=$clampedRead < last=$lastEmittedBytes")
                         return@downloadOneFile
@@ -673,7 +595,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             )
             Log.i(TAG, "Tar.bz2 download complete: ${tarFile.absolutePath}")
 
-            // 发送最终下载进度（确保 100%，非递减保护）
+            // 最终进度（确保 100%）
             val finalBytes = tarSpec.sizeBytes.coerceAtLeast(lastEmittedBytes)
             lastEmittedBytes = finalBytes
             onProgress(
@@ -685,7 +607,6 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                 )
             )
 
-            // 2. 解压（tar.bz2 格式）
             destDir.parentFile?.mkdirs()
             if (destDir.exists()) destDir.deleteRecursively()
             destDir.mkdirs()
@@ -693,10 +614,8 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             TarBzipExtractor.extract(tarFile, destDir, stripTopLevelDir = true).getOrThrow()
             Log.i(TAG, "Tar.bz2 extracted to: ${destDir.absolutePath}")
 
-            // 3. 删除临时文件
             tarFile.delete()
 
-            // 4. 更新状态
             val state = ModelState(
                 modelName = modelName,
                 status = ModelStatus.AVAILABLE,
@@ -714,7 +633,6 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         }
     }
 
-    /** 更新模型状态 */
     override suspend fun updateModelStatus(modelName: String, status: ModelStatus): Result<Unit> =
         withContext(Dispatchers.IO) { runCatching { updateState(modelName, status) } }
 
@@ -722,7 +640,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         updateState(ModelState(name, status, progress, downloadUrl, localPath ?: getModelPath(name), errorMessage))
     }
 
-    /** 更新状态到内存和 state.json 文件（关键：日志记录每次状态流转） */
+    /** 更新状态到内存和 state.json */
     private fun updateState(state: ModelState) {
         val prev = _modelsFlow.value[state.modelName]?.status
         Log.w(TAG, "[STATE_CHANGE] ${state.modelName}: ${prev?.name} -> ${state.status.name}" +
@@ -761,8 +679,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                     var fixedStatus = st
                     var fixedProgress = j.getDouble("progress").toFloat()
                     var fixedLocalPath = localPathStr
-                    // 修复：残留状态（DOWNLOADING / ERROR / NOT_EXIST 但localPath存在）
-                    // 判断：如果localPath存在 → 用 Sherpa/Vosk 的完整性检查辅助修状态
+                    // 修复残留状态：localPath 存在时用完整性检查辅助修正
                     val localPathFile = if (!localPathStr.isNullOrBlank()) File(localPathStr) else null
                     val localPathExists = localPathFile != null && localPathFile.exists()
                     val isSherpaModel = modelNameFromJson.startsWith("SHERPA_ONNX_ASR_") ||
@@ -780,36 +697,34 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                     } else false
 
                     if (st != ModelStatus.AVAILABLE) {
-                        // 情况A：非AVAILABLE但文件完整 → 应该是AVAILABLE（比如写state.json前被杀）
+                        // 情况A：非 AVAILABLE 但文件完整 → 修正 AVAILABLE（如写 state.json 前被杀）
                         if (localPathExists && completeNow) {
                             Log.w(TAG, "[INIT_STATE_FIX] ${modelDir.name}: 残留 $statusStr 但 localPath 完整=$completeNow，修正为 AVAILABLE")
                             fixedStatus = ModelStatus.AVAILABLE
                             fixedProgress = 1f
                             fixedLocalPath = localPathStr
                         }
-                        // 情况B：DOWNLOADING且localPath不存在 → 重置NOT_EXIST（不删真实目录，保留已下数据）
+                        // 情况B：DOWNLOADING 且 localPath 不存在 → 重置 NOT_EXIST（不删文件）
                         else if (st == ModelStatus.DOWNLOADING && !localPathExists) {
                             Log.w(TAG, "[INIT_STATE_FIX] ${modelDir.name}: 残留 DOWNLOADING 且localPath不存在，重置为 NOT_EXIST（不删文件）")
                             fixedStatus = ModelStatus.NOT_EXIST
                             fixedProgress = 0f
                             runCatching { sf.delete() }
                         }
-                        // 情况C：ERROR 且 localPath存在但不完整 → 只改状态为 NOT_EXIST，允许用户点击下载覆盖
-                        //   【不删 localPathFile 内容】防止魔数校验误判产生的 tokens.txt.part.corrupted
-                        //   被判定"不完整"后，整个 161MB 的 encoder/decoder/joiner 被 walkTopDown 删掉。
+                        // 情况C：ERROR 且 localPath 不完整 → 只改状态 NOT_EXIST，不删文件（曾误判删除 161MB 完整模型）
                         else if (st == ModelStatus.ERROR) {
                             if (localPathExists && !completeNow) {
                                 Log.w(TAG, "[INIT_STATE_FIX] ${modelDir.name}: ERROR+localPath不完整 → 只改状态NOT_EXIST（不删已下载的大文件）")
                                 fixedStatus = ModelStatus.NOT_EXIST
                                 fixedProgress = 0f
-                                // fixedLocalPath 保留：下次进入时如果自愈完整了会自动变AVAILABLE
+                                // fixedLocalPath 保留：自愈完整后自动变 AVAILABLE
                             } else if (!localPathExists) {
                                 Log.w(TAG, "[INIT_STATE_FIX] ${modelDir.name}: ERROR且localPath不存在，重置为 NOT_EXIST")
                                 fixedStatus = ModelStatus.NOT_EXIST
                                 fixedProgress = 0f
                                 runCatching { sf.delete() }
                             }
-                            // ERROR 但 localPath 完整 → 走情况A的修复分支（上面if已经进入），这里不会到
+                            // ERROR 但 localPath 完整 → 已走情况A
                         }
                     }
                     result[modelDir.name] = ModelState(
@@ -826,7 +741,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                 }
             }
         }
-        // 扫描 Vosk 模型目录，补全/修正模型状态（同 Sherpa-ONNX 修复逻辑）
+        // 扫描 Vosk 目录，补全/修正状态
         val voskDir = File(modelsBaseDir, "vosk")
         Log.i(TAG, "[INIT] 扫描Vosk目录: ${voskDir.absolutePath}, 存在=${voskDir.exists() && voskDir.isDirectory}")
         if (voskDir.exists() && voskDir.isDirectory) {
@@ -848,17 +763,15 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                             Log.w(TAG, "[INIT_VOSK_FIX] $modelName: 修正为 AVAILABLE")
                         }
                     }
-                    // 文件不完整 + 残留DOWNLOADING/AVAILABLE：重置为NOT_EXIST，允许用户重新下载
+                    // 文件不完整 + 残留 DOWNLOADING/AVAILABLE → 重置 NOT_EXIST，不删文件（曾误删部分下载）
                     existing != null && existing.status != ModelStatus.NOT_EXIST -> {
                         result[modelName] = existing.copy(status = ModelStatus.NOT_EXIST, progress = 0f)
                         Log.w(TAG, "[INIT_VOSK_FIX] $modelName: 文件不完整(完整=$isComplete)且状态=${existing.status.name}，重置为 NOT_EXIST（保留文件，允许用户手动删或重新下载覆盖）")
-                        // 不 walkTopDown：避免用户已下好 am/conf 但 graph 少几个文件时被清空
                     }
                 }
             }
         }
-        // 扫描 Sherpa-ONNX 模型目录，补全/修正模型状态
-        // 修复：state.json 残留 DOWNLOADING 状态时(下载中断/进程被杀)，需根据文件完整性修正
+        // 扫描 Sherpa-ONNX 目录，按文件完整性修正残留状态（下载中断/进程被杀）
         val sherpaOnnxDir = File(modelsBaseDir, "sherpa-onnx")
         Log.i(TAG, "[INIT] 扫描Sherpa目录: ${sherpaOnnxDir.absolutePath}, 存在=${sherpaOnnxDir.exists() && sherpaOnnxDir.isDirectory}")
         if (sherpaOnnxDir.exists() && sherpaOnnxDir.isDirectory) {
@@ -869,7 +782,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                 val existing = result[modelName]
                 Log.i(TAG, "[INIT_SHERPA_SCAN] $modelName: 完整=$isComplete, 现有状态=${existing?.status?.name}, path=${modelDir.absolutePath}")
                 when {
-                    // 文件完整：无论 state.json 是何状态，都修正为 AVAILABLE
+                    // 文件完整则强制 AVAILABLE
                     isComplete -> {
                         if (existing == null || existing.status != ModelStatus.AVAILABLE) {
                             result[modelName] = ModelState(
@@ -881,9 +794,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                             Log.w(TAG, "[INIT_SHERPA_FIX] $modelName: 修正为 AVAILABLE (文件完整)")
                         }
                     }
-                    // 文件不完整 + 残留DOWNLOADING/AVAILABLE：只改状态为 NOT_EXIST，保留目录内容
-                    // （不再 walkTopDown 删！）—— 历史上魔数校验误判 tokens.txt 为 HTML，
-                    // 产生 tokens.txt.part.corrupted，导致完整性=false → 把已下好的 161MB ONNX 全删。
+                    // 文件不完整 + 残留 DOWNLOADING/AVAILABLE → 只改状态，保留文件（曾误判删除 161MB ONNX）
                     existing != null && existing.status != ModelStatus.NOT_EXIST -> {
                         result[modelName] = existing.copy(status = ModelStatus.NOT_EXIST, progress = 0f)
                         Log.w(TAG, "[INIT_SHERPA_FIX] $modelName: 文件不完整(enc/dec/join/tokens=${isComplete})且状态=${existing.status.name}，重置为 NOT_EXIST（保留已下载大文件，自愈完整后自动变AVAILABLE）")
@@ -911,15 +822,13 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         val hasEnc = names.any { it.contains("encoder", ignoreCase = true) && it.endsWith(".onnx") }
         val hasDec = names.any { it.contains("decoder", ignoreCase = true) && it.endsWith(".onnx") }
         val hasJoin = names.any { it.contains("joiner", ignoreCase = true) && it.endsWith(".onnx") }
-        // tokens.txt 识别：接受 tokens.txt / tokens.txt.part / tokens.txt.part.corrupted（历史残留），
-        // 只要存在且>0字节就认为准备好（避免正常tokens里首字符为<被误判为HTML产生.part.corrupted垃圾文件一直堆积）
+        // tokens 识别：也接受 .part / .part.corrupted 历史残留（>0 字节即可）
         val tokenFile = modelDir.listFiles()?.firstOrNull { f ->
             val n = f.name
             (n == "tokens.txt" || n == "tokens.txt.part" || n == "tokens.txt.part.corrupted") && f.length() > 0
         }
         val hasTok = tokenFile != null
-        // 自动清理：如果历史产生了 .part.corrupted 但正式 tokens.txt 不存在，就把 .part.corrupted 重命名成 tokens.txt
-        // （避免用户已经下好了 tokens，被误判为"未下载"）
+        // 历史残留的 .part.corrupted 重命名为正式 tokens.txt，避免已下载文件被误判"未下载"
         if (hasTok && tokenFile != null && tokenFile.name != "tokens.txt") {
             runCatching {
                 val official = File(modelDir, "tokens.txt")
@@ -944,10 +853,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
     private companion object {
         const val TAG = "ModelRepository"
 
-        /**
-         * 允许下载模型的 host 白名单。
-         * 新增源必须经过人工审核。
-         */
+        /** 下载 host 白名单，新增源须人工审核 */
         val ALLOWED_DOWNLOAD_HOSTS = setOf(
             "huggingface.co",
             "cdn-lfs.huggingface.co",
@@ -956,10 +862,11 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             "raw.githubusercontent.com",
             "storage.googleapis.com",
             "alphacephei.com",
-            "modelscope.cn",          // ModelScope 国内镜像
-            "www.modelscope.cn",      // ModelScope 国内镜像（带 www）
-            "modelscope.ai",          // ModelScope 新域名（X-ASR 等模型仓库）
-            "www.modelscope.ai"       // ModelScope 新域名（带 www）
+            // ModelScope 国内镜像（.ai 为新域名，X-ASR 等模型仓库）
+            "modelscope.cn",
+            "www.modelscope.cn",
+            "modelscope.ai",
+            "www.modelscope.ai"
         )
     }
 }

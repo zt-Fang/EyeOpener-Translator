@@ -1,16 +1,3 @@
-/**
- * Sherpa-ONNX 流式 ASR 引擎实现（Zipformer Transducer 中文模型）。
- *
- * 基于 sherpa-onnx JNI 接口，使用 OnlineTransducerModelConfig 加载
- * encoder/decoder/joiner 模型，提供实时流式语音识别。
- *
- * 支持模型：
- * - X-ASR-zh-en-960ms（中英混说）
- * - BN Vosk 2026-02-09（孟加拉语）
- * - Nemotron 3.5 320ms int8（多语种 40 locale，per-stream language）
- *
- * 数据流：录音线程 → feedAudio → stream.acceptWaveform → decode → result
- */
 package io.github.ztfang.eye.engine.asr
 
 import android.util.Log
@@ -30,14 +17,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Sherpa-ONNX 流式 ASR 引擎（多模型共用）。
- *
- * 特性：
- * - 真流式：OnlineStream.acceptWaveform 持续送音频，decode 实时获取 partial
- * - 端点检测：enableEndpoint 检测句尾，触发 final 结果
- * - 线程安全：native 调用均通过 synchronized 保护
- * - 多模型：X-ASR / BN Vosk / Nemotron 3.5 共用同一引擎实例，按 modelId 切换
- * - 动态语种：Nemotron 3.5 支持 per-stream language，切语种无需重载模型
+ * Sherpa-ONNX 流式 ASR 引擎（X-ASR / BN / Nemotron 3.5 共用，按 modelId 切换）。
+ * 数据流：feedAudio → stream.acceptWaveform → decode → partial/final Flow。
+ * Nemotron 支持 per-stream language，切语种无需重载模型。native 调用均 synchronized 保护。
  */
 @Singleton
 class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
@@ -67,11 +49,7 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
     @Volatile
     private var lastPartial: String = ""
 
-    /**
-     * 当前 Nemotron per-stream language 代码（如 "ja"/"en"/"zh-CN"）。
-     * 仅 Nemotron 3.5 生效；X-ASR / BN 忽略。
-     * 默认 "auto" 自动检测。
-     */
+    /** Nemotron per-stream language（仅 Nemotron 生效，其余模型忽略） */
     @Volatile
     private var currentLanguage: String = "auto"
 
@@ -87,11 +65,7 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
 
     override fun isReady(): Boolean = recognizer != null
 
-    /**
-     * 初始化引擎，加载 Zipformer Transducer 模型。
-     *
-     * @param modelPath 模型目录，包含 encoder/decoder/joiner ONNX 文件和 tokens.txt
-     */
+    /** 加载模型目录（含 encoder/decoder/joiner ONNX 和 tokens.txt） */
     override suspend fun init(modelPath: String): Result<Unit> = withContext(Dispatchers.IO) {
         if (isInitializing) {
             return@withContext Result.success(Unit)
@@ -106,13 +80,11 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
                 Log.i(TAG, "init: loading Sherpa-ONNX model from $modelPath")
 
                 val modelDir = File(modelPath)
-                // 修复：根据 modelPath 末段目录名反查模型配置，避免硬编码 DEFAULT_ZH
-                // modelPath 形如 .../files/models/sherpa-onnx/<modelId>/
+                // modelPath 末段目录名即 modelId（.../models/sherpa-onnx/<modelId>/）
                 val modelId = modelDir.name
                 val model = SherpaOnnxModel.fromModelId(modelId) ?: SherpaOnnxModel.DEFAULT_ZH
                 Log.i(TAG, "init: resolved model=$modelId -> ${model.name}")
 
-                // 构建 Transducer 模型配置（Zipformer）
                 val modelConfig = OnlineModelConfig(
                     transducer = OnlineTransducerModelConfig(
                         encoder = File(modelDir, model.encoderFile).absolutePath,
@@ -121,7 +93,7 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
                     ),
                     tokens = File(modelDir, model.tokensFile).absolutePath,
                     numThreads = 2,
-                    modelType = model.modelType,   // 修复：使用模型自身声明的 type（zipformer / zipformer2）
+                    modelType = model.modelType,
                     provider = "cpu",
                     debug = false,
                 )
@@ -139,8 +111,7 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
                 loadedModelId = modelId
                 lastPartial = ""
 
-                // Nemotron 3.5 需要 per-stream language 设置
-                // 通过 setOption("language", lang) 指定识别语种，否则默认 auto
+                // Nemotron 需 setOption("language", ...) 指定语种，否则 auto
                 if (model == SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8) {
                     val lang = currentLanguage.ifEmpty { "auto" }
                     try {
@@ -186,20 +157,14 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
     }
 
     /**
-     * 动态切换 Nemotron 3.5 识别语种（per-stream language）。
-     *
-     * - 仅对 Nemotron 3.5 模型生效，X-ASR / BN Vosk 忽略
-     * - 切换无需重载模型，仅更新 stream 的 language 选项
-     * - 调用时若 stream 尚未创建，会缓存 currentLanguage，待 init 后生效
-     *
-     * @param language 语言代码（ISO 639-1，如 "ja"/"en"/"zh-CN"），"auto" 自动检测
+     * 切换 Nemotron 识别语种（仅 Nemotron 生效，无需重载模型）；
+     * stream 未创建时缓存，init 后生效。"auto" = 自动检测。
      */
     fun setLanguage(language: String) {
         val lang = language.ifEmpty { "auto" }
         currentLanguage = lang
         synchronized(lock) {
             val s = stream ?: return
-            // 仅 Nemotron 模型调用 setOption，避免对其他模型造成异常
             if (loadedModelId == SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.modelId) {
                 try {
                     s.setOption("language", lang)
@@ -214,12 +179,8 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
         }
     }
 
-    /**
-     * 送入一帧 PCM16 音频数据。
-     * Sherpa-ONNX 需要 float 数组，这里做 short→float 转换。
-     */
     override fun feedAudio(samples: ShortArray) {
-        // PCM16 → float32（归一化到 [-1, 1]）
+        // PCM16 → float32 [-1, 1]
         val floatSamples = FloatArray(samples.size) { i ->
             samples[i] / 32768.0f
         }
@@ -235,27 +196,22 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
         }
     }
 
-    /**
-     * 触发解码并返回当前识别文本。
-     * 同时检测端点，到达句尾时触发 final 结果。
-     */
+    /** 解码并返回当前文本；到句尾时发 final 并重置 */
     override fun decodeAndGetResult(): String {
         synchronized(lock) {
             val rec = recognizer ?: return ""
             val s = stream ?: return ""
             try {
-                // 解码（加循环上限保护，避免异常情况下死循环）
+                // 循环上限防死循环
                 var count = 0
                 while (rec.isReady(s) && count < 100) {
                     rec.decode(s)
                     count++
                 }
 
-                // 获取结果
                 val result = rec.getResult(s)
                 val text = result.text.trim()
 
-                // 端点检测 → final 结果
                 if (rec.isEndpoint(s) && text.isNotEmpty()) {
                     finalResultFlow.tryEmit(text)
                     rec.reset(s)
@@ -263,7 +219,6 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
                     return text
                 }
 
-                // partial 结果去重
                 if (text.isNotEmpty() && text != lastPartial) {
                     lastPartial = text
                     partialResultFlow.tryEmit(text)
@@ -276,7 +231,6 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
         }
     }
 
-    /** 是否到达句尾（端点） */
     override fun isEndpoint(): Boolean {
         synchronized(lock) {
             val rec = recognizer ?: return false
@@ -289,7 +243,6 @@ class SherpaOnnxAsrEngine @Inject constructor() : AsrEngine {
         }
     }
 
-    /** 重置当前 stream，开始新一句话 */
     override fun resetStream() {
         synchronized(lock) {
             val rec = recognizer ?: return

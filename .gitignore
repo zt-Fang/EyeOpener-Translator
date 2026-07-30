@@ -39,3 +39,14 @@ logs/
 # ===== 系统文件 =====
 .DS_Store
 
+# ===== 内部材料（不公开到 GitHub）=====
+参考图/
+code_review_report.md
+trae-competition-submission.md
+zhihu_article.md
+PRD文档.md
+eyeopener-website/
+logs/
+.uploads/
+.workbuddy/
+

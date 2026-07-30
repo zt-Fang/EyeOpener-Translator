@@ -21,12 +21,12 @@
 }
 
 # 自研 JNI - NativeAudioProcessor（JNI 函数名含完整包路径）
--keep class com.example.eye.engine.asr.NativeAudioProcessor { *; }
--keep class com.example.eye.engine.asr.NativeAudioProcessor$* { *; }
+-keep class io.github.ztfang.eye.engine.asr.NativeAudioProcessor { *; }
+-keep class io.github.ztfang.eye.engine.asr.NativeAudioProcessor$* { *; }
 
 # Sherpa-ONNX/VAD 引擎（System.loadLibrary 调用方）
--keep class com.example.eye.engine.asr.SherpaOnnxAsrEngine { *; }
--keep class com.example.eye.engine.vad.SileroVadEngine { *; }
+-keep class io.github.ztfang.eye.engine.asr.SherpaOnnxAsrEngine { *; }
+-keep class io.github.ztfang.eye.engine.vad.SileroVadEngine { *; }
 
 # 所有含 native 方法的类（防御性保留类名）
 -keepclasseswithmembernames class * {

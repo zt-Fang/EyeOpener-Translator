@@ -4,9 +4,9 @@
 # ==============================
 # Room - 数据库实体/DAO/数据库类不能混淆
 # ==============================
--keep class com.example.eye.data.local.entity.** { *; }
--keep class com.example.eye.data.local.dao.** { *; }
--keep class com.example.eye.data.local.database.** { *; }
+-keep class io.github.ztfang.eye.data.local.entity.** { *; }
+-keep class io.github.ztfang.eye.data.local.dao.** { *; }
+-keep class io.github.ztfang.eye.data.local.database.** { *; }
 
 # ==============================
 # DataStore - 无需特殊 keep（编译期安全）

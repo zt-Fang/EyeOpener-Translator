@@ -2,11 +2,11 @@ package io.github.ztfang.eye.domain.model
 
 /** 模型状态枚举 */
 enum class ModelStatus {
-    NOT_EXIST,      // 不存在
-    DOWNLOADING,    // 下载中
-    AVAILABLE,      // 已下载
-    DELETING,       // 删除中
-    ERROR           // 错误
+    NOT_EXIST,
+    DOWNLOADING,
+    AVAILABLE,
+    DELETING,
+    ERROR
 }
 
 /** 模型状态数据类 */
@@ -14,9 +14,9 @@ data class ModelState(
     val modelName: String,
     val status: ModelStatus,
     val progress: Float = 0f,           // 下载进度 0..1，仅 DOWNLOADING 状态有效
-    val downloadUrl: String = "",       // 下载地址
-    val localPath: String? = null,      // 本地路径
-    val errorMessage: String? = null    // 错误信息
+    val downloadUrl: String = "",
+    val localPath: String? = null,
+    val errorMessage: String? = null
 )
 
 /** 下载进度数据类 */

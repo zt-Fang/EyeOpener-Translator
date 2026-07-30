@@ -11,10 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 
-/**
- * 模型管理用例。
- * 封装模型下载、删除、状态查询的业务逻辑，所有操作在 IO 线程执行。
- */
+/** 模型管理用例：下载、删除、状态查询，均在 IO 线程执行 */
 class ModelManagementUseCase @Inject constructor(
     private val modelRepository: ModelRepository
 ) {
@@ -36,10 +33,7 @@ class ModelManagementUseCase @Inject constructor(
         modelRepository.downloadModel(modelName, downloadUrl, onProgress)
     }
 
-    /**
-     * 下载多文件模型（如 NLLB 的 5 个文件）。
-     * 文件列表由调用方组装，保持 UseCase 对具体引擎的无关性。
-     */
+    /** 下载多文件模型；文件列表由调用方组装，UseCase 与具体引擎解耦 */
     suspend fun startDownloadFiles(
         modelName: String,
         files: List<ModelFileSpec>,
@@ -49,15 +43,7 @@ class ModelManagementUseCase @Inject constructor(
         modelRepository.downloadModelFiles(modelName, files, onProgress, onFileComplete)
     }
 
-    /**
-     * 下载并解压 Vosk ASR 模型。
-     * Vosk 模型为单 zip 文件，下载后需解压到指定目录才能使用。
-     *
-     * @param modelName 模型名称（如 VOSK_ASR_ZH）
-     * @param zipSpec zip 文件规格
-     * @param extractDir 解压目标目录
-     * @param onProgress 下载进度回调
-     */
+    /** 下载并解压 Vosk 模型（单 zip，如 VOSK_ASR_ZH） */
     suspend fun downloadAndExtractVosk(
         modelName: String,
         zipSpec: ModelFileSpec,
@@ -67,34 +53,17 @@ class ModelManagementUseCase @Inject constructor(
         modelRepository.downloadAndExtractZip(modelName, zipSpec, extractDir, onProgress)
     }
 
-    /**
-     * 下载并解压 Sherpa-ONNX ASR 模型。
-     * Sherpa-ONNX 模型为单 tar.bz2 文件，下载后需解压到指定目录才能使用。
-     *
-     * @param modelName 模型名称（如 SHERPA_ONNX_ASR_xxx）
-     * @param tarSpec tar.bz2 文件规格
-     * @param extractDir 解压目标目录
-     * @param onProgress 下载进度回调
-     */
+    /** 下载并解压 Sherpa-ONNX 模型（单 tar.bz2，如 SHERPA_ONNX_ASR_xxx） */
     suspend fun downloadAndExtractSherpaOnnx(
         modelName: String,
         tarSpec: ModelFileSpec,
         extractDir: String,
         onProgress: (DownloadProgress) -> Unit = {}
     ): Result<ModelState> = withContext(Dispatchers.IO) {
-        // Sherpa-ONNX 模型为 tar.bz2 格式
         modelRepository.downloadAndExtractTarBz2(modelName, tarSpec, extractDir, onProgress)
     }
 
-    /**
-     * 下载 Sherpa-ONNX 模型的多个原始文件到指定目录（无 tar.bz2 直链时使用）。
-     * 用于 X-ASR 等仅提供 git LFS 仓库的模型，逐个下载 encoder/decoder/joiner/tokens。
-     *
-     * @param modelName 模型名称（用于状态管理）
-     * @param files 文件规格列表
-     * @param targetDir 目标目录（如 models/sherpa-onnx/<modelId>/）
-     * @param onProgress 下载进度回调
-     */
+    /** 逐个下载 Sherpa-ONNX 原始文件到 targetDir（无 tar.bz2 直链时用，如 models/sherpa-onnx/<modelId>/） */
     suspend fun downloadSherpaOnnxFiles(
         modelName: String,
         files: List<ModelFileSpec>,

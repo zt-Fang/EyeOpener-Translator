@@ -1,15 +1,8 @@
 package io.github.ztfang.eye.domain.model
 
 /**
- * Vosk ASR 支持的语言枚举。
- *
- * 每个枚举值对应一个 Vosk small 模型：
- * - [code] 用于模型目录名（filesDir/models/vosk/<code>/）和语言匹配
- * - [modelName] 是 Vosk 官方模型名（zip 内顶层目录名）
- * - [modelUrl] 是 alphacephei.com 的下载地址
- * - [mlkitSupported] 标记是否同时被 ML Kit 翻译支持
- *
- * 切换语种时同一时刻只加载一个模型，先 release 旧的再加载新的。
+ * Vosk small 模型语言枚举；模型解压到 filesDir/models/vosk/<code>/。
+ * 切换语种时先 release 旧模型再加载新模型。
  */
 enum class VoskLanguage(
     val code: String,

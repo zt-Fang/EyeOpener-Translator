@@ -1,18 +1,4 @@
-/**
- * 悬浮窗字幕服务
- *
- * 负责管理悬浮窗的创建、显示、拖拽移动、边缘缩放以及字幕内容的实时更新。
- * 该服务以前台服务形式运行，确保在后台时音频录制和字幕处理不被系统中断。
- *
- * 主要功能：
- * - 创建和管理系统级悬浮窗（TYPE_APPLICATION_OVERLAY / TYPE_PHONE）
- * - 支持窗口拖拽移动，自动吸附到屏幕边界
- * - 支持右下角边缘缩放，限制最小/最大尺寸
- * - 实时显示语音转文字的字幕内容（支持原文、译文、双语三种模式）
- * - 显示声纹波动动画，提示翻译中状态
- * - VAD（语音活动检测）静音提示
- * - 持久化保存窗口位置和尺寸
- */
+/** 悬浮字幕前台 Service：窗口创建/拖拽/缩放 + 字幕实时更新 + 位置持久化。 */
 package io.github.ztfang.eye
 
 import android.app.Notification
@@ -136,17 +122,7 @@ class FloatingSubtitleService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     /**
-     * 服务创建时的初始化方法。
-     *
-     * 主要执行以下操作：
-     * 1. 将服务提升为前台服务（Android 9+ 后台服务限制）
-     * 2. 获取 WakeLock 防止屏幕关闭时录音中断
-     * 3. 初始化悬浮窗视图和窗口管理器
-     * 4. 配置窗口参数（类型、标志位、初始大小和位置）
-     * 5. 订阅 subtitleManager 的数据流（位置、大小、字幕内容、VAD 状态、翻译状态等）
-     * 6. 设置触摸事件处理（拖拽、缩放）和按钮点击事件
-     * 7. 将悬浮窗添加到屏幕
-     * 8. 预热翻译引擎和 ASR 模型
+     * 服务创建时初始化：前台化 + WakeLock + 悬浮窗视图 + 数据流订阅 + 触摸事件 + 引擎预热。
      */
     @Suppress("DEPRECATION")
     override fun onCreate() {
@@ -329,13 +305,7 @@ class FloatingSubtitleService : Service() {
     /**
      * 服务销毁时的清理方法。
      *
-     * 主要执行以下操作：
-     * 1. 停止声纹波动动画
-     * 2. 取消协程作用域，停止所有数据流订阅
-     * 3. 停止音频处理
-     * 4. 标记悬浮窗为非活动状态
-     * 5. 从窗口管理器移除悬浮窗视图
-     * 6. 释放 WakeLock
+     * 销毁清理：停动画 + 取消协程 + 停音频 + 移除悬浮窗 + 释放 WakeLock。
      */
     override fun onDestroy() {
         super.onDestroy()
@@ -353,18 +323,8 @@ class FloatingSubtitleService : Service() {
 
     /**
      * 提升为前台 Service。
-     *
-     * FGS 类型选择规则（Android 14+ 严格限制）：
-     * - 仅麦克风模式：FOREGROUND_SERVICE_TYPE_MICROPHONE
-     * - 应用内声音模式且 MediaProjection token 已就绪：
-     *   MICROPHONE | MEDIA_PROJECTION
-     * - 应用内声音模式但 token 未就绪：仅 MICROPHONE（AudioPlaybackCapture 会回退到麦克风）
-     *
-     * 关键约束：
-     * - Android 14+ 要求声明 MEDIA_PROJECTION 类型时，token 必须已注册到当前 Service 进程
-     * - token 由 SubtitleManager 持有，Service 通过 Hilt 注入访问
-     * - 若 token 为 null（用户拒绝授权或尚未授权），强制声明 MEDIA_PROJECTION 会触发
-     *   ForegroundServiceStartNotAllowedException 导致闪退
+     * Android 14+ FGS 类型：仅麦克风=MICROPHONE；应用内声音+token 就绪=MICROPHONE|MEDIA_PROJECTION。
+     * token 未就绪时强制声明 MEDIA_PROJECTION 会触发 ForegroundServiceStartNotAllowedException。
      */
     private fun promoteToForeground() {
         ensureNotificationChannel()
@@ -584,17 +544,7 @@ class FloatingSubtitleService : Service() {
         }
     }
 
-    /**
-     * 将窗口位置和大小约束在屏幕范围内。
-     *
-     * 确保窗口不会超出屏幕边界，同时限制窗口尺寸在最小和最大范围内：
-     * 1. 宽度限制在 [minWidthPx, screenWidthPx]
-     * 2. 高度限制在 [minHeightPx, screenHeightPx]
-     * 3. X 坐标限制在 [0, screenWidthPx - width]
-     * 4. Y 坐标限制在 [0, screenHeightPx - height]
-     *
-     * 在窗口位置或大小发生变化后调用此方法进行边界检查。
-     */
+    /** 将窗口位置/大小约束在屏幕范围内，宽高不超最小/最大值，坐标不越界。 */
     private fun clampToScreen() {
         val currentMaxWidth = screenWidthPx
         val currentMaxHeight = screenHeightPx
@@ -606,16 +556,7 @@ class FloatingSubtitleService : Service() {
         layoutParams.y = layoutParams.y.coerceIn(0, max(0, currentMaxHeight - h))
     }
 
-    /**
-     * 设置悬浮窗的拖拽和缩放触摸事件处理。
-     *
-     * 触摸事件处理逻辑：
-     * 1. 点击顶部操作栏（topActions）区域时，不拦截事件，让按钮点击事件正常处理
-     * 2. 触摸右下角边缘区域（resizeSize = 24dp）时，触发缩放模式
-     * 3. 触摸其他区域时，触发拖拽模式
-     *
-     * 使用状态变量区分拖拽和缩放模式，避免冲突。
-     */
+    /** 设置触摸事件：topActions 区不拦截，右下角 24dp 触发缩放，其他区域拖拽。 */
     private fun setupOverlayDrag() {
         val rootView = floatingView ?: return
         val resizeSize = (24 * resources.displayMetrics.density).toInt() // 缩放触发区域大小（24dp）
@@ -814,15 +755,7 @@ class FloatingSubtitleService : Service() {
     }
 
     /**
-     * 刷新字幕显示内容（多句历史支持）。
-     *
-     * 核心优化：
-     * 1. 视图复用：避免 removeAllViews()，只更新内容
-     * 2. 多句历史：保留最近3句，新句子追加
-     * 3. 透明度区分：partial=半透明(0x80)，final=不透明(0xFF)
-     *
-     * @param lines 字幕行列表（支持多句）
-     * @param displayMode 显示模式（仅原文、仅译文、双语）
+     * 刷新字幕显示：视图复用 + 保留最近 3 句历史 + partial 半透明/final 不透明。
      */
     private fun refreshSubtitleDisplay(
         lines: List<SubtitleLine>,

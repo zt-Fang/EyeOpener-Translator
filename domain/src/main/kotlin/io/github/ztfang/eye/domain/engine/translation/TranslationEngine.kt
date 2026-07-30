@@ -3,10 +3,7 @@ package io.github.ztfang.eye.domain.engine.translation
 import io.github.ztfang.eye.domain.model.TranslationEngine
 import io.github.ztfang.eye.domain.model.TranslationResult
 
-/**
- * 翻译引擎抽象接口。
- * 定义翻译能力的标准契约，实现类包括 ML Kit、云端 API、LLM API。
- */
+/** 翻译引擎抽象，实现类：ML Kit、云端 API、LLM API */
 interface TranslationEngine {
 
     /** 此引擎支持的翻译引擎类型 */

@@ -6,10 +6,7 @@ import io.github.ztfang.eye.domain.model.Language
 import io.github.ztfang.eye.domain.model.TranslationEngine
 import kotlinx.coroutines.flow.Flow
 
-/**
- * 设置仓库接口。
- * 定义应用配置的读写能力，底层基于 DataStore 实现。
- */
+/** 应用配置读写，底层基于 DataStore */
 interface SettingsRepository {
 
     // 显示模式

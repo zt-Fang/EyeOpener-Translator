@@ -9,11 +9,11 @@
 -keepattributes Exceptions
 
 # ==============================
-# 优化指令 - 加强混淆，减小体积，增强反编译防护
+# 优化指令 - 缩减体积 + R8 优化；开源项目弱化命名混淆
 # ==============================
 -allowaccessmodification
--repackageclasses ''
--mergeinterfacesaggressively
+# 不使用 -repackageclasses，保留原包结构便于 crash stack 定位
+# 不使用 -mergeinterfacesaggressively，避免与 Hilt/KSP 生成代码冲突
 
 # ==============================
 # JNI 相关 - 绝对不能混淆（类名/包名/字段名被 C++ 硬编码引用）
@@ -106,6 +106,11 @@
 # ==============================
 -keep public class io.github.ztfang.eye.MainActivity { *; }
 -keep public class io.github.ztfang.eye.FloatingSubtitleService { *; }
+
+# ==============================
+# 开源透明：保留应用自身类名，仅 R8 缩减未用代码
+# ==============================
+-keep,allowobfuscation class io.github.ztfang.eye.** { *; }
 
 # ==============================
 # Jetpack Compose

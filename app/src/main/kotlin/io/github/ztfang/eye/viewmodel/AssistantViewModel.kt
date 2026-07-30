@@ -1,17 +1,4 @@
-/**
- * 助手界面 ViewModel
- *
- * 职责：
- * - 管理聊天消息列表
- * - 调用 LLMClient 进行纯对话（无系统提示词）
- * - 暴露发送状态（loading）给 UI
- * - 支持流式输出，实时显示 AI 回复
- *
- * 设计说明：
- * - 不附加 systemPrompt，让模型自由对话
- * - 多轮消息直接透传给 LLM API，保持上下文
- * - 使用 chatStream 流式接口，token 实时推送
- */
+/** AI 助手 ViewModel：消息列表 + LLMClient 流式对话（无 systemPrompt，多轮透传）。 */
 package io.github.ztfang.eye.viewmodel
 
 import android.util.Log
@@ -56,12 +43,7 @@ class AssistantViewModel @Inject constructor(
     /**
      * 发送用户消息并获取 AI 回复（流式）。
      *
-     * 流程：
-     * 1. 检查 API 配置是否就绪，未就绪则显示友好提示
-     * 2. 追加用户消息到列表
-     * 3. 构造多轮消息历史（role=user/assistant）
-     * 4. 调用 LLMClient.chatStream 获取流式回复
-     * 5. 实时更新 AI 消息到列表
+     * 检查 API 就绪 → 追加用户消息 → 构造多轮历史 → chatStream 流式回复实时更新。
      */
     fun sendUserMessage(text: String) {
         if (text.isBlank()) return

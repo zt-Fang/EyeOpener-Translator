@@ -1,20 +1,11 @@
 package io.github.ztfang.eye.domain.model
 
-/**
- * 模型目录。
- * 定义所有可下载模型的文件规格、下载 URL 和大小信息。
- * 仓库层会验证这些 URL 是否在白名单中。
- * 文件大小为粗略估算值，仅用于进度条显示。
- */
+/** 可下载模型目录：文件规格、URL、大小（估算值，仅用于进度条） */
 object ModelCatalog {
 
     /**
-     * Vosk 多语种 small 模型。
-     * 从 [VoskLanguage] 枚举动态生成，避免重复维护两份列表。
-     * 每个语种对应一个 zip 文件，下载后解压到 models/vosk/<lang>/ 目录。
-     *
-     * Source: alphacephei.com/vosk/models
-     * License: Apache 2.0
+     * Vosk small 模型，由 [VoskLanguage] 枚举生成；每语种一个 zip，解压到 models/vosk/<lang>/
+     * Source: alphacephei.com/vosk/models, License: Apache 2.0
      */
     val VOSK_MODELS: Map<String, ModelFileSpec> = VoskLanguage.getAll().associate { lang ->
         lang.code to ModelFileSpec(
@@ -25,12 +16,8 @@ object ModelCatalog {
     }
 
     /**
-     * Sherpa-ONNX 流式 Zipformer 模型。
-     * 从 [SherpaOnnxModel] 枚举动态生成。
-     * 每个模型对应一个 tar.bz2 文件，下载后解压到 models/sherpa-onnx/<modelId>/ 目录。
-     *
-     * Source: github.com/k2-fsa/sherpa-onnx/releases
-     * License: Apache 2.0
+     * Sherpa-ONNX 流式 Zipformer 模型，由 [SherpaOnnxModel] 枚举生成；每模型一个 tar.bz2，解压到 models/sherpa-onnx/<modelId>/
+     * Source: github.com/k2-fsa/sherpa-onnx/releases, License: Apache 2.0
      */
     val SHERPA_ONNX_MODELS: Map<String, ModelFileSpec> = SherpaOnnxModel.getAll().associate { model ->
         model.modelId to ModelFileSpec(
@@ -87,11 +74,7 @@ object ModelCatalog {
     fun sherpaOnnxTarSpec(modelId: String): ModelFileSpec? =
         SHERPA_ONNX_MODELS[modelId]
 
-    /**
-     * 获取指定模型 ID 的 Sherpa-ONNX 多文件直链规格。
-     * 仅当模型声明了 [SherpaOnnxModel.files] 时返回（如 X-ASR 无 tar.bz2 直链）。
-     * 返回 null 表示该模型应走 tar.bz2 下载流程。
-     */
+    /** 多文件直链规格；null 表示走 tar.bz2 下载流程 */
     fun sherpaOnnxFileSpecs(modelId: String): List<ModelFileSpec>? =
         SherpaOnnxModel.fromModelId(modelId)?.files
 }

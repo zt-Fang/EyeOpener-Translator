@@ -96,13 +96,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Download Vosk ASR model for specified language.
-     * 每个语言有独立的小模型（约30-82 MB），下载为 zip 文件。
-     * 解压后写入 [filesDir]/models/vosk/<lang>/ 目录。
-     *
-     * 注意：下载 Vosk 中文模型前会检查 Sherpa-ONNX 是否存在，存在则提醒先删除（互斥）。
-     *
-     * @param languageCode 语言代码(en/zh/ja/ko/ru/fr/de/es)
+     * 下载 Vosk ASR 模型（30–82 MB zip，解压至 filesDir/models/vosk/<lang>/）。
+     * 下载中文模型前检查 Sherpa-ONNX 互斥，存在则提示先删除。
      */
     fun downloadVoskModel(languageCode: String) {
         viewModelScope.launch {

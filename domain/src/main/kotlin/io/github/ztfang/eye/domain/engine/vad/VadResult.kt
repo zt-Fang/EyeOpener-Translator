@@ -4,7 +4,7 @@
 data class VadResult(
     val hasSpeech: Boolean,
     val noSpeech: Boolean = !hasSpeech,
-    val audioData: ShortArray,      // 判定的音频片段
+    val audioData: ShortArray,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

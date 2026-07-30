@@ -1,16 +1,6 @@
 package io.github.ztfang.eye
 
-/**
- * 主界面 Activity，应用的入口点
- * 
- * 功能包含：
- * - 应用导航管理（NavHost + NavController）
- * - 底部导航栏（字幕、助手、设置三个 Tab）
- * - 权限处理（录音权限、悬浮窗权限）
- * - 悬浮字幕开关控制
- * - 语言选择与切换
- * - 翻译引擎选择（本地翻译 / 云端翻译 / AI 翻译）
- */
+/** 主 Activity：底部导航（字幕/助手/设置）+ 权限处理 + 悬浮窗开关 + 语言/引擎选择。 */
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -432,23 +422,20 @@ object MlKitLanguages {
     val NORWEGIAN_BOKMAL = MlKitLanguage("nb", "Norwegian (Bokmål)", "Norsk (Bokmål)", "挪威语(博克马尔)")
 
     /**
-     * 源语言列表：Vosk + Nemotron-only 语言全集。
-     *
-     * - 前 32 种：Vosk 支持的语言
-     * - 后 9 种：仅 Nemotron 3.5 支持的语言（无 Sherpa-ONNX/Vosk 模型时不可识别）
-     *
-     * ASR 引擎由源语言自动决定（resolveAsrEngine），不再依赖翻译模式。
+     * 源语言列表（共 41 种主语种）：Vosk 32 + Nemotron-only 9。
+     * 主语种口径：去 en-in 变体；BN Vosk 视为孟加拉语在 Vosk 路径下的实现。
+     * ASR 引擎由源语言自动决定（resolveAsrEngine），与翻译模式解耦。
      */
     val VOSK_SOURCE_LANGUAGES: List<MlKitLanguage> = listOf(
-        // Vosk 支持的语言（顺序与 VoskLanguage 枚举一致）
+        // Vosk 33（含 en-in 变体）
         CHINESE, ENGLISH, INDIA_ENGLISH, GERMAN, FRENCH, SPANISH, PORTUGUESE,
         RUSSIAN, TURKISH, VIETNAMESE, ITALIAN, DUTCH, CATALAN, ARABIC, GREEK,
         PERSIAN, FILIPINO, UKRAINIAN, KAZAKH, SWEDISH, JAPANESE, ESPERANTO,
         HINDI, CZECH, POLISH, UZBEK, KOREAN, TAJIK, KYRGYZ, GEORGIAN,
         BRETON, GUJARATI, TELUGU,
-        // 孟加拉语：BN Vosk 模型(若已下载), 否则不可识别
+        // BN Vosk 模型（孟加拉语，未下载则不可识别）
         BENGALI,
-        // 仅 Nemotron 3.5 支持的语言（Vosk 不支持）
+        // Nemotron-only 9（Vosk 不支持，需下载 Nemotron 3.5 模型）
         DANISH, NORWEGIAN_BOKMAL, BULGARIAN, FINNISH, CROATIAN, SLOVAK,
         HUNGARIAN, ROMANIAN, ESTONIAN
     )
@@ -590,18 +577,7 @@ fun LanguagePickerDialog(
     )
 }
 
-/**
- * 字幕主屏，应用核心功能页面
- * 
- * 主要功能：
- * - 悬浮字幕开关控制
- * - 翻译引擎选择（极速/高质量/AI）
- * - 源语言和目标语言选择
- * - 权限处理（悬浮窗权限、录音权限）
- * - ML Kit 离线模型下载管理
- * 
- * @param subtitleManager 字幕管理 ViewModel，负责控制悬浮字幕状态和模型加载
- */
+/** 字幕主屏：悬浮窗开关 + 翻译引擎选择 + 语言选择 + 权限处理 + ML Kit 模型管理。 */
 @Composable
 fun SubtitleScreen(
     subtitleManager: SubtitleManager,
@@ -1100,14 +1076,7 @@ fun SubtitleScreen(
     }
 }
 
-/**
- * 翻译引擎选择区域，展示三种引擎
- * - 本地翻译（ML Kit）：基于 Google ML Kit 离线模型，响应最快
- * - 云端翻译：Papago / 百度 / DeepL / Azure（在设置中选择具体服务商）
- * - AI 翻译：LLM API，上下文理解最强
- *
- * 注：ASR 引擎选择与翻译引擎解耦，仅由源语言决定。
- */
+/** 翻译引擎选择区域：LOCAL(ML Kit) / CLOUD / AI 三档。ASR 引擎与翻译解耦，仅由源语言决定。 */
 @Composable
 private fun EngineSection(
     selected: TranslationEngine,
@@ -1181,15 +1150,7 @@ data class ChatMessage(
     val timestamp: String = "10:30"
 )
 
-/**
- * AI 助手页面，展示聊天界面和示例对话
- *
- * 功能：
- * - 接入大模型纯对话（无系统提示词，多轮上下文）
- * - 输入框跟随软键盘上移（imePadding）
- * - 麦克风按钮长按触发安卓自带 SpeechRecognizer，松开把识别结果填入输入框
- * - 识别期间输入框显示声波动画
- */
+/** AI 助手页：LLM 多轮对话 + imePadding 跟随软键盘 + 麦克风长按 SpeechRecognizer + 声波动画。 */
 @Composable
 fun AssistantScreen() {
     val viewModel: io.github.ztfang.eye.viewmodel.AssistantViewModel = hiltViewModel()
@@ -1322,14 +1283,7 @@ fun AssistantScreen() {
 
 // ============================== 设置屏 ==============================
 
-/**
- * 设置页面，包含多个设置项：
- * - 界面语言
- * - 本地模型管理
- * - API 设置
- * - 个性化设置
- * - 分享、反馈、检查更新
- */
+/** 设置页：界面语言/本地模型/API/个性化/分享/反馈/检查更新入口。 */
 @Composable
 fun SettingsScreen(
     onLocalClick: () -> Unit = {},      // 点击本地模型设置

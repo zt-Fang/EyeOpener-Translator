@@ -1,9 +1,6 @@
 package io.github.ztfang.eye.domain.model
 
-/**
- * 语言定义数据类。
- * 包含语言代码、本地显示名称和英文名称，用于语言选择器和翻译引擎配置。
- */
+/** 语言定义：代码、本地显示名、英文名 */
 data class Language(
     val code: String,
     val displayName: String,

@@ -25,9 +25,10 @@ android {
     }
     buildTypes {
         release {
-            // 开源版本：关闭代码混淆与资源压缩，保证源码与构建产物行为一致、便于调试
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // 开源版本：开启 R8 缩减+优化（移除未用代码/资源），关闭重度混淆
+            // 防逆向目的因源码公开已失效，保留主要为缩减 APK 体积与 R8 优化
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {

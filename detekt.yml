@@ -1,0 +1,70 @@
+# detekt 配置：基于默认规则集，覆盖项目自定义项
+# 完整规则见 https://detekt.dev/docs/rules
+
+complexity:
+  active: true
+  LongMethod:
+    threshold: 80
+  LongParameterList:
+    functionThreshold: 8
+    constructorThreshold: 10
+  ComplexCondition:
+    threshold: 6
+  CyclomaticComplexMethod:
+    threshold: 20
+  TooManyFunctions:
+    thresholdInFiles: 30
+  LargeClass:
+    threshold: 600
+
+style:
+  active: true
+  ReturnCount:
+    max: 5
+  WildcardImport:
+    active: false  # Compose 项目通配符导入常见，关闭
+  MagicNumber:
+    active: false  # UI 项目魔法数字过多，关闭
+  MaxLineLength:
+    max: 140
+  FunctionNaming:
+    functionPattern: '([a-z][a-zA-Z0-9]*)|(`.*`)'
+  FunctionDocumentation:
+    active: false  # 暂不强制每个函数 KDoc
+  PropertyDocumentation:
+    active: false
+
+empty-blocks:
+  active: true
+  EmptyFunctionBlock:
+    ignoreOverridden: true
+
+exceptions:
+  active: true
+  SwallowedException:
+    active: false
+
+naming:
+  active: true
+  FunctionParameterNaming:
+    parameterPattern: '[a-z][A-Za-z0-9]*'
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][A-Za-z0-9]*'
+    propertyPattern: '[a-z][A-Za-z0-9]*'
+
+performance:
+  active: true
+  ForEachOnRange:
+    active: true
+  SpreadOperator:
+    active: true
+
+potential-bugs:
+  active: true
+  UnsafeCallOnNullableType:
+    active: true
+  IteratorNotThrowingNoSuchElementException:
+    active: true
+
+formatting:
+  active: false  # 由 ktlint 负责

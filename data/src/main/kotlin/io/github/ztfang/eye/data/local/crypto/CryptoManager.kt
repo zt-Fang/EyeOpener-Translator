@@ -10,22 +10,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * 基于 Android Keystore 的 AES/GCM 加密工具。
- *
- * 加密流程:
- *   1. 在 Android Keystore 中生成并持久化 AES-256 密钥 (首次启动时)
- *   2. 使用 AES/GCM/NoPadding 加密明文
- *   3. 输出格式: Base64(IV + ciphertext + tag) — GCM tag 自动附在密文末尾
- *
- * 为什么用 GCM:
- *   - 提供认证加密 (AEAD),同时保证机密性和完整性
- *   - Android 官方推荐模式
- *   - 每个密文带独立 IV,相同明文每次加密结果不同
- *
- * 注意:
- *   - 密钥存在 Keystore 中,不可导出,root 也难以提取
- *   - GCM 模式下 IV 必须 12 字节 (96 bit),tag 128 bit
- *   - 加密后密文长度 = 明文长度 + 12 (IV) + 16 (tag)
+ * 基于 Android Keystore 的 AES-256/GCM 加密（AEAD，密钥不可导出）。
+ * 输出格式: Base64(IV + ciphertext + tag)；GCM 要求 IV 12 字节、tag 128 bit。
  */
 class CryptoManager {
 
@@ -33,8 +19,8 @@ class CryptoManager {
         private const val KEY_ALIAS = "eye_opener_api_key"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
-        private const val GCM_IV_LENGTH = 12   // 96 bits, GCM 推荐
-        private const val GCM_TAG_LENGTH = 128 // 128 bits
+        private const val GCM_IV_LENGTH = 12   // GCM 推荐 96 bit
+        private const val GCM_TAG_LENGTH = 128
     }
 
     private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
@@ -43,28 +29,20 @@ class CryptoManager {
         ensureKeyExists()
     }
 
-    /**
-     * 加密字符串。
-     * @param plaintext 明文
-     * @return Base64 编码的密文 (包含 IV + ciphertext + tag)
-     */
+    /** 加密，返回 Base64(IV + ciphertext + tag) */
     fun encrypt(plaintext: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getSecretKey())
         val iv = cipher.iv
         val ciphertext = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
-        // IV + 密文拼接后 Base64 编码,方便存到 DataStore (DataStore 只支持基础类型)
+        // 拼接 IV 后 Base64，便于存入只支持基础类型的 DataStore
         val combined = ByteArray(iv.size + ciphertext.size)
         System.arraycopy(iv, 0, combined, 0, iv.size)
         System.arraycopy(ciphertext, 0, combined, iv.size, ciphertext.size)
         return Base64.encodeToString(combined, Base64.NO_WRAP)
     }
 
-    /**
-     * 解密字符串。
-     * @param ciphertext Base64 编码的密文 (IV + ciphertext + tag)
-     * @return 明文;如果密文为空或无效返回空字符串
-     */
+    /** 解密；密文为空或无效时返回空字符串 */
     fun decrypt(ciphertext: String): String {
         if (ciphertext.isBlank()) return ""
         return try {
@@ -80,16 +58,12 @@ class CryptoManager {
             )
             String(cipher.doFinal(data), Charsets.UTF_8)
         } catch (e: Exception) {
-            // 解密失败可能是密钥变更 (如用户清除数据后重新安装)
-            // 返回空串,上层当作未配置处理
+            // 密钥变更（如清除数据后重装）会导致解密失败，返回空串让上层当作未配置
             ""
         }
     }
 
-    /**
-     * 确保 Keystore 中有密钥。没有则生成。
-     * 密钥属性: AES-256, GCM 模式, 仅在本应用内可用, 不可导出。
-     */
+    /** Keystore 无密钥时生成 AES-256/GCM 密钥 */
     private fun ensureKeyExists() {
         if (keyStore.containsAlias(KEY_ALIAS)) return
         val keyGenerator = KeyGenerator.getInstance(
