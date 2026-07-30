@@ -13,9 +13,8 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 ## 功能特性
 
 - 🎙️ **全局悬浮字幕**：任意 App 之上实时显示原文+译文，可拖拽/缩放
-- 🌐 **41 种语言识别**：X-ASR 中英 + Nemotron 3.5 多语种 + Vosk 兜底
+- 🌐 **41 种语言识别**：X-ASR 中英 + Nemotron 3.5 多语种 + Vosk 小语种
 - 🔄 **三档翻译引擎**：本地 ML Kit 离线 / 云端（Papago/百度/DeepL/Azure/Google）/ AI 大模型
-- 🤖 **AI 助手**：7 家 LLM Provider（OpenAI / Claude / DeepSeek / 千问 / MiniMax / MiMo / Gemini）
 - 📱 **响应式布局**：手机 / 折叠屏 / 平板 / 悬浮窗
 - 🎨 **个性化**：颜色、字号、透明度、显示模式（原文/译文/双语）
 - 📝 **历史记录**：Room 本地存储，支持收藏/导出
