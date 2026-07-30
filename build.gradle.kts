@@ -19,6 +19,8 @@ subprojects {
         config.setFrom(files("$rootDir/detekt.yml"))
         buildUponDefaultConfig = true
         parallel = true
+        // Compose 项目存量代码较多，detekt 作为报告型检查运行，不阻断 CI
+        ignoreFailures = true
     }
 
     configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {

@@ -40,8 +40,6 @@ logs/
 .DS_Store
 
 # ===== 内部材料（不公开到 GitHub）=====
-README.md
-README.en.md
 AGENTS.md
 PRD文档.md
 zhihu_article.md

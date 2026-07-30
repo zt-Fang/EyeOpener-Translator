@@ -1,5 +1,5 @@
 # detekt 配置：基于默认规则集，覆盖项目自定义项
-# 完整规则见 https://detekt.dev/docs/rules
+# detekt 1.23.x 规则见 https://detekt.dev/docs/rules
 
 complexity:
   active: true
@@ -26,13 +26,7 @@ style:
   MagicNumber:
     active: false  # UI 项目魔法数字过多，关闭
   MaxLineLength:
-    max: 140
-  FunctionNaming:
-    functionPattern: '([a-z][a-zA-Z0-9]*)|(`.*`)'
-  FunctionDocumentation:
-    active: false  # 暂不强制每个函数 KDoc
-  PropertyDocumentation:
-    active: false
+    maxLineLength: 140
 
 empty-blocks:
   active: true
@@ -43,9 +37,15 @@ exceptions:
   active: true
   SwallowedException:
     active: false
+  # Android 中捕获通用 Exception 属常见做法
+  TooGenericExceptionCaught:
+    active: false
 
 naming:
   active: true
+  # Compose @Composable 约定用 PascalCase，关闭 camelCase 命名检查
+  FunctionNaming:
+    active: false
   FunctionParameterNaming:
     parameterPattern: '[a-z][A-Za-z0-9]*'
   TopLevelPropertyNaming:
@@ -65,6 +65,3 @@ potential-bugs:
     active: true
   IteratorNotThrowingNoSuchElementException:
     active: true
-
-formatting:
-  active: false  # 由 ktlint 负责
