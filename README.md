@@ -71,17 +71,6 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 - VAD：Silero VAD（32ms / 512 samples 窗口，assets 内置）
 - 音频输入：麦克风 / AudioPlaybackCapture（Android 10+）
 
-## 关键设计决策
-
-1. **ML Kit 翻译模型不由 App 管理** — Google Play Services 管理，未下载时跳过
-2. **API Key 加密存储** — AES/GCM/NoPadding，12 字节随机 IV，Base64(IV+密文+Tag)
-3. **桌面图标直接 PNG 引用** — 避免 adaptive-icon XML 在部分系统回退默认图标
-4. **VAD 不切流** — 只检测语音状态更新 UI，音频照常送 ASR
-5. **ASR 与翻译解耦** — ASR 仅由源语言决定，所有翻译引擎共用同一套分流
-6. **仅 final 触发翻译** — partial 结果不翻译，保证质量
-7. **不支持语种静默处理** — 不弹错误，直接跳过
-8. **翻译版本号管理** — AtomicLong 跟踪，过期结果丢弃
-
 ## 构建
 
 ```bash
