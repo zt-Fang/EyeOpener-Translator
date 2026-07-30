@@ -3,7 +3,6 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Languages](https://img.shields.io/badge/ASR-41%20languages-blue)](#语言支持)
 [![Platform](https://img.shields.io/badge/Android-7.0%2B-green)](#构建)
-[![Architecture](https://img.shields.io/badge/Arch-MVVM%20%2B%20Clean-orange)](#架构)
 
 Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引擎翻译，离线可用。
 
@@ -22,46 +21,6 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 - 📝 **历史记录**：Room 本地存储，支持收藏/导出
 - 🔒 **隐私优先**：API Key AES/GCM 加密存储，离线模式可用
 
-## 架构
-
-```
-UI Layer (Jetpack Compose)
-        ↓
-ViewModel / SubtitleManager
-        ↓
-Domain Layer (Model + UseCase)      ← 纯 Kotlin，无 Android 依赖
-        ↓
-Data Layer (Repository Impl)        ← DataStore / Room
-        ↓
-Engine Layer (ASR / VAD / Translation) ← Sherpa-ONNX / Vosk / ML Kit / LLM
-```
-
-**单向依赖**：上层只调用下层，禁止反向调用。
-
-## 项目结构
-
-```
-eye/
-├── app/         # UI + Service + ViewModel（Compose）
-├── domain/      # 领域层（纯 Kotlin：Model + UseCase + 接口）
-├── engine/      # 引擎层（ASR / VAD / Translation 实现）
-├── data/        # 数据层（Room / DataStore / Repository 实现）
-├── docs/        # 文档与截图
-└── scripts/     # 辅助脚本（日志收集、模型推送）
-```
-
-## 核心数据流
-
-```
-麦克风 / AudioPlaybackCapture
-Silero VAD (仅 UI 状态，不切流)
-    ↓
-ASR Engine.feedAudio(ShortArray)
-    ↓ (final 结果，静音间隔触发)
-Translation Engine (ML Kit / Cloud / LLM)
-    ↓
-悬浮窗显示（原文 + 译文，向上滚动保留 10 行）
-```
 
 ## 语言支持
 
