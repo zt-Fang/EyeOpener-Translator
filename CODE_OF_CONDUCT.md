@@ -25,7 +25,7 @@
 
 ## 举报方式
 
-若遇到违规行为，请通过 GitHub Security Advisories 或邮箱 zt-Fang@users.noreply.github.com 联系维护者。所有举报将被**公正、保密**地处理。
+若遇到违规行为，请通过 GitHub Security Advisories 或邮箱 t874047656@gmail.com 联系维护者。所有举报将被**公正、保密**地处理。
 
 ## 署名
 

@@ -6,7 +6,7 @@
 
 请通过以下方式私下联系维护者：
 - GitHub Security Advisories：在仓库页面 `Security → Report a vulnerability` 提交
-- 邮箱：zt-Fang@users.noreply.github.com
+- 邮箱：t874047656@gmail.com
 
 我们会在 **72 小时内**确认收到，并尽快给出修复时间表。
 
