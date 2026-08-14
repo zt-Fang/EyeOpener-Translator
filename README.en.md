@@ -29,7 +29,6 @@ Two options, pick either:
 | GitHub Releases | <https://github.com/zt-Fang/EyeOpener-Translator/releases> | Source + APK, published first |
 | Lanzou Cloud | <https://eyeopener.lanzoul.com/b01d72jymf> | Extraction code `7856`, faster in mainland China |
 
-> Or build it yourself — see [Build](#build) below.
 
 ## Language Support
 
