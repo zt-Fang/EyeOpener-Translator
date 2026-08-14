@@ -30,7 +30,6 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 | GitHub Releases | <https://github.com/zt-Fang/EyeOpener-Translator/releases> | 源码 + APK，更新第一时间发布 |
 | 蓝奏云 | <https://eyeopener.lanzoul.com/b01d72jymf> | 提取码 `7856`，国内访问更快 |
 
-> 也可以自行构建，见下方[构建](#构建)章节。
 
 ## 语言支持
 
