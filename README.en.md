@@ -20,6 +20,17 @@ Android app for real-time speech translation: global floating subtitle + multi-e
 - 📝 **History** — Room local storage with favorites & export
 - 🔒 **Privacy-first** — API keys AES/GCM encrypted; offline mode available
 
+## Download
+
+Two options, pick either:
+
+| Platform | Link | Notes |
+|----------|------|-------|
+| GitHub Releases | <https://github.com/zt-Fang/EyeOpener-Translator/releases> | Source + APK, published first |
+| Lanzou Cloud | <https://eyeopener.lanzoul.com/b01d72jymf> | Extraction code `7856`, faster in mainland China |
+
+> Or build it yourself — see [Build](#build) below.
+
 ## Language Support
 
 | ASR Engine | Languages | Model Size | Notes |
@@ -89,6 +100,11 @@ Unsupported language pairs are silently skipped (no error popups).
 | onnxruntime | ONNX runtime | prebuilt `jniLibs/` |
 | vosk-android | Vosk ASR | Maven |
 | Silero VAD | Voice activity detection | `assets/silero_vad.onnx` |
+
+## Contact
+
+- Email: 874047656@qq.com
+- GitHub Issues: <https://github.com/zt-Fang/EyeOpener-Translator/issues>
 
 ## Acknowledgements
 
