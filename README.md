@@ -21,6 +21,17 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 - 🔒 **隐私优先**：API Key AES/GCM 加密存储，离线模式可用
 
 
+## 下载
+
+提供两种下载方式，任选其一：
+
+| 平台 | 链接 | 说明 |
+|------|------|------|
+| GitHub Releases | <https://github.com/zt-Fang/EyeOpener-Translator/releases> | 源码 + APK，更新第一时间发布 |
+| 蓝奏云 | <https://eyeopener.lanzoul.com/b01d72jymf> | 提取码 `7856`，国内访问更快 |
+
+> 也可以自行构建，见下方[构建](#构建)章节。
+
 ## 语言支持
 
 | ASR 引擎 | 服务语种 | 模型大小 | 特点 |
@@ -90,6 +101,11 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 | onnxruntime | ONNX 推理 | 预编译 `jniLibs/` |
 | vosk-android | Vosk ASR | Maven |
 | Silero VAD | 语音活动检测 | `assets/silero_vad.onnx` |
+
+## 联系方式
+
+- 邮箱：874047656@qq.com
+- GitHub Issues：<https://github.com/zt-Fang/EyeOpener-Translator/issues>
 
 ## 致谢
 
