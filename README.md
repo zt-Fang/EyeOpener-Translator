@@ -57,17 +57,6 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 | CLOUD | Papago / 百度 / DeepL / Azure / Google | 多语种覆盖广，需 API Key |
 | AI |  LLM Provider | 上下文感知 + 智能润色 + 助手 |
 
-不支持语种时上层静默跳过，不弹错误。
-
-### 模型下载源
-
-| 模型 | 源 |
-|------|----|
-| Vosk ASR | alphacephei.com |
-| X-ASR 中英 | ModelScope（bujidc） |
-| Nemotron 3.5 多语种 | HuggingFace（csukuangfj2） |
-| Sherpa-ONNX BN | GitHub Release（k2-fsa） |
-| ML Kit 翻译 | Google Play Services |
 
 ### 音频参数
 
@@ -103,7 +92,7 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 
 ## 联系方式
 
-- 邮箱：874047656@qq.com
+- 邮箱：t874047656@gmail.com
 - GitHub Issues：<https://github.com/zt-Fang/EyeOpener-Translator/issues>
 
 ## 致谢
