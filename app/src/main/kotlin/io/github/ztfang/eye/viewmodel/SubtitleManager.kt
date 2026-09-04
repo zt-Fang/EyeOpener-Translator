@@ -19,6 +19,7 @@ import io.github.ztfang.eye.domain.model.SubtitleLine
 import io.github.ztfang.eye.domain.model.SubtitleState
 import io.github.ztfang.eye.domain.model.SubtitleType
 import io.github.ztfang.eye.domain.model.SherpaOnnxModel
+import io.github.ztfang.eye.domain.model.VoskLanguage
 import io.github.ztfang.eye.domain.model.TranslationEngine
 import io.github.ztfang.eye.domain.model.TranslationResult
 import io.github.ztfang.eye.domain.model.ModelStatus
@@ -62,7 +63,6 @@ class SubtitleManager @Inject constructor(
     private val voskAsrEngine: VoskAsrEngine,
     private val sherpaOnnxAsrEngine: SherpaOnnxAsrEngine,
     private val modelPreparer: ModelPreparer,
-    private val mlKitEngine: io.github.ztfang.eye.engine.translation.mlkit.MlKitTranslationEngine,
     private val llmClient: io.github.ztfang.eye.engine.translation.llm.LLMClient,
     private val modelRepository: io.github.ztfang.eye.domain.repository.ModelRepository
 ) {
@@ -311,27 +311,32 @@ class SubtitleManager @Inject constructor(
     }
 
     /**
-     * 检查某语言的 ASR 模型是否完整就绪。
+     * 返回某语言所需模型的展示名与体积（字节），用于弹窗精准提示。
+     * 引擎映射复用 [resolveAsrEngine]，保证提示的模型与运行时实际加载的一致。
      */
-    private fun isModelReadyFor(languageCode: String): Boolean =
-        checkEngineReadyAndLog(resolveAsrEngine(languageCode), languageCode)
+    private fun requiredModelInfo(languageCode: String): Pair<String, Long> =
+        when (resolveAsrEngine(languageCode)) {
+            AsrEngineType.VOSK ->
+                "Vosk ${VoskLanguageMap.getDisplayName(languageCode)}" to
+                    (VoskLanguage.fromCode(languageCode)?.sizeBytes ?: 0L)
+            AsrEngineType.SHERPA_ONNX ->
+                SherpaOnnxModel.X_ASR_ZH_EN_960MS.displayName to
+                    SherpaOnnxModel.X_ASR_ZH_EN_960MS.sizeBytes
+            AsrEngineType.SHERPA_ONNX_BN ->
+                SherpaOnnxModel.BN_VOSK_2026_02_09.displayName to
+                    SherpaOnnxModel.BN_VOSK_2026_02_09.sizeBytes
+            AsrEngineType.SHERPA_ONNX_NEMOTRON ->
+                SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.displayName to
+                    SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.sizeBytes
+        }
 
     /**
-     * 返回当前引擎类型下，某语言应该下载模型名（用于精准错误提示）。
+     * 组装「模型未下载」运行时错误文案，带上所需模型名。
+     * 文案前缀「语音识别模型未下载」被 [observeModelDownloads] 用于识别该类错误，改动需同步。
      */
-    private fun expectedModelNameFor(languageCode: String, engine: AsrEngineType = resolveAsrEngine(languageCode)): String = when (engine) {
-        AsrEngineType.VOSK -> "VOSK_ASR_${languageCode.uppercase()}"
-        AsrEngineType.SHERPA_ONNX -> "SHERPA_ONNX_ASR_${SherpaOnnxModel.X_ASR_ZH_EN_960MS.modelId}"
-        AsrEngineType.SHERPA_ONNX_BN -> "SHERPA_ONNX_ASR_${SherpaOnnxModel.BN_VOSK_2026_02_09.modelId}"
-        AsrEngineType.SHERPA_ONNX_NEMOTRON -> "SHERPA_ONNX_ASR_${SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.modelId}"
-    }
-
-    /** 返回 UI 可读模型名称，运行时错误提示用。 */
-    private fun displayModelNameFor(languageCode: String, engine: AsrEngineType = resolveAsrEngine(languageCode)): String = when (engine) {
-        AsrEngineType.VOSK -> "Vosk ${VoskLanguageMap.getDisplayName(languageCode)}"
-        AsrEngineType.SHERPA_ONNX -> SherpaOnnxModel.X_ASR_ZH_EN_960MS.displayName + " (Sherpa X-ASR)"
-        AsrEngineType.SHERPA_ONNX_BN -> SherpaOnnxModel.BN_VOSK_2026_02_09.displayName + " (Sherpa BN)"
-        AsrEngineType.SHERPA_ONNX_NEMOTRON -> SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.displayName + " (Nemotron 多语种)"
+    private fun modelMissingMessage(languageCode: String): String {
+        val (modelName, _) = requiredModelInfo(languageCode)
+        return "语音识别模型未下载：识别该语言需要「$modelName」模型，请前往模型下载界面下载"
     }
 
     /**
@@ -571,25 +576,6 @@ class SubtitleManager @Inject constructor(
      * 保留句末标点在切分结果中，最后一段若无句末标点则视为未完成句保留在缓冲区。
      * 支持中英文标点：。！？.!?；;
      */
-    private fun splitBySentenceEnd(text: String): List<String> {
-        if (text.isEmpty()) return listOf(text)
-        val result = mutableListOf<String>()
-        val current = StringBuilder()
-        for (ch in text) {
-            current.append(ch)
-            if (ch == '。' || ch == '！' || ch == '？' || ch == '.' || ch == '!' || ch == '?'
-                || ch == '；' || ch == ';') {
-                result.add(current.toString())
-                current.setLength(0)
-            }
-        }
-        // 剩余未完成句
-        if (current.isNotEmpty()) {
-            result.add(current.toString())
-        }
-        return result
-    }
-
     private suspend fun reloadAsrModel(languageCode: String) {
         audioMutex.withLock {
             Log.i(LOG_TAG, "reloadAsrModel: 切换语种到 $languageCode")
@@ -977,16 +963,24 @@ class SubtitleManager @Inject constructor(
                 }
             }
             if (!ready) {
-                Log.w(LOG_TAG, "checkAsrModel: 模型未就绪, engine=$engine, lang=$sourceLanguage")
-                _asrDownloadRequest.value = AsrDownloadRequest(sourceLanguage, displayName)
+                val (modelName, modelSize) = requiredModelInfo(sourceLanguage)
+                Log.w(LOG_TAG, "checkAsrModel: 模型未就绪, engine=$engine, lang=$sourceLanguage, 需下载=$modelName")
+                _asrDownloadRequest.value = AsrDownloadRequest(
+                    languageCode = sourceLanguage,
+                    languageDisplayName = displayName,
+                    modelDisplayName = modelName,
+                    modelSizeBytes = modelSize
+                )
             }
         }
     }
 
-    /** ASR 模型下载请求 */
+    /** ASR 模型下载请求：携带所需模型的展示名与体积，供弹窗精准提示 */
     data class AsrDownloadRequest(
         val languageCode: String,
-        val displayName: String,
+        val languageDisplayName: String,
+        val modelDisplayName: String,
+        val modelSizeBytes: Long,
         val requestId: Long = System.currentTimeMillis()
     )
 
@@ -1067,7 +1061,7 @@ class SubtitleManager @Inject constructor(
             }
             prepare.onFailure { err ->
                 Log.e(LOG_TAG, "[ENSURE] ASR 准备失败, engine=$asrEngine, lang=$lang: ${err.message}", err)
-                _runtimeError.value = "语音识别模型未下载，请前往模型下载界面下载对应模型"
+                _runtimeError.value = modelMissingMessage(lang)
             }
         }
     }
@@ -1266,7 +1260,7 @@ class SubtitleManager @Inject constructor(
             }
             if (asrResult.isFailure) {
                 Log.e(LOG_TAG, "startAudioProcessingLocked: ASR prepare 失败, engine=$engine: ${asrResult.exceptionOrNull()?.message}")
-                _runtimeError.value = "语音识别模型未下载，请前往模型下载界面下载对应模型"
+                _runtimeError.value = modelMissingMessage(sourceLanguage)
                 _isOverlayActive.value = false
                 return
             }

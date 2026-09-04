@@ -63,38 +63,6 @@ class SettingsViewModel @Inject constructor(
     private val _downloadError = MutableStateFlow<String?>(null)
     val downloadError: StateFlow<String?> = _downloadError.asStateFlow()
 
-    fun observeModel(name: String): Flow<ModelState> = modelManagementUseCase.observeModel(name)
-
-    fun clearDownloadError() {
-        _downloadError.value = null
-    }
-
-    fun downloadModel(name: String, url: String) {
-        viewModelScope.launch {
-            Log.d(TAG_VM, "[START] downloadModel name=$name, url=$url")
-            _downloadError.value = null
-            _downloadProgressMap.value = _downloadProgressMap.value + (name to DownloadProgress(
-                modelName = name,
-                bytesDownloaded = 0L,
-                totalBytes = 0L,
-                speedBytesPerSec = 0L
-            ))
-            val result = modelManagementUseCase.startDownload(name, url) { progress ->
-                if (progress.bytesDownloaded and 0xFFFFFL == 0L || progress.bytesDownloaded == progress.totalBytes) {
-                    Log.v(TAG_VM, "[PROGRESS] $name: ${progress.bytesDownloaded}/${progress.totalBytes} (${progress.fraction})")
-                }
-                _downloadProgressMap.value = _downloadProgressMap.value + (name to progress)
-            }
-            Log.d(TAG_VM, "[RESULT] downloadModel $name: success=${result.isSuccess}, ex=${result.exceptionOrNull()?.message}")
-            result.onFailure { e ->
-                _downloadError.value = "下载失败: ${e.message}"
-                Log.e(TAG_VM, "[FAIL] downloadModel $name", e)
-            }
-            _downloadProgressMap.value = _downloadProgressMap.value - name
-            Log.d(TAG_VM, "[CLEANUP] downloadModel $name 从 progressMap 移除, 剩余keys=${_downloadProgressMap.value.keys}")
-        }
-    }
-
     /**
      * 下载 Vosk ASR 模型（30–82 MB zip，解压至 filesDir/models/vosk/<lang>/）。
      * 下载中文模型前检查 Sherpa-ONNX 互斥，存在则提示先删除。
@@ -229,9 +197,6 @@ class SettingsViewModel @Inject constructor(
 
     suspend fun isModelAvailable(name: String): Boolean = modelManagementUseCase.isModelAvailable(name)
 
-    fun setSourceLanguage(code: String) { viewModelScope.launch { settingsRepository.setSourceLanguage(code) } }
-    fun setTargetLanguage(code: String) { viewModelScope.launch { settingsRepository.setTargetLanguage(code) } }
-    fun setTranslationEngine(engine: TranslationEngine) { viewModelScope.launch { settingsRepository.setTranslationEngine(engine) } }
     fun setCloudTranslationProvider(provider: CloudTranslationProvider) { viewModelScope.launch { settingsRepository.setCloudTranslationProvider(provider) } }
     fun setCloudTranslationApiKey(key: String) { viewModelScope.launch { settingsRepository.setCloudTranslationApiKey(key) } }
     fun setDisplayMode(mode: DisplayMode) { viewModelScope.launch { settingsRepository.setDisplayMode(mode) } }

@@ -126,11 +126,17 @@
     <!-- Model Download -->
     <string name="local_model_action_download">Download</string>
     <string name="local_model_action_delete">Delete</string>
-    <string name="local_model_huggingface_tip">Bengali and multilingual models require HuggingFace access. Please check your network.</string>
+    <string name="local_model_huggingface_tip">The Chinese-English model uses ModelScope; Bengali and multilingual models require HuggingFace access. Please check your network.</string>
     <string name="local_model_x_asr_name">Chinese-English</string>
     <string name="local_model_nemotron_name">Multilingual (26)</string>
+    <string name="local_model_subtitle_x_asr">Handles Chinese and English (mixed speech included)</string>
+    <string name="local_model_subtitle_nemotron">Handles 26 languages other than Chinese and English</string>
+    <string name="local_model_subtitle_bn">Dedicated to Bengali</string>
+    <string name="local_model_delete_title">Delete model</string>
+    <string name="local_model_delete_msg">Delete “%1$s” (%2$s)? You will need to download it again.</string>
     <string name="asr_model_not_downloaded_title">ASR Model Not Downloaded</string>
-    <string name="asr_model_not_downloaded_msg">The ASR model for the current language is not downloaded. Please go to the model download page.</string>
+    <string name="asr_model_not_downloaded_msg">Recognizing %1$s requires the “%2$s” model (%3$s), which is not downloaded yet.</string>
+    <string name="asr_model_not_downloaded_hint">Note: the Chinese-English model handles Chinese and English; Multilingual (26) covers the rest. They must be downloaded separately.</string>
     <string name="asr_model_go_download">Download</string>
 
     <!-- History -->

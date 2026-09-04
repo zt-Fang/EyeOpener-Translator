@@ -1049,14 +1049,27 @@ fun SubtitleScreen(
     }
 
     // ASR 模型下载提示弹窗 — 源语言切换时模型未下载则弹出
-    // 统一引导用户前往模型下载界面（不显示具体模型名）
+    // 明确告知所需模型的名称与体积，避免用户下错模型（多语种模型不覆盖中英文）
     asrDownloadRequest?.let { req ->
+        val sizeMb = req.modelSizeBytes / 1024 / 1024
+        val sizeText = if (sizeMb > 0) "$sizeMb MB" else ""
         AlertDialog(
             onDismissRequest = { subtitleManager.dismissAsrDownload() },
             title = { Text(text = stringResource(R.string.asr_model_not_downloaded_title)) },
             text = {
                 Column {
-                    Text(text = stringResource(R.string.asr_model_not_downloaded_msg))
+                    Text(
+                        text = stringResource(
+                            R.string.asr_model_not_downloaded_msg,
+                            req.languageDisplayName, req.modelDisplayName, sizeText
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(Dimens.SpaceSm))
+                    Text(
+                        text = stringResource(R.string.asr_model_not_downloaded_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             },
             dismissButton = {

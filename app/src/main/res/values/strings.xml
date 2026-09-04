@@ -126,11 +126,17 @@
     <!-- 模型下载 -->
     <string name="local_model_action_download">开始下载</string>
     <string name="local_model_action_delete">删除</string>
-    <string name="local_model_huggingface_tip">孟加拉语和多语种模型需访问 HuggingFace 官网，请检查网络环境</string>
+    <string name="local_model_huggingface_tip">中英文模型走 ModelScope（国内源）；孟加拉语与多语种模型需访问 HuggingFace，请检查网络环境</string>
     <string name="local_model_x_asr_name">中英文</string>
     <string name="local_model_nemotron_name">多语种(26)</string>
+    <string name="local_model_subtitle_x_asr">负责中文与英文（含中英混说）</string>
+    <string name="local_model_subtitle_nemotron">负责除中文、英文外的 26 种语言</string>
+    <string name="local_model_subtitle_bn">孟加拉语专用</string>
+    <string name="local_model_delete_title">删除模型</string>
+    <string name="local_model_delete_msg">确定删除「%1$s」（%2$s）吗？删除后需重新下载。</string>
     <string name="asr_model_not_downloaded_title">语音识别模型未下载</string>
-    <string name="asr_model_not_downloaded_msg">当前语言的语音识别模型未下载，请前往模型下载界面下载。</string>
+    <string name="asr_model_not_downloaded_msg">识别%1$s需要「%2$s」模型（%3$s），尚未下载。</string>
+    <string name="asr_model_not_downloaded_hint">说明：中英文模型负责中文与英文，多语种(26) 负责其余语言，两者需分别下载。</string>
     <string name="asr_model_go_download">下载</string>
 
     <!-- 历史记录 -->

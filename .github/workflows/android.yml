@@ -34,14 +34,24 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', 'gradle/libs.versions.toml') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      - name: Assemble Debug
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Ktlint
+        run: ./gradlew ktlintCheck --no-daemon
 
       - name: Detekt
         run: ./gradlew detekt --no-daemon
 
+      - name: Lint
+        run: ./gradlew lintDebug --no-daemon
+
       - name: Unit tests
         run: ./gradlew test --no-daemon
+
+      - name: Assemble Debug
+        run: ./gradlew assembleDebug --no-daemon
+
+      # Release 开启了 R8 缩减与资源压缩，仅构建 Debug 无法暴露 R8/keep 规则问题
+      - name: Assemble Release
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Upload Debug APK
         if: github.event_name == 'push'

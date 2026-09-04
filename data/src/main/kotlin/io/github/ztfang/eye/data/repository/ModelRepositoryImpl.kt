@@ -633,9 +633,6 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         }
     }
 
-    override suspend fun updateModelStatus(modelName: String, status: ModelStatus): Result<Unit> =
-        withContext(Dispatchers.IO) { runCatching { updateState(modelName, status) } }
-
     private fun updateState(name: String, status: ModelStatus, progress: Float = 0f, downloadUrl: String = "", localPath: String? = null, errorMessage: String? = null) {
         updateState(ModelState(name, status, progress, downloadUrl, localPath ?: getModelPath(name), errorMessage))
     }

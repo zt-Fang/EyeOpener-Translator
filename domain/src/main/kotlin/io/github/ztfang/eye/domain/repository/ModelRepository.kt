@@ -3,7 +3,6 @@ package io.github.ztfang.eye.domain.repository
 import io.github.ztfang.eye.domain.model.DownloadProgress
 import io.github.ztfang.eye.domain.model.ModelFileSpec
 import io.github.ztfang.eye.domain.model.ModelState
-import io.github.ztfang.eye.domain.model.ModelStatus
 import kotlinx.coroutines.flow.Flow
 
 /** 模型仓库：下载、删除、状态查询 */
@@ -43,9 +42,6 @@ interface ModelRepository {
 
     /** 获取模型的本地路径 */
     fun getModelPath(modelName: String): String?
-
-    /** 更新模型状态 */
-    suspend fun updateModelStatus(modelName: String, status: ModelStatus): Result<Unit>
 
     /** 下载 zip 并解压到 extractDir（Vosk 等 zip 发布的模型） */
     suspend fun downloadAndExtractZip(

@@ -2,10 +2,8 @@ package io.github.ztfang.eye.engine
 
 import android.content.Context
 import android.util.Log
-import io.github.ztfang.eye.domain.model.AsrEngineType
 import io.github.ztfang.eye.domain.model.SherpaOnnxModel
 import io.github.ztfang.eye.domain.model.TranslationEngine
-import io.github.ztfang.eye.domain.model.VoskLanguage
 import io.github.ztfang.eye.engine.asr.SherpaOnnxAsrEngine
 import io.github.ztfang.eye.engine.asr.VoskAsrEngine
 import io.github.ztfang.eye.engine.asr.VoskLanguageMap
@@ -195,39 +193,9 @@ class ModelPreparer @Inject constructor(
     }
 
     /**
-     * 文件系统级检查 ASR 模型是否就绪；无副作用，被 SettingsViewModel / UI / SubtitleManager 共享。
-     * 引擎映射与 SubtitleManager.resolveAsrEngine 保持一致：
-     * zh/en → X-ASR；bn → BN；Nemotron 26 语 → NEMOTRON；其余 → Vosk。
+     * 获取所有支持的 Sherpa-ONNX 模型列表
      */
-    fun isAsrModelReadyFor(languageCode: String): Boolean = when {
-        languageCode == "zh" || languageCode == "en" ->
-            isSherpaOnnxAsrReady(SherpaOnnxModel.X_ASR_ZH_EN_960MS.modelId)
-        languageCode == "bn" ->
-            isSherpaOnnxAsrReady(SherpaOnnxModel.BN_VOSK_2026_02_09.modelId)
-        SherpaOnnxModel.NEMOTRON_LANGUAGES.contains(languageCode) ->
-            isSherpaOnnxAsrReady(SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.modelId)
-        else -> {
-            val dir = asrModelDir(languageCode)
-            val am = File(dir, "am").isDirectory
-            val conf = File(dir, "conf").isDirectory
-            val graph = File(dir, "graph").isDirectory
-            am && conf && graph
-        }
-    }
-
-    /** 返回某语言对应的 ASR 引擎类型（与 SubtitleManager 共用，避免判断不一致） */
-    fun asrEngineTypeFor(languageCode: String): AsrEngineType = when {
-        languageCode == "zh" || languageCode == "en" -> AsrEngineType.SHERPA_ONNX
-        languageCode == "bn" -> AsrEngineType.SHERPA_ONNX_BN
-        SherpaOnnxModel.NEMOTRON_LANGUAGES.contains(languageCode) -> AsrEngineType.SHERPA_ONNX_NEMOTRON
-        else -> AsrEngineType.VOSK
-    }
-
-    /** 获取所有支持的 Sherpa-ONNX 模型列表 */
     fun getSherpaOnnxModels(): List<SherpaOnnxModel> = SherpaOnnxModel.getAll()
-
-    /** 获取所有支持的 Vosk 语种列表 */
-    fun getVoskLanguages(): List<VoskLanguage> = VoskLanguage.getAll()
 
     /**
      * 预热 ML Kit 语言对模型（首次需联网下载 30-100MB）。

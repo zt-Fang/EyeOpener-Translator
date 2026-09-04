@@ -25,15 +25,19 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,6 +82,13 @@ private val SHERPA_COVERED_LANGS: Set<String> by lazy {
 /** LocalModelsScreen UI 层日志标签 */
 private const val TAG_UI = "LocalModelsScreen"
 
+/** 待确认删除的模型：仓库模型名 + 展示标题 + 体积文案 */
+private data class PendingDelete(
+    val modelName: String,
+    val title: String,
+    val sizeText: String
+)
+
 /**
  * 模型下载页面。
  *
@@ -92,6 +103,9 @@ fun LocalModelsScreen(
 ) {
     val allModels by settingsViewModel.allModels.collectAsStateWithLifecycle(emptyList())
     val downloadProgressMap by settingsViewModel.downloadProgressMap.collectAsStateWithLifecycle(emptyMap())
+
+    // 删除是破坏性操作（模型最大 685MB），先弹确认再执行
+    var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
 
     // 监听变化打日志（UI层可观测性，方便定位按钮不显示问题）
     androidx.compose.runtime.LaunchedEffect(allModels, downloadProgressMap) {
@@ -217,16 +231,28 @@ fun LocalModelsScreen(
                         stringResource(R.string.local_model_nemotron_name)
                     else -> model.displayName
                 }
+                // 副标题说明该模型负责的语种，避免用户下错（多语种不覆盖中英文）
+                val modelSubtitle = when (model) {
+                    SherpaOnnxModel.X_ASR_ZH_EN_960MS ->
+                        stringResource(R.string.local_model_subtitle_x_asr)
+                    SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8 ->
+                        stringResource(R.string.local_model_subtitle_nemotron)
+                    SherpaOnnxModel.BN_VOSK_2026_02_09 ->
+                        stringResource(R.string.local_model_subtitle_bn)
+                    else -> null
+                }
+                val sizeText = "${(model.sizeBytes / 1024 / 1024)} MB"
                 ModelRowItem(
                     title = modelTitle,
-                    size = "${(model.sizeBytes / 1024 / 1024)} MB",
+                    size = sizeText,
+                    subtitle = modelSubtitle,
                     accentStart = accentStart,
                     accentEnd = accentEnd,
                     downloaded = isDownloaded,
                     downloading = isDownloading,
                     progress = progress,
                     onDownload = { settingsViewModel.downloadSherpaOnnxModel(model.modelId) },
-                    onDelete = { settingsViewModel.deleteModel(modelName) }
+                    onDelete = { pendingDelete = PendingDelete(modelName, modelTitle, sizeText) }
                 )
             }
 
@@ -248,19 +274,47 @@ fun LocalModelsScreen(
                     Log.d(TAG_UI, "    计算结果: isDownloaded=$isDownloaded  isDownloading=$isDownloading  progress=$progress")
                 }
 
+                val sizeText = "${(lang.sizeBytes / 1024 / 1024)} MB"
                 ModelRowItem(
                     title = lang.displayName,
-                    size = "${(lang.sizeBytes / 1024 / 1024)} MB",
+                    size = sizeText,
                     accentStart = voskAccentStart(lang.code),
                     accentEnd = voskAccentEnd(lang.code),
                     downloaded = isDownloaded,
                     downloading = isDownloading,
                     progress = progress,
                     onDownload = { settingsViewModel.downloadVoskModel(lang.code) },
-                    onDelete = { settingsViewModel.deleteModel(modelName) }
+                    onDelete = { pendingDelete = PendingDelete(modelName, lang.displayName, sizeText) }
                 )
             }
         }
+    }
+
+    pendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(text = stringResource(R.string.local_model_delete_title)) },
+            text = {
+                Text(
+                    text = stringResource(
+                        R.string.local_model_delete_msg, target.title, target.sizeText
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    settingsViewModel.deleteModel(target.modelName)
+                    pendingDelete = null
+                }) {
+                    Text(text = stringResource(R.string.local_model_action_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text(text = stringResource(R.string.common_cancel))
+                }
+            }
+        )
     }
 }
 

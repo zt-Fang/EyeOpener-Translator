@@ -168,10 +168,3 @@ enum class SherpaOnnxModel(
         )
     }
 }
-
-/** Sherpa-ONNX 多文件下载规格 */
-data class SherpaOnnxFileSpec(
-    val relativePath: String,
-    val url: String,
-    val sizeBytes: Long
-)
