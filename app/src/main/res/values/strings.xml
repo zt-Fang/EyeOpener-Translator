@@ -149,6 +149,9 @@
     <string name="history_favorite">收藏</string>
     <string name="history_filter_all">全部</string>
     <string name="history_filter_favorite">收藏</string>
+    <string name="history_clear_all_title">清除全部历史？</string>
+    <string name="history_clear_all_message">将永久删除 %1$d 条记录，此操作无法撤销。</string>
+    <string name="history_clear_all_confirm">删除</string>
 
     <!-- API 设置 -->
     <string name="api_title">API 设置</string>

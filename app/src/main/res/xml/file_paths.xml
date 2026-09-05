@@ -3,4 +3,7 @@
 <paths>
     <!-- 对应 Context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) -->
     <external-files-path name="apk_download" path="Download/" />
+    <!-- 对应 Context.getExternalFilesDir(null)/Exports/：历史记录导出的 txt 文件。
+         导出必须走 FileProvider，直接用 Uri.fromFile 在 Android 7+ 会抛 FileUriExposedException。 -->
+    <external-files-path name="exports" path="Exports/" />
 </paths>

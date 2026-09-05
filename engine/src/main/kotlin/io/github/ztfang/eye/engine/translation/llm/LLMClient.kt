@@ -26,10 +26,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Call
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
@@ -38,13 +40,21 @@ import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
+/** 协程取消时立即中断底层 OkHttp 连接，避免网络差时 IO 线程被阻塞调用占满 */
+private suspend fun Call.executeCancellable() = suspendCancellableCoroutine { cont ->
+    cont.invokeOnCancellation { this@executeCancellable.cancel() }
+    cont.resumeWith(runCatching { this@executeCancellable.execute() })
+}
+
 /**
  * LLM 服务商枚举
  */
 enum class LLMProvider {
     OPEN_AI,
+    OPENROUTER,
     CLAUDE,
     DEEP_SEEK,
+    ZHIPU,
     QWEN,
     MINIMAX,
     MIMO,
@@ -53,8 +63,10 @@ enum class LLMProvider {
 
     val defaultBaseUrl: String get() = when (this) {
         OPEN_AI -> "https://api.openai.com/v1"
+        OPENROUTER -> "https://openrouter.ai/api/v1"
         CLAUDE -> "https://api.anthropic.com/v1"
         DEEP_SEEK -> "https://api.deepseek.com/v1"
+        ZHIPU -> "https://open.bigmodel.cn/api/paas/v4"
         QWEN -> "https://dashscope.aliyuncs.com/compatible-mode/v1"
         MINIMAX -> "https://api.minimax.chat/v1"
         MIMO -> "https://api.mimo.xiaomi.com/v1"
@@ -63,14 +75,16 @@ enum class LLMProvider {
     }
 
     val chatPath: String get() = when (this) {
-        OPEN_AI, DEEP_SEEK, QWEN, MINIMAX, MIMO, GEMINI, AGNES -> "/chat/completions"
+        OPEN_AI, OPENROUTER, DEEP_SEEK, ZHIPU, QWEN, MINIMAX, MIMO, GEMINI, AGNES -> "/chat/completions"
         CLAUDE -> "/messages"
     }
 
     val defaultModel: String get() = when (this) {
         OPEN_AI -> "gpt-4o-mini"
+        OPENROUTER -> "openai/gpt-4o-mini"
         CLAUDE -> "claude-3-haiku-20240307"
         DEEP_SEEK -> "deepseek-v4-flash"
+        ZHIPU -> "glm-4-flash"
         QWEN -> "qwen-turbo"
         MINIMAX -> "abab6.5s-chat"
         MIMO -> "mimo-7b-rl"
@@ -80,8 +94,10 @@ enum class LLMProvider {
 
     val displayName: String get() = when (this) {
         OPEN_AI -> "OpenAI"
+        OPENROUTER -> "OpenRouter"
         CLAUDE -> "Claude"
         DEEP_SEEK -> "DeepSeek"
+        ZHIPU -> "智谱"
         QWEN -> "千问"
         MINIMAX -> "MiniMax"
         MIMO -> "MiMo"
@@ -95,7 +111,9 @@ class LLMClient @Inject constructor(
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
+        // 读超时 30s：上层 translate/chat 用 withTimeout(7s) 兜底，120s 会让慢调用在协程取消后仍
+        // 阻塞 IO 线程直到 120s，网络差时 IO 线程池被占满。30s 作为最坏情况上限即可。
+        .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
@@ -119,7 +137,8 @@ class LLMClient @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             when (provider) {
-                LLMProvider.OPEN_AI, LLMProvider.DEEP_SEEK,
+                LLMProvider.OPEN_AI, LLMProvider.OPENROUTER,
+                LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
                 LLMProvider.QWEN, LLMProvider.MINIMAX,
                 LLMProvider.MIMO, LLMProvider.GEMINI,
                 LLMProvider.AGNES ->
@@ -158,7 +177,8 @@ class LLMClient @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             when (provider) {
-                LLMProvider.OPEN_AI, LLMProvider.DEEP_SEEK,
+                LLMProvider.OPEN_AI, LLMProvider.OPENROUTER,
+                LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
                 LLMProvider.QWEN, LLMProvider.MINIMAX,
                 LLMProvider.MIMO, LLMProvider.GEMINI,
                 LLMProvider.AGNES ->
@@ -182,7 +202,8 @@ class LLMClient @Inject constructor(
 
         try {
             when (provider) {
-                LLMProvider.OPEN_AI, LLMProvider.DEEP_SEEK,
+                LLMProvider.OPEN_AI, LLMProvider.OPENROUTER,
+                LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
                 LLMProvider.QWEN, LLMProvider.MINIMAX,
                 LLMProvider.MIMO, LLMProvider.GEMINI,
                 LLMProvider.AGNES ->
@@ -230,7 +251,8 @@ class LLMClient @Inject constructor(
             .post(requestBody)
             .build()
 
-        val response = client.newCall(request).execute()
+        val call = client.newCall(request)
+        val response = call.executeCancellable()
         if (!response.isSuccessful) {
             val body = response.body?.string() ?: ""
             Log.e("LLMClient", "stream API error ${response.code}: $body")
@@ -301,7 +323,8 @@ class LLMClient @Inject constructor(
             .post(requestBody)
             .build()
 
-        val response = client.newCall(request).execute()
+        val call = client.newCall(request)
+        val response = call.executeCancellable()
         if (!response.isSuccessful) {
             val body = response.body?.string() ?: ""
             Log.e("LLMClient", "Claude stream API error ${response.code}: $body")
@@ -334,7 +357,7 @@ class LLMClient @Inject constructor(
         }
     }
 
-    private fun openAiChat(
+    private suspend fun openAiChat(
         url: String, apiKey: String, model: String,
         messages: List<Pair<String, String>>
     ): String {
@@ -359,7 +382,9 @@ class LLMClient @Inject constructor(
             .post(requestBody)
             .build()
 
-        val response = client.newCall(request).execute()
+        // 协程取消时立即中断底层连接，避免 withTimeout(7s) 取消后阻塞调用仍占用 IO 线程到 30s 读超时
+        val call = client.newCall(request)
+        val response = call.executeCancellable()
         val body = response.body?.string() ?: error("Empty response body")
         if (!response.isSuccessful) {
             Log.e("LLMClient", "chat API error ${response.code}: $body")
@@ -371,7 +396,7 @@ class LLMClient @Inject constructor(
             .getString("content").trim()
     }
 
-    private fun claudeChat(
+    private suspend fun claudeChat(
         url: String, apiKey: String, model: String,
         messages: List<Pair<String, String>>
     ): String {
@@ -396,7 +421,8 @@ class LLMClient @Inject constructor(
             .post(requestBody)
             .build()
 
-        val response = client.newCall(request).execute()
+        val call = client.newCall(request)
+        val response = call.executeCancellable()
         val body = response.body?.string() ?: error("Empty response body")
         if (!response.isSuccessful) {
             Log.e("LLMClient", "chat API error ${response.code}: $body")
@@ -420,7 +446,7 @@ class LLMClient @Inject constructor(
         return raw.trim().replace(Regex("[\\r\\n\\s]+"), "")
     }
 
-    private fun openAiTranslate(
+    private suspend fun openAiTranslate(
         url: String, apiKey: String, model: String,
         systemPrompt: String, text: String
     ): String {
@@ -446,7 +472,8 @@ class LLMClient @Inject constructor(
             .post(requestBody)
             .build()
 
-        val response = client.newCall(request).execute()
+        val call = client.newCall(request)
+        val response = call.executeCancellable()
         val body = response.body?.string() ?: error("Empty response body")
         if (!response.isSuccessful) {
             Log.e("LLMClient", "API error ${response.code}: $body")
@@ -458,7 +485,7 @@ class LLMClient @Inject constructor(
             .getString("content").trim()
     }
 
-    private fun claudeTranslate(
+    private suspend fun claudeTranslate(
         url: String, apiKey: String, model: String,
         systemPrompt: String, text: String
     ): String {
@@ -483,7 +510,8 @@ class LLMClient @Inject constructor(
             .post(requestBody)
             .build()
 
-        val response = client.newCall(request).execute()
+        val call = client.newCall(request)
+        val response = call.executeCancellable()
         val body = response.body?.string() ?: error("Empty response body")
         if (!response.isSuccessful) {
             Log.e("LLMClient", "Claude API error ${response.code}: $body")

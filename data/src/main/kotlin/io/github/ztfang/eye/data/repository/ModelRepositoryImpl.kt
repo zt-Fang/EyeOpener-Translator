@@ -125,10 +125,22 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         val dir = File(modelsBaseDir, modelName)
         dir.mkdirs()
 
-        Log.i(TAG, "下载开始: model=$modelName, files=${files.size}, totalSize=${files.sumOf { it.sizeBytes } / 1024 / 1024}MB, dir=${dir.absolutePath}")
-
         // 预计算总大小用于准确进度报告
         val totalSizeAllFiles: Long = files.sumOf { it.sizeBytes }
+
+        // 磁盘空间预检：开写前一次性判断，避免下到一半 ENOSPC 留下截断文件
+        if (totalSizeAllFiles > 0) {
+            val usable = dir.usableSpace
+            if (usable < totalSizeAllFiles + MIN_FREE_SPACE_BYTES) {
+                val msg = "存储空间不足：需要 ${totalSizeAllFiles / 1024 / 1024}MB，" +
+                    "可用 ${usable / 1024 / 1024}MB"
+                Log.e(TAG, "[DL_SPACE] $modelName: $msg")
+                updateState(modelName, ModelStatus.ERROR, errorMessage = msg)
+                return@withContext Result.failure(IOException(msg))
+            }
+        }
+
+        Log.i(TAG, "下载开始: model=$modelName, files=${files.size}, totalSize=${totalSizeAllFiles / 1024 / 1024}MB, dir=${dir.absolutePath}")
         val sizesByFile: Map<String, Long> = files.associate { it.relativePath to it.sizeBytes }
         var aggregateDownloaded: Long = 0L  // 只累加已完成文件的真实字节数（target.length()）
         val startedAt = System.currentTimeMillis()
@@ -340,11 +352,17 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         }
     }
 
-    /** 下载单个文件：.part 临时文件 + Range 断点续传 */
+    /**
+     * 下载单个文件：.part 临时文件 + Range 断点续传。
+     *
+     * @param allowResume 是否允许基于已有 .part 续传。HTTP 416 重试时置 false——
+     *        此时 .part 已比服务端文件还长，必须先删掉再从头下，否则该模型将永久下载失败。
+     */
     private fun downloadOneFile(
         spec: ModelFileSpec,
         target: File,
-        onBytes: (bytesRead: Long, totalBytes: Long) -> Unit
+        onBytes: (bytesRead: Long, totalBytes: Long) -> Unit,
+        allowResume: Boolean = true
     ) {
         val host = runCatching { URL(spec.url).host }.getOrNull()
         if (host == null || host !in ALLOWED_DOWNLOAD_HOSTS) {
@@ -352,6 +370,8 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         }
 
         val partFile = File(target.parentFile, "${target.name}.part")
+        // 416 重试：.part 长度已超过远端文件，无法续传，删除后从头下载
+        if (!allowResume && partFile.exists()) partFile.delete()
         val existingBytes = if (partFile.exists()) partFile.length() else 0L
 
         val conn = (URL(spec.url).openConnection() as HttpURLConnection).apply {
@@ -366,6 +386,18 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         conn.connect()
 
         val responseCode = conn.responseCode
+        // 416 = Range 起点超出远端文件长度（.part 比远端文件还长，通常因远端文件已更新）。
+        // 旧实现直接抛错但保留 .part，导致之后每次重试都带同样的 Range → 该模型永久下不动。
+        // 现改为：删掉 .part 从头重下一次；仍失败才抛错。
+        if (responseCode == 416) {
+            conn.disconnect()
+            if (allowResume) {
+                Log.w(TAG, "[DL_416] ${spec.relativePath}: .part 无法续传，删除后重新下载")
+                downloadOneFile(spec, target, onBytes, allowResume = false)
+                return
+            }
+            throw IOException("HTTP 416 for ${spec.url}")
+        }
         // 206 = 断点续传成功，200 = 服务器不支持 Range 或全新下载
         val isResume = responseCode == 206
         if (responseCode !in 200..299) {
@@ -383,6 +415,18 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             fullSize > 0 -> fullSize
             spec.sizeBytes > 0 -> spec.sizeBytes
             else -> -1L
+        }
+
+        // 单文件空间预检（用服务端返回的真实长度，比 spec.sizeBytes 可靠）
+        if (totalBytes > 0) {
+            val usable = target.parentFile?.usableSpace ?: Long.MAX_VALUE
+            val remaining = totalBytes - if (isResume) existingBytes else 0L
+            if (usable < remaining + MIN_FREE_SPACE_BYTES) {
+                conn.disconnect()
+                throw IOException(
+                    "存储空间不足：还需 ${remaining / 1024 / 1024}MB，可用 ${usable / 1024 / 1024}MB"
+                )
+            }
         }
 
         // 非续传时清空 .part 从头下载
@@ -409,12 +453,15 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             conn.disconnect()
         }
 
-        // 只校验大小（≥95% 视为成功）；不做魔数校验——曾反复误判（tokens.txt 首字符'<'、
-        // zip/tar 头等）并触发自愈误删完整模型。格式正确性由 ASR 引擎 init() 验证。
+        // 严格校验字节数：必须与服务端声明长度【完全相等】才允许转正。
+        // 旧实现只要求 ≥95%，685MB 的 Nemotron 实际 626MB 就能通过，截断的 ONNX 会被
+        // 重命名为正式文件并标记 AVAILABLE，UI 显示"已下载"但引擎 init() 必失败，用户无从察觉。
+        // 仍不做魔数校验——曾反复误判（tokens.txt 首字符'<'、zip/tar 头等）并触发自愈误删完整模型。
+        // 注：若某模型报 size mismatch，说明 SherpaOnnxModel 里声明的 sizeBytes 与远端实际不符，需核对常量。
         val verifyTotal = if (fullSize > 0) fullSize else spec.sizeBytes
-        if (verifyTotal > 0 && partFile.length() < verifyTotal * 95 / 100) {
+        if (verifyTotal > 0 && partFile.length() != verifyTotal) {
             partFile.delete()
-            throw IOException("Truncated file for ${spec.relativePath}: got ${partFile.length()} of $verifyTotal")
+            throw IOException("File size mismatch for ${spec.relativePath}: got ${partFile.length()} of $verifyTotal")
         }
 
         if (target.exists()) target.delete()
@@ -849,6 +896,9 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
 
     private companion object {
         const val TAG = "ModelRepository"
+
+        /** 下载/解压时要求保留的最小剩余空间（128MB），低于此值直接拒绝，避免产生截断文件 */
+        const val MIN_FREE_SPACE_BYTES = 128L * 1024 * 1024
 
         /** 下载 host 白名单，新增源须人工审核 */
         val ALLOWED_DOWNLOAD_HOSTS = setOf(

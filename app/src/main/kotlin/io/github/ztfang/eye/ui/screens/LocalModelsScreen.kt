@@ -52,6 +52,7 @@ import io.github.ztfang.eye.R
 import io.github.ztfang.eye.domain.model.ModelCatalog
 import io.github.ztfang.eye.domain.model.ModelState
 import io.github.ztfang.eye.domain.model.ModelStatus
+import io.github.ztfang.eye.domain.model.AsrRoutingTable
 import io.github.ztfang.eye.domain.model.SherpaOnnxModel
 import io.github.ztfang.eye.domain.model.VoskLanguage
 import io.github.ztfang.eye.ui.theme.Dimens
@@ -69,15 +70,7 @@ import kotlin.math.abs
  *  注意：en-in（印度英语）是 Vosk 独有变体，Sherpa-ONNX 无对应模型，保留在 Vosk 列表。
  *  使用精确匹配（非 substringBefore），避免误过滤 en-in 等变体。
  */
-private val SHERPA_COVERED_LANGS: Set<String> by lazy {
-    buildSet {
-        // Nemotron ready + broad（含 zh, en）
-        addAll(SherpaOnnxModel.NEMOTRON_READY_LANGUAGES)
-        addAll(SherpaOnnxModel.NEMOTRON_BROAD_LANGUAGES)
-        // BN Vosk
-        add("bn")
-    }
-}
+private val SHERPA_COVERED_LANGS: Set<String> = AsrRoutingTable.sherpaCoveredLanguages
 
 /** LocalModelsScreen UI 层日志标签 */
 private const val TAG_UI = "LocalModelsScreen"

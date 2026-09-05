@@ -53,11 +53,16 @@ object AppModule {
     @Provides @Singleton
     fun provideSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository = impl
 
-    /** 提供 Room 数据库单例 */
+    /**
+     * 提供 Room 数据库单例。
+     *
+     * 不启用 fallbackToDestructiveMigration：那会在任何一次 version 升级时静默清空
+     * tb_history，用户历史全丢且无任何提示。升级 schema 时必须写显式 Migration
+     * （schema 基线见 data/schemas/）。
+     */
     @Provides @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "eye.db")
-            .fallbackToDestructiveMigration()
             .build()
 
     /** 提供 HistoryDao */

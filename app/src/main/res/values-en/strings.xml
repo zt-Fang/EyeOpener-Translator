@@ -149,6 +149,9 @@
     <string name="history_favorite">Favorite</string>
     <string name="history_filter_all">All</string>
     <string name="history_filter_favorite">Favorites</string>
+    <string name="history_clear_all_title">Clear all history?</string>
+    <string name="history_clear_all_message">This will permanently delete %1$d records. This cannot be undone.</string>
+    <string name="history_clear_all_confirm">Delete</string>
 
     <!-- AI Translation (formerly API Settings) -->
     <string name="api_title">AI Translation</string>

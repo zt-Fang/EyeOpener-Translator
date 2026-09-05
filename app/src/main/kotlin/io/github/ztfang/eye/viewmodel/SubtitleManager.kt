@@ -18,6 +18,7 @@ import io.github.ztfang.eye.domain.model.DisplayMode
 import io.github.ztfang.eye.domain.model.SubtitleLine
 import io.github.ztfang.eye.domain.model.SubtitleState
 import io.github.ztfang.eye.domain.model.SubtitleType
+import io.github.ztfang.eye.domain.model.AsrRoutingTable
 import io.github.ztfang.eye.domain.model.SherpaOnnxModel
 import io.github.ztfang.eye.domain.model.VoskLanguage
 import io.github.ztfang.eye.domain.model.TranslationEngine
@@ -314,21 +315,16 @@ class SubtitleManager @Inject constructor(
      * 返回某语言所需模型的展示名与体积（字节），用于弹窗精准提示。
      * 引擎映射复用 [resolveAsrEngine]，保证提示的模型与运行时实际加载的一致。
      */
-    private fun requiredModelInfo(languageCode: String): Pair<String, Long> =
-        when (resolveAsrEngine(languageCode)) {
-            AsrEngineType.VOSK ->
-                "Vosk ${VoskLanguageMap.getDisplayName(languageCode)}" to
-                    (VoskLanguage.fromCode(languageCode)?.sizeBytes ?: 0L)
-            AsrEngineType.SHERPA_ONNX ->
-                SherpaOnnxModel.X_ASR_ZH_EN_960MS.displayName to
-                    SherpaOnnxModel.X_ASR_ZH_EN_960MS.sizeBytes
-            AsrEngineType.SHERPA_ONNX_BN ->
-                SherpaOnnxModel.BN_VOSK_2026_02_09.displayName to
-                    SherpaOnnxModel.BN_VOSK_2026_02_09.sizeBytes
-            AsrEngineType.SHERPA_ONNX_NEMOTRON ->
-                SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.displayName to
-                    SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.sizeBytes
+    private fun requiredModelInfo(languageCode: String): Pair<String, Long> {
+        val route = AsrRoutingTable.forLanguage(languageCode)
+        val sherpa = route.modelId?.let { SherpaOnnxModel.fromModelId(it) }
+        return if (sherpa != null) {
+            sherpa.displayName to sherpa.sizeBytes
+        } else {
+            "Vosk ${VoskLanguageMap.getDisplayName(languageCode)}" to
+                (VoskLanguage.fromCode(languageCode)?.sizeBytes ?: 0L)
         }
+    }
 
     /**
      * 组装「模型未下载」运行时错误文案，带上所需模型名。
@@ -350,23 +346,15 @@ class SubtitleManager @Inject constructor(
      *
      *  不再支持「同语言多引擎选已下载」，因为每种语言用户只能下到唯一的那一种模型。
      */
-    private fun resolveAsrEngine(sourceLanguage: String): AsrEngineType = when {
-        sourceLanguage == "zh" || sourceLanguage == "en" -> AsrEngineType.SHERPA_ONNX
-        sourceLanguage == "bn" -> AsrEngineType.SHERPA_ONNX_BN
-        SherpaOnnxModel.NEMOTRON_LANGUAGES.contains(sourceLanguage) -> AsrEngineType.SHERPA_ONNX_NEMOTRON
-        else -> AsrEngineType.VOSK
-    }.also { eng ->
+    private fun resolveAsrEngine(sourceLanguage: String): AsrEngineType {
+        val eng = AsrRoutingTable.engineFor(sourceLanguage)
         Log.i(LOG_TAG, "[RESOLVE] lang=$sourceLanguage → force engine=$eng")
+        return eng
     }
 
     /** 解析 Sherpa-ONNX 模型 ID：zh/en→X-ASR, bn→BN Vosk, Nemotron 语种→Nemotron 3.5, 其他→null(Vosk) */
-    private fun resolveSherpaModelId(languageCode: String): String? = when (languageCode) {
-        "zh", "en" -> SherpaOnnxModel.X_ASR_ZH_EN_960MS.modelId
-        "bn" -> SherpaOnnxModel.BN_VOSK_2026_02_09.modelId
-        else -> if (SherpaOnnxModel.NEMOTRON_LANGUAGES.contains(languageCode))
-            SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.modelId
-        else null
-    }
+    private fun resolveSherpaModelId(languageCode: String): String? =
+        AsrRoutingTable.modelIdFor(languageCode)
 
     /**
      * Nemotron per-stream language 代码：sherpa-onnx 接受 ISO 639-1 bare code（'en'/'ja'/'auto'），
@@ -577,9 +565,10 @@ class SubtitleManager @Inject constructor(
      * 支持中英文标点：。！？.!?；;
      */
     private suspend fun reloadAsrModel(languageCode: String) {
+        // 同 restartAudioProcessing：必须在加锁【之前】置 false，否则与持锁的录音协程互相等待 → 死锁
+        isRecording = false
         audioMutex.withLock {
             Log.i(LOG_TAG, "reloadAsrModel: 切换语种到 $languageCode")
-            isRecording = false
             audioProcessingJob?.cancel()
             runCatching { audioRecord?.stop() }
             runCatching { audioRecord?.release() }
@@ -1003,11 +992,11 @@ class SubtitleManager @Inject constructor(
         scope.launch {
             Log.w(LOG_TAG, "[ENSURE] ===== ASR 模型准备诊断开始, lang=$lang, pickedEngine=$asrEngine =====")
             Log.w(LOG_TAG, "[ENSURE] 候选引擎逐个自检：")
-            val candidates = when {
-                lang == "zh" || lang == "en" -> listOf(AsrEngineType.SHERPA_ONNX, AsrEngineType.VOSK)
-                lang == "bn" -> listOf(AsrEngineType.SHERPA_ONNX_BN, AsrEngineType.VOSK)
-                SherpaOnnxModel.NEMOTRON_LANGUAGES.contains(lang) -> listOf(AsrEngineType.SHERPA_ONNX_NEMOTRON, AsrEngineType.VOSK)
-                else -> listOf(AsrEngineType.VOSK)
+            val route = AsrRoutingTable.forLanguage(lang)
+            val candidates = if (route.engine == AsrEngineType.VOSK) {
+                listOf(AsrEngineType.VOSK)
+            } else {
+                listOf(route.engine, AsrEngineType.VOSK)
             }
             for (c in candidates) {
                 checkEngineReadyAndLog(c, lang)
@@ -1181,9 +1170,12 @@ class SubtitleManager @Inject constructor(
     /** 重启音频采集（切换音频源时调用） */
     private fun restartAudioProcessing() {
         scope.launch(Dispatchers.IO) {
+            // 必须在加锁【之前】置 false：录音协程正持有 audioMutex 在 while(isRecording) 中循环，
+            // 若把 isRecording=false 放进 withLock 内部，本协程永远拿不到锁，而录音协程永远等不到
+            // 退出信号 → 死锁。与 stopAudioProcessing() 的 tryLock 分支同一思路（先置标志再取锁）。
+            isRecording = false
             audioMutex.withLock {
                 Log.i(LOG_TAG, "restartAudioProcessing: 开始重启音频采集")
-                isRecording = false
                 audioProcessingJob?.cancel()
                 audioRecord?.stop()
                 audioRecord?.release()

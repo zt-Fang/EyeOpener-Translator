@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import io.github.ztfang.eye.R
 import io.github.ztfang.eye.domain.model.HistoryRecord
 import io.github.ztfang.eye.domain.repository.HistoryRepository
@@ -79,6 +80,8 @@ fun HistoryScreen(
     var pendingExportSingle by remember { mutableStateOf<HistoryRecord?>(null) }
     // 导出确认弹窗状态：是否待导出全部
     var pendingExportAll by remember { mutableStateOf(false) }
+    // 清除全部确认弹窗：删除不可撤销，必须二次确认
+    var pendingClearAll by remember { mutableStateOf(false) }
 
     val filteredRecords = if (filterFavorite) {
         records.filter { it.isFavorite }
@@ -92,15 +95,25 @@ fun HistoryScreen(
         // ========== 顶部标题栏（与其他设置页风格一致） ==========
         HistoryTopBar(
             onBack = onBack,
-            onClearAll = {
-                CoroutineScope(Dispatchers.IO).launch {
-                    historyRepository.deleteAllRecords()
-                }
-            },
+            onClearAll = { pendingClearAll = true },
+            // 用【总】记录数决定删除按钮可用性：收藏筛选下当前列表为空时，仍应能清除全部
+            recordCount = records.size
+        )
+
+        // 筛选/导出工具栏常驻：旧实现把它放在非空分支里，导致"收藏"筛选且无收藏时
+        // 页面只剩空态图标，没有任何控件能切回"全部"，成为死胡同。
+        HistoryToolbar(
+            modifier = Modifier.padding(
+                horizontal = Dimens.ScreenPaddingH,
+                vertical = Dimens.SpaceSm
+            ),
+            filterFavorite = filterFavorite,
+            onFilterChange = { filterFavorite = it },
+            onExportAll = { pendingExportAll = true },
             recordCount = filteredRecords.size
         )
 
-        // ========== 记录列表区（含筛选/导出工具栏） ==========
+        // ========== 记录列表区 ==========
         if (filteredRecords.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -130,17 +143,6 @@ fun HistoryScreen(
                     vertical = Dimens.SpaceSm
                 )
             ) {
-                // 筛选/导出工具栏放在记录区第一条
-                item {
-                    HistoryToolbar(
-                        filterFavorite = filterFavorite,
-                        onFilterChange = { filterFavorite = it },
-                        onExportAll = { pendingExportAll = true },
-                        recordCount = filteredRecords.size
-                    )
-                    Spacer(modifier = Modifier.height(Dimens.SpaceSm))
-                }
-
                 items(filteredRecords) { record ->
                     HistoryItem(
                         record = record,
@@ -169,11 +171,11 @@ fun HistoryScreen(
     // 导出确认弹窗 — 单条记录
     pendingExportSingle?.let { record ->
         val fileName = "translation_${record.timestamp}.txt"
-        val exportDir = context.getExternalFilesDir(null)
+        val targetDir = exportDir(context)
         AlertDialog(
             onDismissRequest = { pendingExportSingle = null },
             title = { Text("Export Record") },
-            text = { Text("Export to:\n${exportDir?.absolutePath}/$fileName") },
+            text = { Text("Export to:\n${targetDir.absolutePath}/$fileName") },
             confirmButton = {
                 TextButton(onClick = {
                     exportRecord(context, record)
@@ -202,6 +204,30 @@ fun HistoryScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingExportAll = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // 清除全部确认弹窗：删除不可撤销，旧实现点图标即执行，误触即永久丢失全部记录
+    if (pendingClearAll) {
+        AlertDialog(
+            onDismissRequest = { pendingClearAll = false },
+            title = { Text(stringResource(R.string.history_clear_all_title)) },
+            text = {
+                Text(stringResource(R.string.history_clear_all_message, records.size))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        historyRepository.deleteAllRecords()
+                    }
+                    pendingClearAll = false
+                }) { Text(stringResource(R.string.history_clear_all_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingClearAll = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             }
         )
     }
@@ -272,9 +298,10 @@ private fun HistoryToolbar(
     filterFavorite: Boolean,
     onFilterChange: (Boolean) -> Unit,
     onExportAll: () -> Unit,
-    recordCount: Int
+    recordCount: Int,
+    modifier: Modifier = Modifier
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(Dimens.SpaceSm)) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -439,18 +466,29 @@ private fun copyToClipboard(context: Context, text: String) {
     Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
 }
 
+/** 导出目录：getExternalFilesDir(null)/Exports/，须与 res/xml/file_paths.xml 的 exports 条目一致 */
+private fun exportDir(context: Context): File =
+    File(context.getExternalFilesDir(null), "Exports").apply { mkdirs() }
+
+/**
+ * 生成可被外部应用读取的 content:// URI。
+ * Android 7+ 直接用 Uri.fromFile 跨进程分享会抛 FileUriExposedException（导出必崩）。
+ */
+private fun shareFileUri(context: Context, file: File): Uri =
+    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+
 private fun exportRecord(context: Context, record: HistoryRecord) {
     val text = """Source: ${record.sourceText}
 Translation: ${record.translatedText}
 Time: ${formatTime(record.timestamp)}
 """
     val fileName = "translation_${record.timestamp}.txt"
-    val file = File(context.getExternalFilesDir(null), fileName)
+    val file = File(exportDir(context), fileName)
     FileOutputStream(file).use { it.write(text.toByteArray()) }
     Toast.makeText(context, "Exported: $fileName", Toast.LENGTH_LONG).show()
 
     val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(Uri.fromFile(file), "text/plain")
+        setDataAndType(shareFileUri(context, file), "text/plain")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, "Open file"))
@@ -467,12 +505,12 @@ private fun exportAllRecords(context: Context, records: List<HistoryRecord>) {
         sb.append("\n")
     }
     val fileName = "all_translations_${System.currentTimeMillis()}.txt"
-    val file = File(context.getExternalFilesDir(null), fileName)
+    val file = File(exportDir(context), fileName)
     FileOutputStream(file).use { it.write(sb.toString().toByteArray()) }
     Toast.makeText(context, "Exported ${records.size} records: $fileName", Toast.LENGTH_LONG).show()
 
     val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(Uri.fromFile(file), "text/plain")
+        setDataAndType(shareFileUri(context, file), "text/plain")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, "Open file"))

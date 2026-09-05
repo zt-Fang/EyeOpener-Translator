@@ -23,6 +23,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+// Room schema 导出目录：exportSchema=true 的落点，版本升级写 Migration 时对照用
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
 dependencies {
     implementation(project(":domain"))
     implementation(libs.datastore.preferences)
