@@ -382,7 +382,45 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
      * @param allowResume 是否允许基于已有 .part 续传。HTTP 416 重试时置 false——
      *        此时 .part 已比服务端文件还长，必须先删掉再从头下，否则该模型将永久下载失败。
      */
+    /**
+     * 带重试的下载入口：对网络类 IOException 自动重试，.part 保留可续传。
+     * 不重试的情况：用户取消、host 不在白名单、存储空间不足（重试也必然失败）。
+     */
     private fun downloadOneFile(
+        spec: ModelFileSpec,
+        target: File,
+        onBytes: (bytesRead: Long, totalBytes: Long) -> Unit,
+        allowResume: Boolean = true,
+        modelName: String
+    ) {
+        var lastError: IOException? = null
+        repeat(MAX_DOWNLOAD_RETRIES) { attempt ->
+            try {
+                downloadOneFileOnce(spec, target, onBytes, allowResume, modelName)
+                return
+            } catch (e: DownloadCancelledException) {
+                throw e
+            } catch (e: IOException) {
+                lastError = e
+                val msg = e.message.orEmpty()
+                val noRetry = msg.contains("存储空间不足") || msg.contains("non-whitelisted") ||
+                    msg.contains("size mismatch")
+                if (noRetry) throw e
+                if (attempt < MAX_DOWNLOAD_RETRIES - 1) {
+                    val waitMs = RETRY_BACKOFF_MS * (attempt + 1)
+                    Log.w(
+                        TAG,
+                        "[DL_RETRY] ${spec.relativePath}: 第${attempt + 1}/${MAX_DOWNLOAD_RETRIES} 次失败 " +
+                            "(${e.javaClass.simpleName}: ${e.message})，${waitMs}ms 后重试，.part 保留续传"
+                    )
+                    Thread.sleep(waitMs)
+                }
+            }
+        }
+        throw lastError ?: IOException("Download failed: ${spec.relativePath}")
+    }
+
+    private fun downloadOneFileOnce(
         spec: ModelFileSpec,
         target: File,
         onBytes: (bytesRead: Long, totalBytes: Long) -> Unit,
@@ -394,14 +432,22 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             throw SecurityException("Refusing to download from non-whitelisted host: $host")
         }
 
+        // 已完整下载过（大小与声明完全一致）→ 跳过，避免重试时重复下载 657MB 的 encoder
+        if (target.exists() && spec.sizeBytes > 0 && target.length() == spec.sizeBytes) {
+            Log.i(TAG, "[DL_SKIP] ${spec.relativePath}: 已存在且大小匹配(${target.length()}B)，跳过重复下载")
+            onBytes(target.length(), target.length())
+            return
+        }
+
         val partFile = File(target.parentFile, "${target.name}.part")
         // 416 重试：.part 长度已超过远端文件，无法续传，删除后从头下载
         if (!allowResume && partFile.exists()) partFile.delete()
         val existingBytes = if (partFile.exists()) partFile.length() else 0L
 
         val conn = (URL(spec.url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000
-            readTimeout = 30_000
+            // 685MB 大模型在国内网络下常出现 30s 无数据 → 放宽读超时，并配合外层重试
+            connectTimeout = 20_000
+            readTimeout = 60_000
             instanceFollowRedirects = true
             requestMethod = "GET"
             if (existingBytes > 0) {
@@ -418,7 +464,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             conn.disconnect()
             if (allowResume) {
                 Log.w(TAG, "[DL_416] ${spec.relativePath}: .part 无法续传，删除后重新下载")
-                downloadOneFile(spec, target, onBytes, allowResume = false, modelName = modelName)
+                downloadOneFileOnce(spec, target, onBytes, allowResume = false, modelName = modelName)
                 return
             }
             throw IOException("HTTP 416 for ${spec.url}")
@@ -968,6 +1014,16 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
 
         /** 下载/解压时要求保留的最小剩余空间（128MB），低于此值直接拒绝，避免产生截断文件 */
         const val MIN_FREE_SPACE_BYTES = 128L * 1024 * 1024
+
+        /**
+         * 单文件下载最大尝试次数（含首次）。
+         * 685MB 的 Nemotron 在国内网络下极易中途 read timeout，
+         * 旧实现一次超时即整体失败，用户只能手动重下。
+         */
+        const val MAX_DOWNLOAD_RETRIES = 4
+
+        /** 重试退避基数：第 n 次失败等待 RETRY_BACKOFF_MS * n */
+        const val RETRY_BACKOFF_MS = 3_000L
 
         /** 下载 host 白名单，新增源须人工审核 */
         val ALLOWED_DOWNLOAD_HOSTS = setOf(
