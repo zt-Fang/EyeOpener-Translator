@@ -45,58 +45,62 @@ fun EngineCard(
     onClick: () -> Unit,
     accent: EngineAccent = EngineAccent.Blue,
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = Dimens.CornerLg
+    cornerRadius: Dp = Dimens.CornerLg,
 ) {
     val colors = accentColors(accent)
 
-    val iconBg = if (selected) {
-        Brush.linearGradient(listOf(colors.primary, colors.secondary))
-    } else {
-        Brush.linearGradient(
-            listOf(
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+    val iconBg =
+        if (selected) {
+            Brush.linearGradient(listOf(colors.primary, colors.secondary))
+        } else {
+            Brush.linearGradient(
+                listOf(
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                ),
             )
-        )
-    }
+        }
     val iconTint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     val titleColor = if (selected) colors.primary else MaterialTheme.colorScheme.onBackground
     val borderColor = if (selected) colors.primary.copy(alpha = 0.7f) else Color.Transparent
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = Dimens.EngineCardMinHeight)
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(
-                if (selected) Color.White.copy(alpha = 0.85f)
-                else MaterialTheme.colorScheme.surface.copy(alpha = Dimens.GlassSurfaceAlpha)
-            )
-            .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = borderColor,
-                shape = RoundedCornerShape(cornerRadius)
-            )
-            .clickable(onClick = onClick)
-            .padding(Dimens.SpaceMd)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = Dimens.EngineCardMinHeight)
+                .clip(RoundedCornerShape(cornerRadius))
+                .background(
+                    if (selected) {
+                        Color.White.copy(alpha = 0.85f)
+                    } else {
+                        MaterialTheme.colorScheme.surface.copy(alpha = Dimens.GlassSurfaceAlpha)
+                    },
+                ).border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = borderColor,
+                    shape = RoundedCornerShape(cornerRadius),
+                ).clickable(onClick = onClick)
+                .padding(Dimens.SpaceMd),
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
             horizontalAlignment = Alignment.Start,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Box(
-                modifier = Modifier
-                    .size(Dimens.EngineCardIconBox)
-                    .clip(CircleShape)
-                    .background(iconBg),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(Dimens.EngineCardIconBox)
+                        .clip(CircleShape)
+                        .background(iconBg),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = iconTint,
-                    modifier = Modifier.size(Dimens.EngineCardIcon)
+                    modifier = Modifier.size(Dimens.EngineCardIcon),
                 )
             }
             Spacer(modifier = Modifier.height(Dimens.SpaceXxs))
@@ -105,32 +109,37 @@ fun EngineCard(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = titleColor,
-                maxLines = 1
+                maxLines = 1,
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.labelSmall,
-                color = if (selected) colors.primary.copy(alpha = 0.75f)
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                color =
+                    if (selected) {
+                        colors.primary.copy(alpha = 0.75f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 maxLines = 2,
-                minLines = 2
+                minLines = 2,
             )
         }
         // 选中右上角对勾
         if (selected) {
             Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(colors.primary)
-                    .align(Alignment.TopEnd),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(colors.primary)
+                        .align(Alignment.TopEnd),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Check,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(14.dp),
                 )
             }
         }
@@ -139,19 +148,26 @@ fun EngineCard(
 
 enum class EngineAccent { Blue, Orange, Purple }
 
-private data class EngineColors(val primary: Color, val secondary: Color)
+private data class EngineColors(
+    val primary: Color,
+    val secondary: Color,
+)
 
-private fun accentColors(accent: EngineAccent): EngineColors = when (accent) {
-    EngineAccent.Blue -> EngineColors(
-        primary = Color(0xFF1A73E8),
-        secondary = Color(0xFF4FA3FF)
-    )
-    EngineAccent.Orange -> EngineColors(
-        primary = Color(0xFFFF8F00),
-        secondary = Color(0xFFFFD180)
-    )
-    EngineAccent.Purple -> EngineColors(
-        primary = Color(0xFF8B7FD8),
-        secondary = Color(0xFFB197FC)
-    )
-}
+private fun accentColors(accent: EngineAccent): EngineColors =
+    when (accent) {
+        EngineAccent.Blue ->
+            EngineColors(
+                primary = Color(0xFF1A73E8),
+                secondary = Color(0xFF4FA3FF),
+            )
+        EngineAccent.Orange ->
+            EngineColors(
+                primary = Color(0xFFFF8F00),
+                secondary = Color(0xFFFFD180),
+            )
+        EngineAccent.Purple ->
+            EngineColors(
+                primary = Color(0xFF8B7FD8),
+                secondary = Color(0xFFB197FC),
+            )
+    }

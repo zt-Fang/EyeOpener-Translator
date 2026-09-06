@@ -8,7 +8,6 @@ import org.junit.Test
 
 /** ModelCatalog 模型目录与命名函数测试。 */
 class ModelCatalogTest {
-
     @Test
     fun `voskModelName generates uppercase id`() {
         assertEquals("VOSK_ASR_ZH", ModelCatalog.voskModelName("zh"))
@@ -74,9 +73,10 @@ class ModelCatalogTest {
 
     @Test
     fun `totalSizeBytes returns expected for SHERPA_ONNX prefix`() {
-        val size = ModelCatalog.totalSizeBytes(
-            "SHERPA_ONNX_ASR_${SherpaOnnxModel.X_ASR_ZH_EN_960MS.modelId}"
-        )
+        val size =
+            ModelCatalog.totalSizeBytes(
+                "SHERPA_ONNX_ASR_${SherpaOnnxModel.X_ASR_ZH_EN_960MS.modelId}",
+            )
         assertTrue("X-ASR size 应 > 0", size > 0)
     }
 

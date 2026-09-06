@@ -27,5 +27,7 @@ subprojects {
         version.set("1.3.1")
         android.set(true)
         ignoreFailures.set(false)
+        // 存量违规记录在 baseline 不阻断 CI，新增违规仍会失败（同 detekt 思路）
+        baseline.set(File("$rootDir/config/ktlint/${project.name}-baseline.xml"))
     }
 }

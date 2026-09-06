@@ -23,15 +23,15 @@ import android.util.Log
 import io.github.ztfang.eye.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Call
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
@@ -41,10 +41,11 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /** 协程取消时立即中断底层 OkHttp 连接，避免网络差时 IO 线程被阻塞调用占满 */
-private suspend fun Call.executeCancellable() = suspendCancellableCoroutine { cont ->
-    cont.invokeOnCancellation { this@executeCancellable.cancel() }
-    cont.resumeWith(runCatching { this@executeCancellable.execute() })
-}
+private suspend fun Call.executeCancellable() =
+    suspendCancellableCoroutine { cont ->
+        cont.invokeOnCancellation { this@executeCancellable.cancel() }
+        cont.resumeWith(runCatching { this@executeCancellable.execute() })
+    }
 
 /**
  * LLM 服务商枚举
@@ -61,557 +62,737 @@ enum class LLMProvider {
     GEMINI,
     AGNES,
     SILICONFLOW,
-    CUSTOM;
+    CUSTOM,
+    ;
 
-    val defaultBaseUrl: String get() = when (this) {
-        OPEN_AI -> "https://api.openai.com/v1"
-        OPENROUTER -> "https://openrouter.ai/api/v1"
-        CLAUDE -> "https://api.anthropic.com/v1"
-        DEEP_SEEK -> "https://api.deepseek.com/v1"
-        ZHIPU -> "https://open.bigmodel.cn/api/paas/v4"
-        QWEN -> "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        MINIMAX -> "https://api.minimax.chat/v1"
-        MIMO -> "https://api.mimo.xiaomi.com/v1"
-        GEMINI -> "https://generativelanguage.googleapis.com/v1beta/openai"
-        AGNES -> "https://apihub.agnes-ai.com/v1"
-        SILICONFLOW -> "https://api.siliconflow.cn/v1"
-        CUSTOM -> ""
-    }
+    val defaultBaseUrl: String get() =
+        when (this) {
+            OPEN_AI -> "https://api.openai.com/v1"
+            OPENROUTER -> "https://openrouter.ai/api/v1"
+            CLAUDE -> "https://api.anthropic.com/v1"
+            DEEP_SEEK -> "https://api.deepseek.com/v1"
+            ZHIPU -> "https://open.bigmodel.cn/api/paas/v4"
+            QWEN -> "https://dashscope.aliyuncs.com/compatible-mode/v1"
+            MINIMAX -> "https://api.minimax.chat/v1"
+            MIMO -> "https://api.mimo.xiaomi.com/v1"
+            GEMINI -> "https://generativelanguage.googleapis.com/v1beta/openai"
+            AGNES -> "https://apihub.agnes-ai.com/v1"
+            SILICONFLOW -> "https://api.siliconflow.cn/v1"
+            CUSTOM -> ""
+        }
 
-    val chatPath: String get() = when (this) {
-        OPEN_AI, OPENROUTER, DEEP_SEEK, ZHIPU, QWEN, MINIMAX, MIMO, GEMINI, AGNES, SILICONFLOW, CUSTOM -> "/chat/completions"
-        CLAUDE -> "/messages"
-    }
+    val chatPath: String get() =
+        when (this) {
+            OPEN_AI, OPENROUTER, DEEP_SEEK, ZHIPU, QWEN, MINIMAX, MIMO, GEMINI, AGNES, SILICONFLOW, CUSTOM -> "/chat/completions"
+            CLAUDE -> "/messages"
+        }
 
     /**
      * 仅收录经各服务商官网核实、支持 SSE 流式输出、可用于翻译/对话的 chat 模型。
      * 嵌入/视觉/已废弃模型已剔除（如 Gemini 1.5 系列、DeepSeek 旧 deepseek-v4-flash 命名等）。
      * defaultModel 取首项；CUSTOM 无预设，留空由用户自由填写。
      */
-    val models: List<String> get() = when (this) {
-        OPEN_AI -> listOf(
-            "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4o", "gpt-4o-mini"
-        )
-        OPENROUTER -> listOf(
-            "openai/gpt-5.1", "anthropic/claude-sonnet-4-6", "deepseek/deepseek-chat",
-            "google/gemini-2.5-flash", "qwen/qwen3-235b-a22b", "z-ai/glm-5",
-            "meta-llama/llama-3.3-70b-instruct:free"
-        )
-        CLAUDE -> listOf(
-            "claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5-20251001"
-        )
-        DEEP_SEEK -> listOf(
-            "deepseek-chat", "deepseek-reasoner"
-        )
-        ZHIPU -> listOf(
-            "glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.6", "glm-4.5", "glm-4-flash"
-        )
-        QWEN -> listOf(
-            "qwen-max", "qwen-plus", "qwen-turbo", "qwen3-max", "qwen3-coder"
-        )
-        MINIMAX -> listOf(
-            "abab6.5s-chat", "abab6.5g-chat", "abab5.5-chat"
-        )
-        MIMO -> listOf(
-            "mimo-v2.5-pro", "mimo-v2-pro", "mimo-v2-omni", "mimo-v2-flash"
-        )
-        GEMINI -> listOf(
-            "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro",
-            "gemini-3-flash-preview", "gemini-3.1-flash", "gemini-3.1-pro-preview"
-        )
-        AGNES -> listOf(
-            "agnes-2.5-flash", "agnes-2.5-pro", "agnes-2.5-pro-alpha", "agnes-2.0-flash"
-        )
-        SILICONFLOW -> listOf(
-            "deepseek-ai/DeepSeek-V3", "Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-V4-Flash",
-            "THUDM/GLM-5", "THUDM/GLM-4.7", "moonshotai/Kimi-K2",
-            "Qwen/Qwen3.6-27B", "MiniMaxAI/MiniMax-M3"
-        )
-        CUSTOM -> emptyList()
-    }
+    val models: List<String> get() =
+        when (this) {
+            OPEN_AI ->
+                listOf(
+                    "gpt-5.1",
+                    "gpt-5",
+                    "gpt-5-mini",
+                    "gpt-4.1",
+                    "gpt-4o",
+                    "gpt-4o-mini",
+                )
+            OPENROUTER ->
+                listOf(
+                    "openai/gpt-5.1",
+                    "anthropic/claude-sonnet-4-6",
+                    "deepseek/deepseek-chat",
+                    "google/gemini-2.5-flash",
+                    "qwen/qwen3-235b-a22b",
+                    "z-ai/glm-5",
+                    "meta-llama/llama-3.3-70b-instruct:free",
+                )
+            CLAUDE ->
+                listOf(
+                    "claude-sonnet-4-6",
+                    "claude-opus-4-7",
+                    "claude-haiku-4-5-20251001",
+                )
+            DEEP_SEEK ->
+                listOf(
+                    "deepseek-chat",
+                    "deepseek-reasoner",
+                )
+            ZHIPU ->
+                listOf(
+                    "glm-5",
+                    "glm-4.7",
+                    "glm-4.7-flash",
+                    "glm-4.6",
+                    "glm-4.5",
+                    "glm-4-flash",
+                )
+            QWEN ->
+                listOf(
+                    "qwen-max",
+                    "qwen-plus",
+                    "qwen-turbo",
+                    "qwen3-max",
+                    "qwen3-coder",
+                )
+            MINIMAX ->
+                listOf(
+                    "abab6.5s-chat",
+                    "abab6.5g-chat",
+                    "abab5.5-chat",
+                )
+            MIMO ->
+                listOf(
+                    "mimo-v2.5-pro",
+                    "mimo-v2-pro",
+                    "mimo-v2-omni",
+                    "mimo-v2-flash",
+                )
+            GEMINI ->
+                listOf(
+                    "gemini-2.5-flash",
+                    "gemini-2.5-flash-lite",
+                    "gemini-2.5-pro",
+                    "gemini-3-flash-preview",
+                    "gemini-3.1-flash",
+                    "gemini-3.1-pro-preview",
+                )
+            AGNES ->
+                listOf(
+                    "agnes-2.5-flash",
+                    "agnes-2.5-pro",
+                    "agnes-2.5-pro-alpha",
+                    "agnes-2.0-flash",
+                )
+            SILICONFLOW ->
+                listOf(
+                    "deepseek-ai/DeepSeek-V3",
+                    "Qwen/Qwen3-8B",
+                    "deepseek-ai/DeepSeek-V4-Flash",
+                    "THUDM/GLM-5",
+                    "THUDM/GLM-4.7",
+                    "moonshotai/Kimi-K2",
+                    "Qwen/Qwen3.6-27B",
+                    "MiniMaxAI/MiniMax-M3",
+                )
+            CUSTOM -> emptyList()
+        }
 
     val defaultModel: String get() = models.firstOrNull() ?: ""
 
-    val displayName: String get() = when (this) {
-        OPEN_AI -> "OpenAI"
-        OPENROUTER -> "OpenRouter"
-        CLAUDE -> "Claude"
-        DEEP_SEEK -> "DeepSeek"
-        ZHIPU -> "智谱"
-        QWEN -> "千问"
-        MINIMAX -> "MiniMax"
-        MIMO -> "MiMo"
-        GEMINI -> "Gemini"
-        AGNES -> "Agnes"
-        SILICONFLOW -> "硅基流动"
-        CUSTOM -> "自定义"
-    }
+    val displayName: String get() =
+        when (this) {
+            OPEN_AI -> "OpenAI"
+            OPENROUTER -> "OpenRouter"
+            CLAUDE -> "Claude"
+            DEEP_SEEK -> "DeepSeek"
+            ZHIPU -> "智谱"
+            QWEN -> "千问"
+            MINIMAX -> "MiniMax"
+            MIMO -> "MiMo"
+            GEMINI -> "Gemini"
+            AGNES -> "Agnes"
+            SILICONFLOW -> "硅基流动"
+            CUSTOM -> "自定义"
+        }
 }
 
-class LLMClient @Inject constructor(
-    private val settingsRepository: SettingsRepository
-) {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        // 读超时 30s：上层 translate/chat 用 withTimeout(7s) 兜底，120s 会让慢调用在协程取消后仍
-        // 阻塞 IO 线程直到 120s，网络差时 IO 线程池被占满。30s 作为最坏情况上限即可。
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
+class LLMClient
+    @Inject
+    constructor(
+        private val settingsRepository: SettingsRepository,
+    ) {
+        private val client =
+            OkHttpClient
+                .Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                // 读超时 30s：上层 translate/chat 用 withTimeout(7s) 兜底，120s 会让慢调用在协程取消后仍
+                // 阻塞 IO 线程直到 120s，网络差时 IO 线程池被占满。30s 作为最坏情况上限即可。
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .build()
 
-    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+        private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
-    suspend fun translate(
-        text: String,
-        systemPrompt: String,
-        model: String
-    ): String {
-        val provider = resolveProvider()
-        val apiKey = resolveApiKey(provider)
-        val baseUrl = settingsRepository.llmUrl.first().trim()
-            .ifEmpty { provider.defaultBaseUrl }
-        val effectiveModel = model.ifBlank {
-            settingsRepository.llmModel.first().trim().ifEmpty { provider.defaultModel }
-        }
-        val fullUrl = baseUrl.trimEnd('/') + provider.chatPath
+        suspend fun translate(
+            text: String,
+            systemPrompt: String,
+            model: String,
+        ): String {
+            val provider = resolveProvider()
+            val apiKey = resolveApiKey(provider)
+            val baseUrl =
+                settingsRepository.llmUrl
+                    .first()
+                    .trim()
+                    .ifEmpty { provider.defaultBaseUrl }
+            val effectiveModel =
+                model.ifBlank {
+                    settingsRepository.llmModel
+                        .first()
+                        .trim()
+                        .ifEmpty { provider.defaultModel }
+                }
+            val fullUrl = baseUrl.trimEnd('/') + provider.chatPath
 
-        Log.d("LLMClient", "translate: provider=$provider, url=$fullUrl, model=$effectiveModel")
+            Log.d("LLMClient", "translate: provider=$provider, url=$fullUrl, model=$effectiveModel")
 
-        return withContext(Dispatchers.IO) {
-            when (provider) {
-                LLMProvider.OPEN_AI, LLMProvider.OPENROUTER,
-                LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
-                LLMProvider.QWEN, LLMProvider.MINIMAX,
-                LLMProvider.MIMO, LLMProvider.GEMINI,
-                LLMProvider.AGNES, LLMProvider.SILICONFLOW,
-                LLMProvider.CUSTOM ->
-                    openAiTranslate(fullUrl, apiKey, effectiveModel, systemPrompt, text)
-                LLMProvider.CLAUDE ->
-                    claudeTranslate(fullUrl, apiKey, effectiveModel, systemPrompt, text)
-            }
-        }
-    }
-
-    suspend fun validateConfig(): Result<Unit> {
-        val provider = resolveProvider()
-        val apiKey = resolveApiKey(provider)
-        val url = settingsRepository.llmUrl.first().trim()
-        return when {
-            url.isBlank() && apiKey.isBlank() -> Result.failure(
-                IllegalStateException("请配置 API Key 和 URL")
-            )
-            apiKey.isBlank() -> Result.failure(
-                IllegalStateException("请填写 API Key")
-            )
-            else -> Result.success(Unit)
-        }
-    }
-
-    suspend fun chat(messages: List<Pair<String, String>>): String {
-        val provider = resolveProvider()
-        val apiKey = resolveApiKey(provider)
-        val baseUrl = settingsRepository.llmUrl.first().trim()
-            .ifEmpty { provider.defaultBaseUrl }
-        val effectiveModel = settingsRepository.llmModel.first().trim()
-            .ifEmpty { provider.defaultModel }
-        val fullUrl = baseUrl.trimEnd('/') + provider.chatPath
-
-        Log.d("LLMClient", "chat: provider=$provider, url=$fullUrl, msgs=${messages.size}")
-
-        return withContext(Dispatchers.IO) {
-            when (provider) {
-                LLMProvider.OPEN_AI, LLMProvider.OPENROUTER,
-                LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
-                LLMProvider.QWEN, LLMProvider.MINIMAX,
-                LLMProvider.MIMO, LLMProvider.GEMINI,
-                LLMProvider.AGNES, LLMProvider.SILICONFLOW,
-                LLMProvider.CUSTOM ->
-                    openAiChat(fullUrl, apiKey, effectiveModel, messages)
-                LLMProvider.CLAUDE ->
-                    claudeChat(fullUrl, apiKey, effectiveModel, messages)
-            }
-        }
-    }
-
-    fun chatStream(messages: List<Pair<String, String>>): Flow<String> = flow {
-        val provider = resolveProvider()
-        val apiKey = resolveApiKey(provider)
-        val baseUrl = settingsRepository.llmUrl.first().trim()
-            .ifEmpty { provider.defaultBaseUrl }
-        val effectiveModel = settingsRepository.llmModel.first().trim()
-            .ifEmpty { provider.defaultModel }
-        val fullUrl = baseUrl.trimEnd('/') + provider.chatPath
-
-        Log.d("LLMClient", "chatStream: provider=$provider, url=$fullUrl")
-
-        try {
-            when (provider) {
-                LLMProvider.OPEN_AI, LLMProvider.OPENROUTER,
-                LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
-                LLMProvider.QWEN, LLMProvider.MINIMAX,
-                LLMProvider.MIMO, LLMProvider.GEMINI,
-                LLMProvider.AGNES, LLMProvider.SILICONFLOW,
-                LLMProvider.CUSTOM ->
-                    openAiChatStream(fullUrl, apiKey, effectiveModel, messages).collect { emit(it) }
-                LLMProvider.CLAUDE ->
-                    claudeChatStream(fullUrl, apiKey, effectiveModel, messages).collect { emit(it) }
-            }
-        } catch (e: Exception) {
-            // 流式失败 → 降级到非流式，一次性 emit 完整回复
-            Log.w("LLMClient", "stream failed, fallback to non-stream: ${e.message}")
-            val reply = withContext(Dispatchers.IO) {
+            return withContext(Dispatchers.IO) {
                 when (provider) {
-                    LLMProvider.CLAUDE -> claudeChat(fullUrl, apiKey, effectiveModel, messages)
-                    else -> openAiChat(fullUrl, apiKey, effectiveModel, messages)
+                    LLMProvider.OPEN_AI, LLMProvider.OPENROUTER,
+                    LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
+                    LLMProvider.QWEN, LLMProvider.MINIMAX,
+                    LLMProvider.MIMO, LLMProvider.GEMINI,
+                    LLMProvider.AGNES, LLMProvider.SILICONFLOW,
+                    LLMProvider.CUSTOM,
+                    ->
+                        openAiTranslate(fullUrl, apiKey, effectiveModel, systemPrompt, text)
+                    LLMProvider.CLAUDE ->
+                        claudeTranslate(fullUrl, apiKey, effectiveModel, systemPrompt, text)
                 }
             }
-            emit(reply)
         }
-    }
 
-    private fun openAiChatStream(
-        url: String, apiKey: String, model: String,
-        messages: List<Pair<String, String>>
-    ): Flow<String> = flow {
-        val msgs = JSONArray().apply {
-            messages.forEach { (role, content) ->
-                put(JSONObject().apply {
-                    put("role", role); put("content", content)
-                })
+        suspend fun validateConfig(): Result<Unit> {
+            val provider = resolveProvider()
+            val apiKey = resolveApiKey(provider)
+            val url = settingsRepository.llmUrl.first().trim()
+            return when {
+                url.isBlank() && apiKey.isBlank() ->
+                    Result.failure(
+                        IllegalStateException("请配置 API Key 和 URL"),
+                    )
+                apiKey.isBlank() ->
+                    Result.failure(
+                        IllegalStateException("请填写 API Key"),
+                    )
+                else -> Result.success(Unit)
             }
         }
-        val requestBody = JSONObject().apply {
-            put("model", model)
-            put("messages", msgs)
-            put("max_tokens", 2048)
-            put("temperature", 0.7)
-            put("stream", true)
-        }.toString().toRequestBody(jsonMediaType)
 
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Authorization", "Bearer $apiKey")
-            .addHeader("Content-Type", "application/json")
-            .addHeader("Accept", "text/event-stream")
-            .post(requestBody)
-            .build()
+        suspend fun chat(messages: List<Pair<String, String>>): String {
+            val provider = resolveProvider()
+            val apiKey = resolveApiKey(provider)
+            val baseUrl =
+                settingsRepository.llmUrl
+                    .first()
+                    .trim()
+                    .ifEmpty { provider.defaultBaseUrl }
+            val effectiveModel =
+                settingsRepository.llmModel
+                    .first()
+                    .trim()
+                    .ifEmpty { provider.defaultModel }
+            val fullUrl = baseUrl.trimEnd('/') + provider.chatPath
 
-        val call = client.newCall(request)
-        val response = call.executeCancellable()
-        if (!response.isSuccessful) {
-            val body = response.body?.string() ?: ""
-            Log.e("LLMClient", "stream API error ${response.code}: $body")
-            error("API error ${response.code}: $body")
+            Log.d("LLMClient", "chat: provider=$provider, url=$fullUrl, msgs=${messages.size}")
+
+            return withContext(Dispatchers.IO) {
+                when (provider) {
+                    LLMProvider.OPEN_AI, LLMProvider.OPENROUTER,
+                    LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
+                    LLMProvider.QWEN, LLMProvider.MINIMAX,
+                    LLMProvider.MIMO, LLMProvider.GEMINI,
+                    LLMProvider.AGNES, LLMProvider.SILICONFLOW,
+                    LLMProvider.CUSTOM,
+                    ->
+                        openAiChat(fullUrl, apiKey, effectiveModel, messages)
+                    LLMProvider.CLAUDE ->
+                        claudeChat(fullUrl, apiKey, effectiveModel, messages)
+                }
+            }
         }
 
-        val reader = BufferedReader(InputStreamReader(response.body?.byteStream(), "UTF-8"))
-        try {
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                line?.let { l ->
-                    // 跳过空行、注释行（: 开头的心跳）
-                    if (l.isBlank() || l.startsWith(":")) return@let
-                    // 兼容 "data:" 和 "data: " 两种格式
-                    val jsonStr = when {
-                        l.startsWith("data: ") -> l.substring(6)
-                        l.startsWith("data:") -> l.substring(5)
-                        else -> return@let  // 非 data 行跳过
+        fun chatStream(messages: List<Pair<String, String>>): Flow<String> =
+            flow {
+                val provider = resolveProvider()
+                val apiKey = resolveApiKey(provider)
+                val baseUrl =
+                    settingsRepository.llmUrl
+                        .first()
+                        .trim()
+                        .ifEmpty { provider.defaultBaseUrl }
+                val effectiveModel =
+                    settingsRepository.llmModel
+                        .first()
+                        .trim()
+                        .ifEmpty { provider.defaultModel }
+                val fullUrl = baseUrl.trimEnd('/') + provider.chatPath
+
+                Log.d("LLMClient", "chatStream: provider=$provider, url=$fullUrl")
+
+                try {
+                    when (provider) {
+                        LLMProvider.OPEN_AI, LLMProvider.OPENROUTER,
+                        LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
+                        LLMProvider.QWEN, LLMProvider.MINIMAX,
+                        LLMProvider.MIMO, LLMProvider.GEMINI,
+                        LLMProvider.AGNES, LLMProvider.SILICONFLOW,
+                        LLMProvider.CUSTOM,
+                        ->
+                            openAiChatStream(fullUrl, apiKey, effectiveModel, messages).collect { emit(it) }
+                        LLMProvider.CLAUDE ->
+                            claudeChatStream(fullUrl, apiKey, effectiveModel, messages).collect { emit(it) }
                     }
-                    val trimmed = jsonStr.trim()
-                    if (trimmed == "[DONE]") return@flow
-                    try {
-                        val json = JSONObject(trimmed)
-                        val choices = json.optJSONArray("choices")
-                        if (choices != null && choices.length() > 0) {
-                            val delta = choices.getJSONObject(0).optJSONObject("delta")
-                            if (delta != null && delta.has("content") && !delta.isNull("content")) {
-                                val content = delta.optString("content", "")
-                                if (content.isNotEmpty() && content != "null") {
-                                    emit(content)
+                } catch (e: Exception) {
+                    // 流式失败 → 降级到非流式，一次性 emit 完整回复
+                    Log.w("LLMClient", "stream failed, fallback to non-stream: ${e.message}")
+                    val reply =
+                        withContext(Dispatchers.IO) {
+                            when (provider) {
+                                LLMProvider.CLAUDE -> claudeChat(fullUrl, apiKey, effectiveModel, messages)
+                                else -> openAiChat(fullUrl, apiKey, effectiveModel, messages)
+                            }
+                        }
+                    emit(reply)
+                }
+            }
+
+        private fun openAiChatStream(
+            url: String,
+            apiKey: String,
+            model: String,
+            messages: List<Pair<String, String>>,
+        ): Flow<String> =
+            flow {
+                val msgs =
+                    JSONArray().apply {
+                        messages.forEach { (role, content) ->
+                            put(
+                                JSONObject().apply {
+                                    put("role", role)
+                                    put("content", content)
+                                },
+                            )
+                        }
+                    }
+                val requestBody =
+                    JSONObject()
+                        .apply {
+                            put("model", model)
+                            put("messages", msgs)
+                            put("max_tokens", 2048)
+                            put("temperature", 0.7)
+                            put("stream", true)
+                        }.toString()
+                        .toRequestBody(jsonMediaType)
+
+                val request =
+                    Request
+                        .Builder()
+                        .url(url)
+                        .addHeader("Authorization", "Bearer $apiKey")
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Accept", "text/event-stream")
+                        .post(requestBody)
+                        .build()
+
+                val call = client.newCall(request)
+                val response = call.executeCancellable()
+                if (!response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    Log.e("LLMClient", "stream API error ${response.code}: $body")
+                    error("API error ${response.code}: $body")
+                }
+
+                val reader = BufferedReader(InputStreamReader(response.body?.byteStream(), "UTF-8"))
+                try {
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        line?.let { l ->
+                            // 跳过空行、注释行（: 开头的心跳）
+                            if (l.isBlank() || l.startsWith(":")) return@let
+                            // 兼容 "data:" 和 "data: " 两种格式
+                            val jsonStr =
+                                when {
+                                    l.startsWith("data: ") -> l.substring(6)
+                                    l.startsWith("data:") -> l.substring(5)
+                                    else -> return@let // 非 data 行跳过
+                                }
+                            val trimmed = jsonStr.trim()
+                            if (trimmed == "[DONE]") return@flow
+                            try {
+                                val json = JSONObject(trimmed)
+                                val choices = json.optJSONArray("choices")
+                                if (choices != null && choices.length() > 0) {
+                                    val delta = choices.getJSONObject(0).optJSONObject("delta")
+                                    if (delta != null && delta.has("content") && !delta.isNull("content")) {
+                                        val content = delta.optString("content", "")
+                                        if (content.isNotEmpty() && content != "null") {
+                                            emit(content)
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w("LLMClient", "stream parse skip: $trimmed")
+                            }
+                        }
+                    }
+                } finally {
+                    reader.close()
+                    response.body?.close()
+                }
+            }
+
+        private fun claudeChatStream(
+            url: String,
+            apiKey: String,
+            model: String,
+            messages: List<Pair<String, String>>,
+        ): Flow<String> =
+            flow {
+                val msgs =
+                    JSONArray().apply {
+                        messages.forEach { (role, content) ->
+                            put(
+                                JSONObject().apply {
+                                    put("role", role)
+                                    put("content", content)
+                                },
+                            )
+                        }
+                    }
+                val requestBody =
+                    JSONObject()
+                        .apply {
+                            put("model", model)
+                            put("max_tokens", 2048)
+                            put("messages", msgs)
+                            put("stream", true)
+                        }.toString()
+                        .toRequestBody(jsonMediaType)
+
+                val request =
+                    Request
+                        .Builder()
+                        .url(url)
+                        .addHeader("x-api-key", apiKey)
+                        .addHeader("anthropic-version", "2023-06-01")
+                        .addHeader("Content-Type", "application/json")
+                        .post(requestBody)
+                        .build()
+
+                val call = client.newCall(request)
+                val response = call.executeCancellable()
+                if (!response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    Log.e("LLMClient", "Claude stream API error ${response.code}: $body")
+                    error("Claude API error ${response.code}: $body")
+                }
+
+                val reader = BufferedReader(InputStreamReader(response.body?.byteStream(), "UTF-8"))
+                try {
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        line?.let { l ->
+                            if (l.startsWith("data: ")) {
+                                val jsonStr = l.substring(6)
+                                if (jsonStr == "[DONE]") return@flow
+                                try {
+                                    val json = JSONObject(jsonStr)
+                                    val delta =
+                                        json
+                                            .getJSONArray("content")
+                                            .getJSONObject(0)
+                                    if (delta.has("text")) {
+                                        emit(delta.getString("text"))
+                                    }
+                                } catch (_: Exception) {
                                 }
                             }
                         }
-                    } catch (e: Exception) {
-                        Log.w("LLMClient", "stream parse skip: $trimmed")
                     }
+                } finally {
+                    reader.close()
+                    response.body?.close()
                 }
             }
-        } finally {
-            reader.close()
-            response.body?.close()
-        }
-    }
 
-    private fun claudeChatStream(
-        url: String, apiKey: String, model: String,
-        messages: List<Pair<String, String>>
-    ): Flow<String> = flow {
-        val msgs = JSONArray().apply {
-            messages.forEach { (role, content) ->
-                put(JSONObject().apply {
-                    put("role", role); put("content", content)
-                })
-            }
-        }
-        val requestBody = JSONObject().apply {
-            put("model", model)
-            put("max_tokens", 2048)
-            put("messages", msgs)
-            put("stream", true)
-        }.toString().toRequestBody(jsonMediaType)
-
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("x-api-key", apiKey)
-            .addHeader("anthropic-version", "2023-06-01")
-            .addHeader("Content-Type", "application/json")
-            .post(requestBody)
-            .build()
-
-        val call = client.newCall(request)
-        val response = call.executeCancellable()
-        if (!response.isSuccessful) {
-            val body = response.body?.string() ?: ""
-            Log.e("LLMClient", "Claude stream API error ${response.code}: $body")
-            error("Claude API error ${response.code}: $body")
-        }
-
-        val reader = BufferedReader(InputStreamReader(response.body?.byteStream(), "UTF-8"))
-        try {
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                line?.let { l ->
-                    if (l.startsWith("data: ")) {
-                        val jsonStr = l.substring(6)
-                        if (jsonStr == "[DONE]") return@flow
-                        try {
-                            val json = JSONObject(jsonStr)
-                            val delta = json.getJSONArray("content")
-                                .getJSONObject(0)
-                            if (delta.has("text")) {
-                                emit(delta.getString("text"))
-                            }
-                        } catch (_: Exception) {
-                        }
+        private suspend fun openAiChat(
+            url: String,
+            apiKey: String,
+            model: String,
+            messages: List<Pair<String, String>>,
+        ): String {
+            val msgs =
+                JSONArray().apply {
+                    messages.forEach { (role, content) ->
+                        put(
+                            JSONObject().apply {
+                                put("role", role)
+                                put("content", content)
+                            },
+                        )
                     }
                 }
-            }
-        } finally {
-            reader.close()
-            response.body?.close()
-        }
-    }
+            val requestBody =
+                JSONObject()
+                    .apply {
+                        put("model", model)
+                        put("messages", msgs)
+                        put("max_tokens", 2048)
+                        put("temperature", 0.7)
+                    }.toString()
+                    .toRequestBody(jsonMediaType)
 
-    private suspend fun openAiChat(
-        url: String, apiKey: String, model: String,
-        messages: List<Pair<String, String>>
-    ): String {
-        val msgs = JSONArray().apply {
-            messages.forEach { (role, content) ->
-                put(JSONObject().apply {
-                    put("role", role); put("content", content)
-                })
-            }
-        }
-        val requestBody = JSONObject().apply {
-            put("model", model)
-            put("messages", msgs)
-            put("max_tokens", 2048)
-            put("temperature", 0.7)
-        }.toString().toRequestBody(jsonMediaType)
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .addHeader("Authorization", "Bearer $apiKey")
+                    .addHeader("Content-Type", "application/json")
+                    .post(requestBody)
+                    .build()
 
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Authorization", "Bearer $apiKey")
-            .addHeader("Content-Type", "application/json")
-            .post(requestBody)
-            .build()
-
-        // 协程取消时立即中断底层连接，避免 withTimeout(7s) 取消后阻塞调用仍占用 IO 线程到 30s 读超时
-        val call = client.newCall(request)
-        val response = call.executeCancellable()
-        val body = response.body?.string() ?: error("Empty response body")
-        if (!response.isSuccessful) {
-            Log.e("LLMClient", "chat API error ${response.code}: $body")
-            error("API error ${response.code}: $body")
-        }
-        val json = JSONObject(body)
-        return json.getJSONArray("choices")
-            .getJSONObject(0).getJSONObject("message")
-            .getString("content").trim()
-    }
-
-    private suspend fun claudeChat(
-        url: String, apiKey: String, model: String,
-        messages: List<Pair<String, String>>
-    ): String {
-        val msgs = JSONArray().apply {
-            messages.forEach { (role, content) ->
-                put(JSONObject().apply {
-                    put("role", role); put("content", content)
-                })
-            }
-        }
-        val requestBody = JSONObject().apply {
-            put("model", model)
-            put("max_tokens", 2048)
-            put("messages", msgs)
-        }.toString().toRequestBody(jsonMediaType)
-
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("x-api-key", apiKey)
-            .addHeader("anthropic-version", "2023-06-01")
-            .addHeader("Content-Type", "application/json")
-            .post(requestBody)
-            .build()
-
-        val call = client.newCall(request)
-        val response = call.executeCancellable()
-        val body = response.body?.string() ?: error("Empty response body")
-        if (!response.isSuccessful) {
-            Log.e("LLMClient", "chat API error ${response.code}: $body")
-            error("API error ${response.code}: $body")
-        }
-        val json = JSONObject(body)
-        return json.getJSONArray("content")
-            .getJSONObject(0).getString("text").trim()
-    }
-
-    /**
-     * 从服务商 API 拉取可用模型列表（GET {baseUrl}/models）。
-     * OpenAI 兼容服务商（含硅基流动/DeepSeek/智谱/千问/Gemini OpenAI 兼容层等）返回 data[].id，
-     * Claude Messages API 返回 data[].id，均以 Bearer / x-api-key 鉴权。
-     * 返回去重后的模型 ID 列表；失败时 Result.failure（UI 层回退到 [LLMProvider.models] 预设）。
-     */
-    suspend fun fetchModels(
-        provider: LLMProvider,
-        baseUrl: String,
-        apiKey: String
-    ): Result<List<String>> = try {
-        val base = baseUrl.trim().ifEmpty { provider.defaultBaseUrl }.trimEnd('/')
-        val ids = withContext(Dispatchers.IO) {
-            val request = Request.Builder()
-                .url("$base/models")
-                .apply {
-                    if (provider == LLMProvider.CLAUDE) {
-                        addHeader("x-api-key", apiKey)
-                        addHeader("anthropic-version", "2023-06-01")
-                    } else {
-                        addHeader("Authorization", "Bearer $apiKey")
-                    }
-                }
-                .build()
+            // 协程取消时立即中断底层连接，避免 withTimeout(7s) 取消后阻塞调用仍占用 IO 线程到 30s 读超时
             val call = client.newCall(request)
             val response = call.executeCancellable()
-            val body = response.body?.string() ?: ""
+            val body = response.body?.string() ?: error("Empty response body")
             if (!response.isSuccessful) {
-                Log.e("LLMClient", "fetchModels error ${response.code}: $body")
-                error("HTTP ${response.code}")
+                Log.e("LLMClient", "chat API error ${response.code}: $body")
+                error("API error ${response.code}: $body")
             }
             val json = JSONObject(body)
-            val arr = json.optJSONArray("data") ?: json.optJSONArray("models") ?: JSONArray()
-            val list = mutableListOf<String>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.optJSONObject(i) ?: continue
-                val id = obj.optString("id", "").ifEmpty { obj.optString("name", "") }
-                if (id.isNotBlank()) list.add(id)
+            return json
+                .getJSONArray("choices")
+                .getJSONObject(0)
+                .getJSONObject("message")
+                .getString("content")
+                .trim()
+        }
+
+        private suspend fun claudeChat(
+            url: String,
+            apiKey: String,
+            model: String,
+            messages: List<Pair<String, String>>,
+        ): String {
+            val msgs =
+                JSONArray().apply {
+                    messages.forEach { (role, content) ->
+                        put(
+                            JSONObject().apply {
+                                put("role", role)
+                                put("content", content)
+                            },
+                        )
+                    }
+                }
+            val requestBody =
+                JSONObject()
+                    .apply {
+                        put("model", model)
+                        put("max_tokens", 2048)
+                        put("messages", msgs)
+                    }.toString()
+                    .toRequestBody(jsonMediaType)
+
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .addHeader("x-api-key", apiKey)
+                    .addHeader("anthropic-version", "2023-06-01")
+                    .addHeader("Content-Type", "application/json")
+                    .post(requestBody)
+                    .build()
+
+            val call = client.newCall(request)
+            val response = call.executeCancellable()
+            val body = response.body?.string() ?: error("Empty response body")
+            if (!response.isSuccessful) {
+                Log.e("LLMClient", "chat API error ${response.code}: $body")
+                error("API error ${response.code}: $body")
             }
-            list.distinct()
+            val json = JSONObject(body)
+            return json
+                .getJSONArray("content")
+                .getJSONObject(0)
+                .getString("text")
+                .trim()
         }
-        Result.success(ids)
-    } catch (e: kotlinx.coroutines.CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Result.failure(e)
+
+        /**
+         * 从服务商 API 拉取可用模型列表（GET {baseUrl}/models）。
+         * OpenAI 兼容服务商（含硅基流动/DeepSeek/智谱/千问/Gemini OpenAI 兼容层等）返回 data[].id，
+         * Claude Messages API 返回 data[].id，均以 Bearer / x-api-key 鉴权。
+         * 返回去重后的模型 ID 列表；失败时 Result.failure（UI 层回退到 [LLMProvider.models] 预设）。
+         */
+        suspend fun fetchModels(
+            provider: LLMProvider,
+            baseUrl: String,
+            apiKey: String,
+        ): Result<List<String>> =
+            try {
+                val base = baseUrl.trim().ifEmpty { provider.defaultBaseUrl }.trimEnd('/')
+                val ids =
+                    withContext(Dispatchers.IO) {
+                        val request =
+                            Request
+                                .Builder()
+                                .url("$base/models")
+                                .apply {
+                                    if (provider == LLMProvider.CLAUDE) {
+                                        addHeader("x-api-key", apiKey)
+                                        addHeader("anthropic-version", "2023-06-01")
+                                    } else {
+                                        addHeader("Authorization", "Bearer $apiKey")
+                                    }
+                                }.build()
+                        val call = client.newCall(request)
+                        val response = call.executeCancellable()
+                        val body = response.body?.string() ?: ""
+                        if (!response.isSuccessful) {
+                            Log.e("LLMClient", "fetchModels error ${response.code}: $body")
+                            error("HTTP ${response.code}")
+                        }
+                        val json = JSONObject(body)
+                        val arr = json.optJSONArray("data") ?: json.optJSONArray("models") ?: JSONArray()
+                        val list = mutableListOf<String>()
+                        for (i in 0 until arr.length()) {
+                            val obj = arr.optJSONObject(i) ?: continue
+                            val id = obj.optString("id", "").ifEmpty { obj.optString("name", "") }
+                            if (id.isNotBlank()) list.add(id)
+                        }
+                        list.distinct()
+                    }
+                Result.success(ids)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+
+        private suspend fun resolveProvider(): LLMProvider {
+            val name = settingsRepository.llmProvider.first()
+            return try {
+                LLMProvider.valueOf(name)
+            } catch (_: Exception) {
+                LLMProvider.OPEN_AI
+            }
+        }
+
+        private suspend fun resolveApiKey(provider: LLMProvider): String {
+            val raw =
+                when (provider) {
+                    LLMProvider.CLAUDE -> settingsRepository.claudeKey.first()
+                    else -> settingsRepository.openAiKey.first()
+                }
+            return raw.trim().replace(Regex("[\\r\\n\\s]+"), "")
+        }
+
+        private suspend fun openAiTranslate(
+            url: String,
+            apiKey: String,
+            model: String,
+            systemPrompt: String,
+            text: String,
+        ): String {
+            val messages =
+                JSONArray().apply {
+                    put(
+                        JSONObject().apply {
+                            put("role", "system")
+                            put("content", systemPrompt)
+                        },
+                    )
+                    put(
+                        JSONObject().apply {
+                            put("role", "user")
+                            put("content", text)
+                        },
+                    )
+                }
+            val requestBody =
+                JSONObject()
+                    .apply {
+                        put("model", model)
+                        put("messages", messages)
+                        put("max_tokens", 1024)
+                        put("temperature", 0.3)
+                    }.toString()
+                    .toRequestBody(jsonMediaType)
+
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .addHeader("Authorization", "Bearer $apiKey")
+                    .addHeader("Content-Type", "application/json")
+                    .post(requestBody)
+                    .build()
+
+            val call = client.newCall(request)
+            val response = call.executeCancellable()
+            val body = response.body?.string() ?: error("Empty response body")
+            if (!response.isSuccessful) {
+                Log.e("LLMClient", "API error ${response.code}: $body")
+                error("API error ${response.code}: $body")
+            }
+            val json = JSONObject(body)
+            return json
+                .getJSONArray("choices")
+                .getJSONObject(0)
+                .getJSONObject("message")
+                .getString("content")
+                .trim()
+        }
+
+        private suspend fun claudeTranslate(
+            url: String,
+            apiKey: String,
+            model: String,
+            systemPrompt: String,
+            text: String,
+        ): String {
+            val messages =
+                JSONArray().apply {
+                    put(
+                        JSONObject().apply {
+                            put("role", "user")
+                            put("content", text)
+                        },
+                    )
+                }
+            val requestBody =
+                JSONObject()
+                    .apply {
+                        put("model", model)
+                        put("system", systemPrompt)
+                        put("messages", messages)
+                        put("max_tokens", 1024)
+                        put("temperature", 0.3)
+                    }.toString()
+                    .toRequestBody(jsonMediaType)
+
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .addHeader("x-api-key", apiKey)
+                    .addHeader("anthropic-version", "2023-06-01")
+                    .addHeader("Content-Type", "application/json")
+                    .post(requestBody)
+                    .build()
+
+            val call = client.newCall(request)
+            val response = call.executeCancellable()
+            val body = response.body?.string() ?: error("Empty response body")
+            if (!response.isSuccessful) {
+                Log.e("LLMClient", "Claude API error ${response.code}: $body")
+                error("Claude API error ${response.code}: $body")
+            }
+            val json = JSONObject(body)
+            return json
+                .getJSONArray("content")
+                .getJSONObject(0)
+                .getString("text")
+                .trim()
+        }
     }
-
-    private suspend fun resolveProvider(): LLMProvider {
-        val name = settingsRepository.llmProvider.first()
-        return try { LLMProvider.valueOf(name) } catch (_: Exception) { LLMProvider.OPEN_AI }
-    }
-
-    private suspend fun resolveApiKey(provider: LLMProvider): String {
-        val raw = when (provider) {
-            LLMProvider.CLAUDE -> settingsRepository.claudeKey.first()
-            else -> settingsRepository.openAiKey.first()
-        }
-        return raw.trim().replace(Regex("[\\r\\n\\s]+"), "")
-    }
-
-    private suspend fun openAiTranslate(
-        url: String, apiKey: String, model: String,
-        systemPrompt: String, text: String
-    ): String {
-        val messages = JSONArray().apply {
-            put(JSONObject().apply {
-                put("role", "system"); put("content", systemPrompt)
-            })
-            put(JSONObject().apply {
-                put("role", "user"); put("content", text)
-            })
-        }
-        val requestBody = JSONObject().apply {
-            put("model", model)
-            put("messages", messages)
-            put("max_tokens", 1024)
-            put("temperature", 0.3)
-        }.toString().toRequestBody(jsonMediaType)
-
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Authorization", "Bearer $apiKey")
-            .addHeader("Content-Type", "application/json")
-            .post(requestBody)
-            .build()
-
-        val call = client.newCall(request)
-        val response = call.executeCancellable()
-        val body = response.body?.string() ?: error("Empty response body")
-        if (!response.isSuccessful) {
-            Log.e("LLMClient", "API error ${response.code}: $body")
-            error("API error ${response.code}: $body")
-        }
-        val json = JSONObject(body)
-        return json.getJSONArray("choices")
-            .getJSONObject(0).getJSONObject("message")
-            .getString("content").trim()
-    }
-
-    private suspend fun claudeTranslate(
-        url: String, apiKey: String, model: String,
-        systemPrompt: String, text: String
-    ): String {
-        val messages = JSONArray().apply {
-            put(JSONObject().apply {
-                put("role", "user"); put("content", text)
-            })
-        }
-        val requestBody = JSONObject().apply {
-            put("model", model)
-            put("system", systemPrompt)
-            put("messages", messages)
-            put("max_tokens", 1024)
-            put("temperature", 0.3)
-        }.toString().toRequestBody(jsonMediaType)
-
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("x-api-key", apiKey)
-            .addHeader("anthropic-version", "2023-06-01")
-            .addHeader("Content-Type", "application/json")
-            .post(requestBody)
-            .build()
-
-        val call = client.newCall(request)
-        val response = call.executeCancellable()
-        val body = response.body?.string() ?: error("Empty response body")
-        if (!response.isSuccessful) {
-            Log.e("LLMClient", "Claude API error ${response.code}: $body")
-            error("Claude API error ${response.code}: $body")
-        }
-        val json = JSONObject(body)
-        return json.getJSONArray("content")
-            .getJSONObject(0).getString("text").trim()
-    }
-}

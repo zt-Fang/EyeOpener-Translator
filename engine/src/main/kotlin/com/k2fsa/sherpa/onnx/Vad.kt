@@ -36,7 +36,10 @@ data class VadModelConfig(
 )
 
 /** 语音段(含起始样本位置和 PCM float 数据) */
-class SpeechSegment(val start: Int, val samples: FloatArray)
+class SpeechSegment(
+    val start: Int,
+    val samples: FloatArray,
+)
 
 /**
  * Sherpa-ONNX VAD 包装类。
@@ -103,9 +106,7 @@ class Vad(
     fun pop() = pop(ptr)
 
     /** 获取队首语音段(不弹出) */
-    fun front(): SpeechSegment {
-        return front(ptr)
-    }
+    fun front(): SpeechSegment = front(ptr)
 
     /** 清空队列 */
     fun clear() = clear(ptr)
@@ -120,21 +121,36 @@ class Vad(
     fun flush() = flush(ptr)
 
     private external fun delete(ptr: Long)
+
     private external fun newFromAsset(
         assetManager: AssetManager,
         config: VadModelConfig,
     ): Long
-    private external fun newFromFile(
-        config: VadModelConfig,
-    ): Long
-    private external fun acceptWaveform(ptr: Long, samples: FloatArray)
-    private external fun compute(ptr: Long, samples: FloatArray): Float
+
+    private external fun newFromFile(config: VadModelConfig): Long
+
+    private external fun acceptWaveform(
+        ptr: Long,
+        samples: FloatArray,
+    )
+
+    private external fun compute(
+        ptr: Long,
+        samples: FloatArray,
+    ): Float
+
     private external fun empty(ptr: Long): Boolean
+
     private external fun pop(ptr: Long)
+
     private external fun clear(ptr: Long)
+
     private external fun front(ptr: Long): SpeechSegment
+
     private external fun isSpeechDetected(ptr: Long): Boolean
+
     private external fun reset(ptr: Long)
+
     private external fun flush(ptr: Long)
 
     companion object {
@@ -150,30 +166,38 @@ class Vad(
  * @param type 0: Silero VAD (推荐), 1: Ten VAD
  * @param modelPath 模型文件路径(绝对路径), 默认空串表示走 assets
  */
-fun getVadModelConfig(type: Int, modelPath: String = ""): VadModelConfig? = when (type) {
-    0 -> VadModelConfig(
-        sileroVadModelConfig = SileroVadModelConfig(
-            model = modelPath.ifEmpty { "silero_vad.onnx" },
-            threshold = 0.5F,
-            minSilenceDuration = 0.25F,
-            minSpeechDuration = 0.25F,
-            windowSize = 512,
-        ),
-        sampleRate = 16000,
-        numThreads = 1,
-        provider = "cpu",
-    )
-    1 -> VadModelConfig(
-        tenVadModelConfig = TenVadModelConfig(
-            model = modelPath.ifEmpty { "ten-vad.onnx" },
-            threshold = 0.5F,
-            minSilenceDuration = 0.25F,
-            minSpeechDuration = 0.25F,
-            windowSize = 256,
-        ),
-        sampleRate = 16000,
-        numThreads = 1,
-        provider = "cpu",
-    )
-    else -> null
-}
+fun getVadModelConfig(
+    type: Int,
+    modelPath: String = "",
+): VadModelConfig? =
+    when (type) {
+        0 ->
+            VadModelConfig(
+                sileroVadModelConfig =
+                    SileroVadModelConfig(
+                        model = modelPath.ifEmpty { "silero_vad.onnx" },
+                        threshold = 0.5F,
+                        minSilenceDuration = 0.25F,
+                        minSpeechDuration = 0.25F,
+                        windowSize = 512,
+                    ),
+                sampleRate = 16000,
+                numThreads = 1,
+                provider = "cpu",
+            )
+        1 ->
+            VadModelConfig(
+                tenVadModelConfig =
+                    TenVadModelConfig(
+                        model = modelPath.ifEmpty { "ten-vad.onnx" },
+                        threshold = 0.5F,
+                        minSilenceDuration = 0.25F,
+                        minSpeechDuration = 0.25F,
+                        windowSize = 256,
+                    ),
+                sampleRate = 16000,
+                numThreads = 1,
+                provider = "cpu",
+            )
+        else -> null
+    }

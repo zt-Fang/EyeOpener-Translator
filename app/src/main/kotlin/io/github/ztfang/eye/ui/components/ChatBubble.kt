@@ -47,18 +47,19 @@ fun ChatBubble(
     timestamp: String,
     isFromAi: Boolean,
     isRead: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = Dimens.ScreenPaddingH),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = Dimens.ScreenPaddingH),
         horizontalArrangement = if (isFromAi) Arrangement.Start else Arrangement.End,
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.Top,
     ) {
         Column(
             horizontalAlignment = if (isFromAi) Alignment.Start else Alignment.End,
-            modifier = Modifier.widthIn(max = Dimens.ChatBubbleMaxWidth)
+            modifier = Modifier.widthIn(max = Dimens.ChatBubbleMaxWidth),
         ) {
             // 头像在上方
             if (isFromAi) {
@@ -77,20 +78,20 @@ fun ChatBubble(
             Spacer(modifier = Modifier.height(Dimens.MessageMetaSpacing))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXxs)
+                horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXxs),
             ) {
                 if (!isFromAi && isRead) {
                     Icon(
                         imageVector = Icons.Filled.DoneAll,
                         contentDescription = stringResource(R.string.assistant_read_receipt_cd),
                         tint = Color(0xFF8B7FD8),
-                        modifier = Modifier.size(Dimens.MessageMetaIcon)
+                        modifier = Modifier.size(Dimens.MessageMetaIcon),
                     )
                 }
                 Text(
                     text = timestamp,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -99,72 +100,78 @@ fun ChatBubble(
 
 @Composable
 private fun AiBubble(text: String) {
-    val shape = RoundedCornerShape(
-        topStart = Dimens.ChatBubbleCornerSm,
-        topEnd = Dimens.ChatBubbleCornerLg,
-        bottomEnd = Dimens.ChatBubbleCornerLg,
-        bottomStart = Dimens.ChatBubbleCornerLg,
-    )
+    val shape =
+        RoundedCornerShape(
+            topStart = Dimens.ChatBubbleCornerSm,
+            topEnd = Dimens.ChatBubbleCornerLg,
+            bottomEnd = Dimens.ChatBubbleCornerLg,
+            bottomStart = Dimens.ChatBubbleCornerLg,
+        )
     Box(
-        modifier = Modifier
-            .shadow(
-                elevation = Dimens.SpaceXxs,
-                shape = shape,
-                ambientColor = Color(0xFF1A73E8).copy(alpha = 0.06f),
-                spotColor = Color(0xFF1A73E8).copy(alpha = 0.08f),
-            )
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.85f))
-            .border(
-                border = BorderStroke(width = 1.dp, brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.95f),
-                        Color.White.copy(alpha = 0.25f),
-                    )
-                )),
-                shape = shape
-            )
-            .padding(horizontal = Dimens.SpaceMd, vertical = Dimens.SpaceSm + Dimens.SpaceXxs)
+        modifier =
+            Modifier
+                .shadow(
+                    elevation = Dimens.SpaceXxs,
+                    shape = shape,
+                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.06f),
+                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.08f),
+                ).clip(shape)
+                .background(Color.White.copy(alpha = 0.85f))
+                .border(
+                    border =
+                        BorderStroke(
+                            width = 1.dp,
+                            brush =
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.White.copy(alpha = 0.95f),
+                                        Color.White.copy(alpha = 0.25f),
+                                    ),
+                                ),
+                        ),
+                    shape = shape,
+                ).padding(horizontal = Dimens.SpaceMd, vertical = Dimens.SpaceSm + Dimens.SpaceXxs),
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
 
 @Composable
 private fun UserBubble(text: String) {
-    val shape = RoundedCornerShape(
-        topStart = Dimens.ChatBubbleCornerLg,
-        topEnd = Dimens.ChatBubbleCornerSm,
-        bottomEnd = Dimens.ChatBubbleCornerLg,
-        bottomStart = Dimens.ChatBubbleCornerLg,
-    )
+    val shape =
+        RoundedCornerShape(
+            topStart = Dimens.ChatBubbleCornerLg,
+            topEnd = Dimens.ChatBubbleCornerSm,
+            bottomEnd = Dimens.ChatBubbleCornerLg,
+            bottomStart = Dimens.ChatBubbleCornerLg,
+        )
     Box(
-        modifier = Modifier
-            .shadow(
-                elevation = Dimens.SpaceXs,
-                shape = shape,
-                ambientColor = Color(0xFF8B7FD8).copy(alpha = 0.18f),
-                spotColor = Color(0xFF8B7FD8).copy(alpha = 0.22f),
-            )
-            .clip(shape)
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFFB197FC),
-                        Color(0xFF8B7FD8),
-                    )
-                )
-            )
-            .padding(horizontal = Dimens.SpaceMd, vertical = Dimens.SpaceSm + Dimens.SpaceXxs)
+        modifier =
+            Modifier
+                .shadow(
+                    elevation = Dimens.SpaceXs,
+                    shape = shape,
+                    ambientColor = Color(0xFF8B7FD8).copy(alpha = 0.18f),
+                    spotColor = Color(0xFF8B7FD8).copy(alpha = 0.22f),
+                ).clip(shape)
+                .background(
+                    Brush.linearGradient(
+                        colors =
+                            listOf(
+                                Color(0xFFB197FC),
+                                Color(0xFF8B7FD8),
+                            ),
+                    ),
+                ).padding(horizontal = Dimens.SpaceMd, vertical = Dimens.SpaceSm + Dimens.SpaceXxs),
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.White
+            color = Color.White,
         )
     }
 }
@@ -172,18 +179,20 @@ private fun UserBubble(text: String) {
 @Composable
 private fun AiAvatar() {
     Box(
-        modifier = Modifier
-            .size(Dimens.ChatAvatarSize)
-            .clip(CircleShape)
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF8B7FD8),
-                        Color(0xFFB197FC),
-                    )
-                )
-            ),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(Dimens.ChatAvatarSize)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        colors =
+                            listOf(
+                                Color(0xFF8B7FD8),
+                                Color(0xFFB197FC),
+                            ),
+                    ),
+                ),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = stringResource(R.string.assistant_avatar_ai),
@@ -196,18 +205,20 @@ private fun AiAvatar() {
 @Composable
 private fun UserAvatar() {
     Box(
-        modifier = Modifier
-            .size(Dimens.ChatAvatarSize)
-            .clip(CircleShape)
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF4F8AFF),
-                        Color(0xFF8B7FD8),
-                    )
-                )
-            ),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(Dimens.ChatAvatarSize)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        colors =
+                            listOf(
+                                Color(0xFF4F8AFF),
+                                Color(0xFF8B7FD8),
+                            ),
+                    ),
+                ),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = stringResource(R.string.assistant_avatar_user),

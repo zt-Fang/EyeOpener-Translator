@@ -1,9 +1,9 @@
 package io.github.ztfang.eye
 
-import android.content.Context
 import android.app.Application
-import io.github.ztfang.eye.util.LocaleHelper
+import android.content.Context
 import dagger.hilt.android.HiltAndroidApp
+import io.github.ztfang.eye.util.LocaleHelper
 
 /**
  * 应用入口类。
@@ -11,7 +11,6 @@ import dagger.hilt.android.HiltAndroidApp
  */
 @HiltAndroidApp
 class EyeApplication : Application() {
-
     override fun attachBaseContext(base: Context) {
         // 读取保存的语言偏好，默认中文
         val prefs = base.getSharedPreferences("eye_opener_settings", Context.MODE_PRIVATE)

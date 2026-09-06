@@ -38,31 +38,32 @@ fun GlassCard(
     contentPadding: Dp = Dimens.CardPadding,
     containerColor: Color = MaterialTheme.colorScheme.surface.copy(alpha = Dimens.GlassSurfaceAlpha),
     elevation: Dp = Dimens.GlassShadowElevation,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(cornerRadius)
     // 顶部高光 → 底部隐去的线性渐变描边,营造玻璃边缘光
-    val borderBrush = Brush.verticalGradient(
-        colors = listOf(
-            Color.White.copy(alpha = Dimens.GlassHighlightAlpha),
-            Color.White.copy(alpha = 0.15f),
+    val borderBrush =
+        Brush.verticalGradient(
+            colors =
+                listOf(
+                    Color.White.copy(alpha = Dimens.GlassHighlightAlpha),
+                    Color.White.copy(alpha = 0.15f),
+                ),
         )
-    )
     Box(
-        modifier = modifier
-            .shadow(
-                elevation = elevation,
-                shape = shape,
-                ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
-                spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f),
-            )
-            .clip(shape)
-            .background(containerColor)
-            .border(
-                border = BorderStroke(width = 1.dp, brush = borderBrush),
-                shape = shape
-            )
-            .padding(contentPadding)
+        modifier =
+            modifier
+                .shadow(
+                    elevation = elevation,
+                    shape = shape,
+                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
+                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f),
+                ).clip(shape)
+                .background(containerColor)
+                .border(
+                    border = BorderStroke(width = 1.dp, brush = borderBrush),
+                    shape = shape,
+                ).padding(contentPadding),
     ) {
         content()
     }

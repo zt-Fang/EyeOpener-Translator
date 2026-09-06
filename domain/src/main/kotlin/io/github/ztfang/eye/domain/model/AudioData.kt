@@ -11,7 +11,5 @@ data class AudioData(
         return samples.contentEquals(other.samples) && sampleRate == other.sampleRate
     }
 
-    override fun hashCode(): Int {
-        return samples.contentHashCode() * 31 + sampleRate
-    }
+    override fun hashCode(): Int = samples.contentHashCode() * 31 + sampleRate
 }

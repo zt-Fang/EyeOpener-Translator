@@ -96,7 +96,7 @@ import java.security.MessageDigest
 @Composable
 fun CloudTranslationSettingsScreen(
     onBack: () -> Unit,
-    settingsViewModel: SettingsViewModel = hiltViewModel()
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
@@ -137,17 +137,18 @@ fun CloudTranslationSettingsScreen(
     var status by remember { mutableStateOf("") }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .imePadding(),
-        verticalArrangement = Arrangement.spacedBy(Dimens.PersonalizationSectionGap)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .imePadding(),
+        verticalArrangement = Arrangement.spacedBy(Dimens.PersonalizationSectionGap),
     ) {
         CloudSettingsTopBar(onBack = onBack)
 
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPaddingH),
-            verticalArrangement = Arrangement.spacedBy(Dimens.PersonalizationSectionGap)
+            verticalArrangement = Arrangement.spacedBy(Dimens.PersonalizationSectionGap),
         ) {
             // 顶部提示语卡片
             CloudTipCard()
@@ -155,7 +156,7 @@ fun CloudTranslationSettingsScreen(
             // Provider 下拉
             CloudProviderSelector(
                 selected = selectedProvider,
-                onSelected = { selectedProvider = it }
+                onSelected = { selectedProvider = it },
             )
 
             // 凭证输入区
@@ -165,17 +166,23 @@ fun CloudTranslationSettingsScreen(
                 secretField = secretField,
                 onKeyChange = { keyField = it },
                 onSecretChange = { secretField = it },
-                alreadyConfigured = currentApiKey.isNotBlank() && keyField.isBlank() && secretField.isBlank()
+                alreadyConfigured = currentApiKey.isNotBlank() && keyField.isBlank() && secretField.isBlank(),
             )
 
             if (status.isNotEmpty()) {
                 Text(
                     text = status,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (status.contains(context.getString(R.string.cloud_saved).replace(" ✓", ""))
-                        || status.contains("成功")) Color(0xFF2EB89A) else Color(0xFFE53935),
+                    color =
+                        if (status.contains(context.getString(R.string.cloud_saved).replace(" ✓", "")) ||
+                            status.contains("成功")
+                        ) {
+                            Color(0xFF2EB89A)
+                        } else {
+                            Color(0xFFE53935)
+                        },
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
 
@@ -208,19 +215,23 @@ fun CloudTranslationSettingsScreen(
                 enabled = !isTesting,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(Dimens.CornerLg),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF1A73E8), contentColor = Color.White
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1A73E8),
+                        contentColor = Color.White,
+                    ),
             ) {
                 if (isTesting) {
                     CircularProgressIndicator(
-                        color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp)
+                        color = Color.White,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(20.dp),
                     )
                 } else {
                     Text(
                         stringResource(R.string.cloud_save),
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
@@ -231,7 +242,7 @@ fun CloudTranslationSettingsScreen(
                 text = stringResource(R.string.cloud_config_tip),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = Dimens.SpaceXs)
+                modifier = Modifier.padding(horizontal = Dimens.SpaceXs),
             )
             OutlinedButton(
                 onClick = {
@@ -241,12 +252,12 @@ fun CloudTranslationSettingsScreen(
                     status = context.getString(R.string.cloud_cleared)
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(Dimens.CornerLg)
+                shape = RoundedCornerShape(Dimens.CornerLg),
             ) {
                 Text(
                     text = stringResource(R.string.cloud_clear_config),
                     style = MaterialTheme.typography.labelLarge,
-                    color = Color(0xFFE53935)
+                    color = Color(0xFFE53935),
                 )
             }
         }
@@ -258,30 +269,39 @@ fun CloudTranslationSettingsScreen(
 private fun CloudTipCard() {
     val shape = RoundedCornerShape(Dimens.SettingsCardCorner)
     Box(
-        modifier = Modifier.fillMaxWidth()
-            .shadow(Dimens.GlassShadowElevation, shape = shape,
-                ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
-                spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f))
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
-            .border(BorderStroke(1.dp, Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f))
-            )), shape = shape)
-            .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .shadow(
+                    Dimens.GlassShadowElevation,
+                    shape = shape,
+                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
+                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f),
+                ).clip(shape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                .border(
+                    BorderStroke(
+                        1.dp,
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f)),
+                        ),
+                    ),
+                    shape = shape,
+                ).padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = Icons.Filled.Info,
                 contentDescription = null,
                 tint = Color(0xFF1A73E8),
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
             )
             Spacer(modifier = Modifier.width(Dimens.SpaceSm))
             Text(
                 text = stringResource(R.string.cloud_tip),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
         }
     }
@@ -291,72 +311,96 @@ private fun CloudTipCard() {
 @Composable
 private fun CloudProviderSelector(
     selected: CloudTranslationProvider,
-    onSelected: (CloudTranslationProvider) -> Unit
+    onSelected: (CloudTranslationProvider) -> Unit,
 ) {
     val shape = RoundedCornerShape(Dimens.SettingsCardCorner)
     var expanded by remember { mutableStateOf(false) }
 
     Box(
-        modifier = Modifier.fillMaxWidth()
-            .shadow(Dimens.GlassShadowElevation, shape = shape,
-                ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
-                spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f))
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
-            .border(BorderStroke(1.dp, Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f))
-            )), shape = shape)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .shadow(
+                    Dimens.GlassShadowElevation,
+                    shape = shape,
+                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
+                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f),
+                ).clip(shape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                .border(
+                    BorderStroke(
+                        1.dp,
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f)),
+                        ),
+                    ),
+                    shape = shape,
+                ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = true }
-                .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = true }
+                    .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = stringResource(R.string.cloud_provider_format, stringResource(selected.displayNameRes())),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
             Icon(
-                imageVector = if (expanded) Icons.Default.KeyboardArrowUp
-                else Icons.Default.KeyboardArrowDown,
+                imageVector =
+                    if (expanded) {
+                        Icons.Default.KeyboardArrowUp
+                    } else {
+                        Icons.Default.KeyboardArrowDown
+                    },
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .background(MaterialTheme.colorScheme.surface)
+            modifier =
+                Modifier
+                    .fillMaxWidth(0.92f)
+                    .background(MaterialTheme.colorScheme.surface),
         ) {
             CloudTranslationProvider.entries.forEach { provider ->
                 DropdownMenuItem(
                     text = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)
+                            horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
                         ) {
                             Text(
                                 text = stringResource(provider.displayNameRes()),
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = if (provider == selected) Color(0xFF1A73E8)
-                                else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (provider == selected) FontWeight.SemiBold
-                                else FontWeight.Normal
+                                color =
+                                    if (provider == selected) {
+                                        Color(0xFF1A73E8)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                fontWeight =
+                                    if (provider == selected) {
+                                        FontWeight.SemiBold
+                                    } else {
+                                        FontWeight.Normal
+                                    },
                             )
                             if (provider == selected) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
                                     tint = Color(0xFF1A73E8),
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(18.dp),
                                 )
                             }
                         }
@@ -364,7 +408,7 @@ private fun CloudProviderSelector(
                     onClick = {
                         onSelected(provider)
                         expanded = false
-                    }
+                    },
                 )
                 if (provider != CloudTranslationProvider.entries.last()) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -388,43 +432,73 @@ private fun CloudCredentialInputs(
     secretField: String,
     onKeyChange: (String) -> Unit,
     onSecretChange: (String) -> Unit,
-    alreadyConfigured: Boolean
+    alreadyConfigured: Boolean,
 ) {
-    val (keyLabel, keyPlaceholder, secretLabel, secretPlaceholder, secretOptional) = when (provider) {
-        CloudTranslationProvider.PAPAGO -> Quintuple(
-            "Client ID", "Papago Client ID",
-            "Client Secret", "Papago Client Secret", false
-        )
-        CloudTranslationProvider.BAIDU -> Quintuple(
-            "App ID", "百度 App ID",
-            "Secret Key", "百度 Secret Key", false
-        )
-        CloudTranslationProvider.AZURE -> Quintuple(
-            "Subscription Key", "Azure Subscription Key",
-            "Region", "例如 eastasia（可选）", true
-        )
-        CloudTranslationProvider.DEEPL -> Quintuple(
-            "Auth Key", "DeepL AuthKey（Free 以 :fx 结尾）",
-            "", "", false
-        )
-        CloudTranslationProvider.GOOGLE -> Quintuple(
-            stringResource(R.string.cloud_api_key_label), stringResource(R.string.cloud_api_key_hint_google),
-            "", "", false
-        )
-    }
+    val (keyLabel, keyPlaceholder, secretLabel, secretPlaceholder, secretOptional) =
+        when (provider) {
+            CloudTranslationProvider.PAPAGO ->
+                Quintuple(
+                    "Client ID",
+                    "Papago Client ID",
+                    "Client Secret",
+                    "Papago Client Secret",
+                    false,
+                )
+            CloudTranslationProvider.BAIDU ->
+                Quintuple(
+                    "App ID",
+                    "百度 App ID",
+                    "Secret Key",
+                    "百度 Secret Key",
+                    false,
+                )
+            CloudTranslationProvider.AZURE ->
+                Quintuple(
+                    "Subscription Key",
+                    "Azure Subscription Key",
+                    "Region",
+                    "例如 eastasia（可选）",
+                    true,
+                )
+            CloudTranslationProvider.DEEPL ->
+                Quintuple(
+                    "Auth Key",
+                    "DeepL AuthKey（Free 以 :fx 结尾）",
+                    "",
+                    "",
+                    false,
+                )
+            CloudTranslationProvider.GOOGLE ->
+                Quintuple(
+                    stringResource(R.string.cloud_api_key_label),
+                    stringResource(R.string.cloud_api_key_hint_google),
+                    "",
+                    "",
+                    false,
+                )
+        }
 
     val shape = RoundedCornerShape(Dimens.SettingsCardCorner)
     Box(
-        modifier = Modifier.fillMaxWidth()
-            .shadow(Dimens.GlassShadowElevation, shape = shape,
-                ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
-                spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f))
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
-            .border(BorderStroke(1.dp, Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f))
-            )), shape = shape)
-            .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .shadow(
+                    Dimens.GlassShadowElevation,
+                    shape = shape,
+                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
+                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f),
+                ).clip(shape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                .border(
+                    BorderStroke(
+                        1.dp,
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f)),
+                        ),
+                    ),
+                    shape = shape,
+                ).padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
     ) {
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)) {
             // 主键输入
@@ -432,7 +506,7 @@ private fun CloudCredentialInputs(
                 label = keyLabel,
                 placeholder = keyPlaceholder,
                 value = keyField,
-                onValueChange = onKeyChange
+                onValueChange = onKeyChange,
             )
             // 副字段（DeepL 无）
             if (secretLabel.isNotEmpty()) {
@@ -440,7 +514,7 @@ private fun CloudCredentialInputs(
                     label = if (secretOptional) "$secretLabel（可选）" else secretLabel,
                     placeholder = secretPlaceholder,
                     value = secretField,
-                    onValueChange = onSecretChange
+                    onValueChange = onSecretChange,
                 )
             }
             if (alreadyConfigured) {
@@ -448,7 +522,7 @@ private fun CloudCredentialInputs(
                     text = stringResource(R.string.cloud_api_key_already_configured),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF2EB89A),
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
             }
         }
@@ -461,14 +535,14 @@ private fun CloudLabeledTextField(
     label: String,
     placeholder: String,
     value: String,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXxs)) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
         )
         OutlinedTextField(
             value = value,
@@ -477,20 +551,21 @@ private fun CloudLabeledTextField(
                 Text(
                     placeholder,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 )
             },
             visualTransformation = PasswordVisualTransformation(),
             shape = RoundedCornerShape(Dimens.CornerMd),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF1A73E8),
-                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                cursorColor = Color(0xFF1A73E8),
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent
-            ),
+            colors =
+                OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF1A73E8),
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    cursorColor = Color(0xFF1A73E8),
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                ),
             textStyle = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
@@ -499,21 +574,27 @@ private fun CloudLabeledTextField(
 @Composable
 private fun CloudSettingsTopBar(onBack: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(Dimens.PersonalizationTopBarHeight)
-            .padding(horizontal = Dimens.SpaceXs),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(Dimens.PersonalizationTopBarHeight)
+                .padding(horizontal = Dimens.SpaceXs),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier.size(Dimens.TopAppBarIconBox).clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                .clickable(onClick = onBack),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(Dimens.TopAppBarIconBox)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                    .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = stringResource(R.string.cloud_back_cd),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(22.dp),
             )
         }
         Spacer(Modifier.width(Dimens.SpaceSm))
@@ -521,19 +602,20 @@ private fun CloudSettingsTopBar(onBack: () -> Unit) {
             text = stringResource(R.string.cloud_title),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
         )
     }
 }
 
 /** Provider 显示名称资源 ID */
-private fun CloudTranslationProvider.displayNameRes(): Int = when (this) {
-    CloudTranslationProvider.PAPAGO -> R.string.cloud_provider_papago
-    CloudTranslationProvider.BAIDU -> R.string.cloud_provider_baidu
-    CloudTranslationProvider.DEEPL -> R.string.cloud_provider_deepl
-    CloudTranslationProvider.AZURE -> R.string.cloud_provider_azure
-    CloudTranslationProvider.GOOGLE -> R.string.cloud_provider_google
-}
+private fun CloudTranslationProvider.displayNameRes(): Int =
+    when (this) {
+        CloudTranslationProvider.PAPAGO -> R.string.cloud_provider_papago
+        CloudTranslationProvider.BAIDU -> R.string.cloud_provider_baidu
+        CloudTranslationProvider.DEEPL -> R.string.cloud_provider_deepl
+        CloudTranslationProvider.AZURE -> R.string.cloud_provider_azure
+        CloudTranslationProvider.GOOGLE -> R.string.cloud_provider_google
+    }
 
 /**
  * 将持久化的合并字符串拆分为 (key, secret)。
@@ -542,7 +624,7 @@ private fun CloudTranslationProvider.displayNameRes(): Int = when (this) {
  */
 private fun splitCredential(
     provider: CloudTranslationProvider,
-    raw: String
+    raw: String,
 ): Pair<String, String> {
     if (raw.isBlank()) return "" to ""
     // DeepL 和 Google：整串即为 API Key，无 secret
@@ -559,21 +641,30 @@ private fun splitCredential(
 private fun mergeCredential(
     provider: CloudTranslationProvider,
     key: String,
-    secret: String
-): String = when (provider) {
-    CloudTranslationProvider.DEEPL, CloudTranslationProvider.GOOGLE -> key
-    else -> if (secret.isBlank()) key else "$key:$secret"
-}
+    secret: String,
+): String =
+    when (provider) {
+        CloudTranslationProvider.DEEPL, CloudTranslationProvider.GOOGLE -> key
+        else -> if (secret.isBlank()) key else "$key:$secret"
+    }
 
 /** 五元组数据载体（避免新增长度参数） */
 private data class Quintuple(
-    val a: String, val b: String, val c: String, val d: String, val e: Boolean
+    val a: String,
+    val b: String,
+    val c: String,
+    val d: String,
+    val e: Boolean,
 )
 
 private operator fun Quintuple.component1() = a
+
 private operator fun Quintuple.component2() = b
+
 private operator fun Quintuple.component3() = c
+
 private operator fun Quintuple.component4() = d
+
 private operator fun Quintuple.component5() = e
 
 /**
@@ -585,95 +676,127 @@ private operator fun Quintuple.component5() = e
  */
 private suspend fun testCloudApi(
     provider: CloudTranslationProvider,
-    merged: String
-): String? = withContext(Dispatchers.IO) {
-    try {
-        val client = OkHttpClient.Builder().build()
-        when (provider) {
-            CloudTranslationProvider.PAPAGO -> {
-                val (id, secret) = splitCredential(provider, merged)
-                if (id.isBlank() || secret.isBlank())
-                    return@withContext "Papago 需要 Client ID 和 Client Secret"
-                val form = FormBody.Builder()
-                    .add("source", "en").add("target", "ko").add("text", "hi")
-                    .build()
-                val req = Request.Builder()
-                    .url("https://openapi.naver.com/v1/papago/n2mt")
-                    .addHeader("X-Naver-Client-Id", id)
-                    .addHeader("X-Naver-Client-Secret", secret)
-                    .post(form).build()
-                client.newCall(req).execute().use { res ->
-                    if (res.isSuccessful) null else "HTTP ${res.code}"
-                }
-            }
-            CloudTranslationProvider.BAIDU -> {
-                val (appid, secret) = splitCredential(provider, merged)
-                if (appid.isBlank() || secret.isBlank())
-                    return@withContext "百度需要 App ID 和 Secret Key"
-                val salt = System.currentTimeMillis().toString()
-                val sign = md5("$appid" + "hi" + salt + secret)
-                val url = "https://fanyi-api.baidu.com/api/trans/vip/translate" +
-                    "?q=hi&from=en&to=zh&appid=$appid&salt=$salt&sign=$sign"
-                val req = Request.Builder().url(url).build()
-                client.newCall(req).execute().use { res ->
-                    val body = res.body?.string() ?: ""
-                    val json = JSONObject(body)
-                    if (json.has("error_code")) {
-                        "${json.optString("error_code")}: ${json.optString("error_msg")}"
-                    } else null
-                }
-            }
-            CloudTranslationProvider.DEEPL -> {
-                val form = FormBody.Builder()
-                    .add("text", "hi").add("source_lang", "EN").add("target_lang", "DE")
-                    .build()
-                val baseUrl = if (merged.endsWith(":fx"))
-                    "https://api-free.deepl.com/v2/translate"
-                else "https://api.deepl.com/v2/translate"
-                val req = Request.Builder()
-                    .url(baseUrl)
-                    .addHeader("Authorization", "DeepL-Auth-Key $merged")
-                    .post(form).build()
-                client.newCall(req).execute().use { res ->
-                    if (res.isSuccessful) null else "HTTP ${res.code}"
-                }
-            }
-            CloudTranslationProvider.AZURE -> {
-                val (key, region) = splitCredential(provider, merged)
-                if (key.isBlank()) return@withContext "Azure 需要 Subscription Key"
-                val body = "[{\"Text\":\"hi\"}]".toRequestBody(JSON_MEDIA)
-                val url = "https://api.cognitive.microsofttranslator.com/translate" +
-                    "?api-version=3.0&from=en&to=zh-Hans"
-                val req = Request.Builder()
-                    .url(url)
-                    .addHeader("Ocp-Apim-Subscription-Key", key)
-                    .addHeader("Content-Type", "application/json; charset=UTF-8")
-                    .apply {
-                        if (region.isNotEmpty())
-                            addHeader("Ocp-Apim-Subscription-Region", region)
+    merged: String,
+): String? =
+    withContext(Dispatchers.IO) {
+        try {
+            val client = OkHttpClient.Builder().build()
+            when (provider) {
+                CloudTranslationProvider.PAPAGO -> {
+                    val (id, secret) = splitCredential(provider, merged)
+                    if (id.isBlank() || secret.isBlank()) {
+                        return@withContext "Papago 需要 Client ID 和 Client Secret"
                     }
-                    .post(body).build()
-                client.newCall(req).execute().use { res ->
-                    if (res.isSuccessful) null else "HTTP ${res.code}"
+                    val form =
+                        FormBody
+                            .Builder()
+                            .add("source", "en")
+                            .add("target", "ko")
+                            .add("text", "hi")
+                            .build()
+                    val req =
+                        Request
+                            .Builder()
+                            .url("https://openapi.naver.com/v1/papago/n2mt")
+                            .addHeader("X-Naver-Client-Id", id)
+                            .addHeader("X-Naver-Client-Secret", secret)
+                            .post(form)
+                            .build()
+                    client.newCall(req).execute().use { res ->
+                        if (res.isSuccessful) null else "HTTP ${res.code}"
+                    }
+                }
+                CloudTranslationProvider.BAIDU -> {
+                    val (appid, secret) = splitCredential(provider, merged)
+                    if (appid.isBlank() || secret.isBlank()) {
+                        return@withContext "百度需要 App ID 和 Secret Key"
+                    }
+                    val salt = System.currentTimeMillis().toString()
+                    val sign = md5("$appid" + "hi" + salt + secret)
+                    val url =
+                        "https://fanyi-api.baidu.com/api/trans/vip/translate" +
+                            "?q=hi&from=en&to=zh&appid=$appid&salt=$salt&sign=$sign"
+                    val req = Request.Builder().url(url).build()
+                    client.newCall(req).execute().use { res ->
+                        val body = res.body?.string() ?: ""
+                        val json = JSONObject(body)
+                        if (json.has("error_code")) {
+                            "${json.optString("error_code")}: ${json.optString("error_msg")}"
+                        } else {
+                            null
+                        }
+                    }
+                }
+                CloudTranslationProvider.DEEPL -> {
+                    val form =
+                        FormBody
+                            .Builder()
+                            .add("text", "hi")
+                            .add("source_lang", "EN")
+                            .add("target_lang", "DE")
+                            .build()
+                    val baseUrl =
+                        if (merged.endsWith(":fx")) {
+                            "https://api-free.deepl.com/v2/translate"
+                        } else {
+                            "https://api.deepl.com/v2/translate"
+                        }
+                    val req =
+                        Request
+                            .Builder()
+                            .url(baseUrl)
+                            .addHeader("Authorization", "DeepL-Auth-Key $merged")
+                            .post(form)
+                            .build()
+                    client.newCall(req).execute().use { res ->
+                        if (res.isSuccessful) null else "HTTP ${res.code}"
+                    }
+                }
+                CloudTranslationProvider.AZURE -> {
+                    val (key, region) = splitCredential(provider, merged)
+                    if (key.isBlank()) return@withContext "Azure 需要 Subscription Key"
+                    val body = "[{\"Text\":\"hi\"}]".toRequestBody(JSON_MEDIA)
+                    val url =
+                        "https://api.cognitive.microsofttranslator.com/translate" +
+                            "?api-version=3.0&from=en&to=zh-Hans"
+                    val req =
+                        Request
+                            .Builder()
+                            .url(url)
+                            .addHeader("Ocp-Apim-Subscription-Key", key)
+                            .addHeader("Content-Type", "application/json; charset=UTF-8")
+                            .apply {
+                                if (region.isNotEmpty()) {
+                                    addHeader("Ocp-Apim-Subscription-Region", region)
+                                }
+                            }.post(body)
+                            .build()
+                    client.newCall(req).execute().use { res ->
+                        if (res.isSuccessful) null else "HTTP ${res.code}"
+                    }
+                }
+                CloudTranslationProvider.GOOGLE -> {
+                    if (merged.isBlank()) {
+                        return@withContext "Google Cloud 需要 API Key"
+                    }
+                    val body =
+                        """{"q":"hi","source":"en","target":"zh","format":"text"}"""
+                            .toRequestBody(JSON_MEDIA)
+                    val req =
+                        Request
+                            .Builder()
+                            .url("https://translation.googleapis.com/language/translate/v2?key=$merged")
+                            .post(body)
+                            .build()
+                    client.newCall(req).execute().use { res ->
+                        if (res.isSuccessful) null else "HTTP ${res.code}"
+                    }
                 }
             }
-            CloudTranslationProvider.GOOGLE -> {
-                if (merged.isBlank())
-                    return@withContext "Google Cloud 需要 API Key"
-                val body = """{"q":"hi","source":"en","target":"zh","format":"text"}"""
-                    .toRequestBody(JSON_MEDIA)
-                val req = Request.Builder()
-                    .url("https://translation.googleapis.com/language/translate/v2?key=$merged")
-                    .post(body).build()
-                client.newCall(req).execute().use { res ->
-                    if (res.isSuccessful) null else "HTTP ${res.code}"
-                }
-            }
+        } catch (e: Exception) {
+            e.message ?: "连接失败"
         }
-    } catch (e: Exception) {
-        e.message ?: "连接失败"
     }
-}
 
 /** MD5 哈希 */
 private fun md5(input: String): String {

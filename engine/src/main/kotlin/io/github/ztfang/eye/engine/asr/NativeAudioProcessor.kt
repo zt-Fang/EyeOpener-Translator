@@ -6,9 +6,8 @@ class NativeAudioProcessor(
     bufferCapacity: Int = 32768,
     gainFactor: Float = 0.8f,
     gainThreshold: Float = 0.01f,
-    maxGain: Float = 10.0f
+    maxGain: Float = 10.0f,
 ) {
-
     private var handle: Long = 0L
     private val TAG = "NativeAudioProcessor"
 
@@ -36,7 +35,11 @@ class NativeAudioProcessor(
         }
     }
 
-    fun setGain(factor: Float, threshold: Float, maxGain: Float) {
+    fun setGain(
+        factor: Float,
+        threshold: Float,
+        maxGain: Float,
+    ) {
         if (handle != 0L) {
             nativeSetGain(handle, factor, threshold, maxGain)
         }
@@ -59,16 +62,28 @@ class NativeAudioProcessor(
         bufferCapacity: Int,
         gainFactor: Float,
         gainThreshold: Float,
-        maxGain: Float
+        maxGain: Float,
     ): Long
 
     private external fun nativeDestroy(handle: Long)
 
-    private external fun nativeFeed(handle: Long, data: ShortArray)
+    private external fun nativeFeed(
+        handle: Long,
+        data: ShortArray,
+    )
 
-    private external fun nativeGetBatch(handle: Long, output: ShortArray, batchSize: Int): Int
+    private external fun nativeGetBatch(
+        handle: Long,
+        output: ShortArray,
+        batchSize: Int,
+    ): Int
 
-    private external fun nativeSetGain(handle: Long, factor: Float, threshold: Float, maxGain: Float)
+    private external fun nativeSetGain(
+        handle: Long,
+        factor: Float,
+        threshold: Float,
+        maxGain: Float,
+    )
 
     private external fun nativeClear(handle: Long)
 

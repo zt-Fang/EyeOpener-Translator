@@ -2,14 +2,12 @@ package io.github.ztfang.eye.domain.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** VoskLanguage 枚举完整性测试。 */
 class VoskLanguageTest {
-
     @Test
     fun `getAll returns 33 languages including en-in variant`() {
         val all = VoskLanguage.getAll()
@@ -51,7 +49,7 @@ class VoskLanguageTest {
         VoskLanguage.getAll().forEach { lang ->
             assertTrue(
                 "${lang.name} URL 应为 https 开头: ${lang.modelUrl}",
-                lang.modelUrl.startsWith("https://")
+                lang.modelUrl.startsWith("https://"),
             )
         }
     }
@@ -61,7 +59,7 @@ class VoskLanguageTest {
         VoskLanguage.getAll().forEach { lang ->
             assertTrue(
                 "${lang.name} sizeBytes 应 > 0",
-                lang.sizeBytes > 0
+                lang.sizeBytes > 0,
             )
         }
     }

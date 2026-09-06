@@ -4,5 +4,5 @@ package io.github.ztfang.eye.domain.engine.vad
 data class VoiceSegment(
     val startSample: Int,
     val endSample: Int,
-    val isVoice: Boolean
+    val isVoice: Boolean,
 )

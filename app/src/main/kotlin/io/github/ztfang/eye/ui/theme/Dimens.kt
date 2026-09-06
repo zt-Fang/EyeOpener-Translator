@@ -78,10 +78,12 @@ object Dimens {
     val MessageMetaIcon: Dp = 12.dp
     val OnlineDotSize: Dp = 6.dp
     val ReceiptIconExtra: Dp = 2.dp
+
     // 输入栏
     val InputBarHeight: Dp = 60.dp
     val InputBarIconSize: Dp = 24.dp
     val InputBarSendBox: Dp = 44.dp
+
     // 顶部栏
     val AssistantTopBarHeight: Dp = 64.dp
     val AssistantTopBarActionPad: Dp = 12.dp
@@ -89,33 +91,33 @@ object Dimens {
     // ---- 设置屏新增 ----
     val SettingsTopBarHeight: Dp = 64.dp
     val SettingsCardCorner: Dp = 20.dp
-    val SettingsCardPadding: Dp = 4.dp      // 卡片内边距(行有自己的 padding)
+    val SettingsCardPadding: Dp = 4.dp // 卡片内边距(行有自己的 padding)
     val SettingsRowHeight: Dp = 60.dp
     val SettingsRowPaddingH: Dp = 16.dp
     val SettingsRowPaddingV: Dp = 12.dp
     val SettingsIconBox: Dp = 40.dp
     val SettingsIconSize: Dp = 22.dp
     val SettingsChevronSize: Dp = 20.dp
-    val SettingsRowSpacing: Dp = 0.dp       // 行间距(由卡片内 spacing 提供)
-    val SettingsSectionGap: Dp = 24.dp      // 区段之间的间距
-    val SettingsSectionTitleGap: Dp = 8.dp  // 标题与卡片之间的间距
-    val SettingsRowInternalGap: Dp = 14.dp  // 行内图标与文字间距
-    val SettingsValueTextGap: Dp = 8.dp     // 文字与右侧值的间距
+    val SettingsRowSpacing: Dp = 0.dp // 行间距(由卡片内 spacing 提供)
+    val SettingsSectionGap: Dp = 24.dp // 区段之间的间距
+    val SettingsSectionTitleGap: Dp = 8.dp // 标题与卡片之间的间距
+    val SettingsRowInternalGap: Dp = 14.dp // 行内图标与文字间距
+    val SettingsValueTextGap: Dp = 8.dp // 文字与右侧值的间距
     val SettingsDividerHairline: Dp = 0.5.dp // 行间分割线粗细
 
     // ---- 个性化设置详情页 ----
-    val PersonalizationTopBarHeight: Dp = 64.dp           // 顶部栏高度
-    val PersonalizationColorSwatch: Dp = 48.dp            // 颜色方块边长
-    val PersonalizationSwatchSelectedBorder: Dp = 3.dp    // 选中态外圈描边
-    val PersonalizationPercentBadgeWidth: Dp = 44.dp      // 百分比浮标宽度
-    val PersonalizationPercentBadgeHeight: Dp = 24.dp     // 百分比浮标高度
-    val PersonalizationRadioSize: Dp = 22.dp              // 单选圆点外径
-    val PersonalizationRadioSelectedBorder: Dp = 6.dp     // 选中态圆点填充
-    val PersonalizationRadioUnselectedBorder: Dp = 2.dp   // 未选中态圆点描边
-    val PersonalizationDisplayItemPaddingV: Dp = 14.dp    // 显示模式行垂直内边距
-    val PersonalizationSectionGap: Dp = 20.dp             // 区段之间的间距
-    val PersonalizationSectionTitleGap: Dp = 8.dp         // 标题与卡片之间的间距
-    val PersonalizationSliderVPadding: Dp = 16.dp         // 滑块卡片垂直内边距
-    val PersonalizationFontSizeLabelGap: Dp = 8.dp        // 字体大小当前值与滑块的间距
-    val PersonalizationFontSizeScaleGap: Dp = 4.dp        // 滑块与底部刻度行的间距
+    val PersonalizationTopBarHeight: Dp = 64.dp // 顶部栏高度
+    val PersonalizationColorSwatch: Dp = 48.dp // 颜色方块边长
+    val PersonalizationSwatchSelectedBorder: Dp = 3.dp // 选中态外圈描边
+    val PersonalizationPercentBadgeWidth: Dp = 44.dp // 百分比浮标宽度
+    val PersonalizationPercentBadgeHeight: Dp = 24.dp // 百分比浮标高度
+    val PersonalizationRadioSize: Dp = 22.dp // 单选圆点外径
+    val PersonalizationRadioSelectedBorder: Dp = 6.dp // 选中态圆点填充
+    val PersonalizationRadioUnselectedBorder: Dp = 2.dp // 未选中态圆点描边
+    val PersonalizationDisplayItemPaddingV: Dp = 14.dp // 显示模式行垂直内边距
+    val PersonalizationSectionGap: Dp = 20.dp // 区段之间的间距
+    val PersonalizationSectionTitleGap: Dp = 8.dp // 标题与卡片之间的间距
+    val PersonalizationSliderVPadding: Dp = 16.dp // 滑块卡片垂直内边距
+    val PersonalizationFontSizeLabelGap: Dp = 8.dp // 字体大小当前值与滑块的间距
+    val PersonalizationFontSizeScaleGap: Dp = 4.dp // 滑块与底部刻度行的间距
 }

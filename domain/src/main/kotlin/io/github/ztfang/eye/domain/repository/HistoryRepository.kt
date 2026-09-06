@@ -4,7 +4,6 @@ import io.github.ztfang.eye.domain.model.HistoryRecord
 import kotlinx.coroutines.flow.Flow
 
 interface HistoryRepository {
-
     fun getAllRecords(): Flow<List<HistoryRecord>>
 
     fun getFavoriteRecords(): Flow<List<HistoryRecord>>

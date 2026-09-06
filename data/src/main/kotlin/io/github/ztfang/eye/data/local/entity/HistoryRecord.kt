@@ -11,5 +11,5 @@ data class HistoryRecord(
     val sourceLanguage: String,
     val targetLanguage: String,
     val timestamp: Long,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
 )

@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface HistoryDao {
-
     @Query("SELECT * FROM tb_history ORDER BY timestamp DESC")
     fun getAllRecords(): Flow<List<HistoryRecord>>
 

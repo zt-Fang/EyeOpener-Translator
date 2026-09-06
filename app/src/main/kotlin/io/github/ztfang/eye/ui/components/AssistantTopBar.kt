@@ -38,29 +38,32 @@ import io.github.ztfang.eye.ui.theme.Dimens
 @Composable
 fun AssistantTopBar(
     onClearClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(Dimens.AssistantTopBarHeight)
-            .padding(horizontal = Dimens.ScreenPaddingH),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(Dimens.AssistantTopBarHeight)
+                .padding(horizontal = Dimens.ScreenPaddingH),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // AI 品牌头像(紫蓝渐变)
         Box(
-            modifier = Modifier
-                .size(Dimens.ChatAvatarSize + Dimens.SpaceXs)
-                .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF8B7FD8),
-                            Color(0xFFB197FC),
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(Dimens.ChatAvatarSize + Dimens.SpaceXs)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            colors =
+                                listOf(
+                                    Color(0xFF8B7FD8),
+                                    Color(0xFFB197FC),
+                                ),
+                        ),
+                    ),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = stringResource(R.string.assistant_avatar_ai),
@@ -72,54 +75,56 @@ fun AssistantTopBar(
         Spacer(modifier = Modifier.width(Dimens.SpaceSm))
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
         ) {
             Text(
                 text = stringResource(R.string.assistant_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
             )
             Spacer(modifier = Modifier.height(Dimens.SpaceXxs))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXs)
+                horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXs),
             ) {
                 // 在线小绿点
                 Box(
-                    modifier = Modifier
-                        .size(Dimens.OnlineDotSize)
-                        .clip(CircleShape)
-                        .background(Color(0xFF34C759))
+                    modifier =
+                        Modifier
+                            .size(Dimens.OnlineDotSize)
+                            .clip(CircleShape)
+                            .background(Color(0xFF34C759)),
                 )
                 Text(
                     text = stringResource(R.string.assistant_online_status),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
         // 右侧「清空」玻璃药丸按钮
         Row(
-            modifier = Modifier
-                .height(Dimens.ChatAvatarSize + Dimens.SpaceXs)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                .clickable(onClick = onClearClick)
-                .padding(horizontal = Dimens.AssistantTopBarActionPad),
+            modifier =
+                Modifier
+                    .height(Dimens.ChatAvatarSize + Dimens.SpaceXs)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                    .clickable(onClick = onClearClick)
+                    .padding(horizontal = Dimens.AssistantTopBarActionPad),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXs)
+            horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXs),
         ) {
             Icon(
                 imageVector = Icons.Filled.DeleteSweep,
                 contentDescription = stringResource(R.string.assistant_clear),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(Dimens.MessageMetaIcon + Dimens.ReceiptIconExtra)
+                modifier = Modifier.size(Dimens.MessageMetaIcon + Dimens.ReceiptIconExtra),
             )
             Text(
                 text = stringResource(R.string.assistant_clear),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

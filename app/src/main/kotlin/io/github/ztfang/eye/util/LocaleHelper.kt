@@ -18,21 +18,24 @@ import java.util.Locale
  * 2. Activity 中切换语言后调用 updateAppLocale() + recreate()
  */
 object LocaleHelper {
-
     private const val DEFAULT_LANGUAGE = "zh"
 
     /** 根据语言代码构建 Locale */
-    fun getLocale(languageCode: String): Locale = when (languageCode) {
-        "zh" -> Locale.SIMPLIFIED_CHINESE
-        "en" -> Locale.ENGLISH
-        else -> Locale.SIMPLIFIED_CHINESE
-    }
+    fun getLocale(languageCode: String): Locale =
+        when (languageCode) {
+            "zh" -> Locale.SIMPLIFIED_CHINESE
+            "en" -> Locale.ENGLISH
+            else -> Locale.SIMPLIFIED_CHINESE
+        }
 
     /**
      * 包装 Context，使其使用指定语言资源。
      * 在 Application.attachBaseContext() 中调用。
      */
-    fun wrap(context: Context, languageCode: String): Context {
+    fun wrap(
+        context: Context,
+        languageCode: String,
+    ): Context {
         val locale = getLocale(languageCode)
         Locale.setDefault(locale)
 
@@ -56,13 +59,17 @@ object LocaleHelper {
      */
     fun updateAppLocale(languageCode: String) {
         val locale = getLocale(languageCode)
-        AppCompatDelegate.setApplicationLocales(androidx.core.os.LocaleListCompat.create(locale))
+        AppCompatDelegate.setApplicationLocales(
+            androidx.core.os.LocaleListCompat
+                .create(locale),
+        )
     }
 
     /** 语言代码 → 显示名称 */
-    fun getDisplayName(languageCode: String): String = when (languageCode) {
-        "zh" -> "简体中文"
-        "en" -> "English"
-        else -> "简体中文"
-    }
+    fun getDisplayName(languageCode: String): String =
+        when (languageCode) {
+            "zh" -> "简体中文"
+            "en" -> "English"
+            else -> "简体中文"
+        }
 }

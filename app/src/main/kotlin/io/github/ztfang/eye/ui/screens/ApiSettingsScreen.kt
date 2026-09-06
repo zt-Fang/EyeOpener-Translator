@@ -17,11 +17,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -80,7 +79,7 @@ import java.net.URL
 @Composable
 fun ApiSettingsScreen(
     onBack: () -> Unit,
-    settingsViewModel: SettingsViewModel = hiltViewModel()
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
@@ -95,7 +94,11 @@ fun ApiSettingsScreen(
 
     var selectedProvider by rememberSaveable {
         mutableStateOf(
-            try { LLMProvider.valueOf(currentProvider) } catch (_: Exception) { LLMProvider.OPEN_AI }
+            try {
+                LLMProvider.valueOf(currentProvider)
+            } catch (_: Exception) {
+                LLMProvider.OPEN_AI
+            },
         )
     }
     var apiKey by rememberSaveable { mutableStateOf("") }
@@ -103,13 +106,14 @@ fun ApiSettingsScreen(
     var modelName by rememberSaveable { mutableStateOf("") }
 
     // 根据 provider 读取对应的 API Key（用于初始化和切换 provider 时回显）
-    fun keyFor(provider: LLMProvider): String = when (provider) {
-        LLMProvider.CLAUDE -> currentClaudeKey
-        else -> {
-            // 其他 provider 共用 openAiKey，但只在 openAiKeyProvider 匹配时才回显
-            if (currentOpenAiKeyProvider == provider.name) currentOpenAiKey else ""
+    fun keyFor(provider: LLMProvider): String =
+        when (provider) {
+            LLMProvider.CLAUDE -> currentClaudeKey
+            else -> {
+                // 其他 provider 共用 openAiKey，但只在 openAiKeyProvider 匹配时才回显
+                if (currentOpenAiKeyProvider == provider.name) currentOpenAiKey else ""
+            }
         }
-    }
 
     // 标记是否已从 DataStore 同步过初始值
     var initialized by rememberSaveable { mutableStateOf(false) }
@@ -117,7 +121,12 @@ fun ApiSettingsScreen(
     // 仅首次进入时同步 DataStore 中的值，保存后不重置用户输入
     LaunchedEffect(Unit) {
         if (!initialized) {
-            val provider = try { LLMProvider.valueOf(currentProvider) } catch (_: Exception) { LLMProvider.OPEN_AI }
+            val provider =
+                try {
+                    LLMProvider.valueOf(currentProvider)
+                } catch (_: Exception) {
+                    LLMProvider.OPEN_AI
+                }
             selectedProvider = provider
             apiUrl = currentApiUrl
             modelName = currentModelName
@@ -160,42 +169,47 @@ fun ApiSettingsScreen(
     var status by remember { mutableStateOf("") }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .imePadding(),
-        verticalArrangement = Arrangement.spacedBy(Dimens.PersonalizationSectionGap)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .imePadding(),
+        verticalArrangement = Arrangement.spacedBy(Dimens.PersonalizationSectionGap),
     ) {
         ApiSettingsTopBar(onBack = onBack)
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPaddingH),
-            verticalArrangement = Arrangement.spacedBy(Dimens.PersonalizationSectionGap)
+            verticalArrangement = Arrangement.spacedBy(Dimens.PersonalizationSectionGap),
         ) {
             // Provider
             ProviderSelector(
                 selected = selectedProvider,
-                onSelected = { selectedProvider = it }
+                onSelected = { selectedProvider = it },
             )
 
             ApiInputCard(
                 label = stringResource(R.string.api_key_label),
-                placeholder = when (selectedProvider) {
-                    LLMProvider.CLAUDE -> "sk-ant-..."
-                    LLMProvider.DEEP_SEEK -> "sk-..."
-                    else -> "sk-..."
-                },
+                placeholder =
+                    when (selectedProvider) {
+                        LLMProvider.CLAUDE -> "sk-ant-..."
+                        LLMProvider.DEEP_SEEK -> "sk-..."
+                        else -> "sk-..."
+                    },
                 value = apiKey,
                 onValueChange = { apiKey = it },
                 isPassword = true,
-                helperText = if (keyFor(selectedProvider).isNotBlank() && apiKey.isBlank())
-                    context.getString(R.string.api_key_already_configured)
-                else null
+                helperText =
+                    if (keyFor(selectedProvider).isNotBlank() && apiKey.isBlank()) {
+                        context.getString(R.string.api_key_already_configured)
+                    } else {
+                        null
+                    },
             )
             ApiInputCard(
                 label = stringResource(R.string.api_url_label),
                 placeholder = selectedProvider.defaultBaseUrl,
                 value = apiUrl,
-                onValueChange = { apiUrl = it }
+                onValueChange = { apiUrl = it },
             )
             // 模型名称卡：自由输入 + 「拉取」实时模型 + 内置预设三合一；
             // 列表优先展示 API 实时拉取结果，未拉取时展示内置预设（均为官网核实支持流式的模型）。
@@ -219,16 +233,20 @@ fun ApiSettingsScreen(
                             isFetchingModels = true
                             fetchNote = context.getString(R.string.api_model_fetching)
                             fetchNoteIsError = false
-                            settingsViewModel.fetchLlmModels(selectedProvider, apiUrl.trim(), apiKey.trim())
+                            settingsViewModel
+                                .fetchLlmModels(selectedProvider, apiUrl.trim(), apiKey.trim())
                                 .onSuccess { list ->
                                     fetchedModels = list
-                                    fetchNote = if (list.isEmpty()) context.getString(R.string.api_model_fetch_empty)
-                                    else context.getString(R.string.api_model_fetch_success, list.size)
+                                    fetchNote =
+                                        if (list.isEmpty()) {
+                                            context.getString(R.string.api_model_fetch_empty)
+                                        } else {
+                                            context.getString(R.string.api_model_fetch_success, list.size)
+                                        }
                                     fetchNoteIsError = false
                                     // 拉取成功自动展开列表，减少一次点击
                                     modelListExpanded = true
-                                }
-                                .onFailure { e ->
+                                }.onFailure { e ->
                                     // 拉取失败：保留内置预设，仅提示原因
                                     fetchNote = context.getString(R.string.api_model_fetch_failed, e.message ?: "")
                                     fetchNoteIsError = true
@@ -236,30 +254,50 @@ fun ApiSettingsScreen(
                             isFetchingModels = false
                         }
                     }
-                }
+                },
             )
 
             if (status.isNotEmpty()) {
                 Text(
                     text = status,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (status.contains(context.getString(R.string.api_saved).replace(" ✓", "")) || status.contains("成功")) Color(0xFF2EB89A) else Color(0xFFE53935),
+                    color =
+                        if (status.contains(context.getString(R.string.api_saved).replace(" ✓", "")) ||
+                            status.contains("成功")
+                        ) {
+                            Color(0xFF2EB89A)
+                        } else {
+                            Color(0xFFE53935)
+                        },
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
 
             Button(
                 onClick = {
-                    if (apiKey.isBlank()) { status = context.getString(R.string.api_enter_key); return@Button }
-                    if (apiUrl.isBlank()) { status = context.getString(R.string.api_enter_url); return@Button }
-                    if (modelName.isBlank()) { status = context.getString(R.string.api_enter_model); return@Button }
-                    isTesting = true; status = context.getString(R.string.api_testing)
+                    if (apiKey.isBlank()) {
+                        status = context.getString(R.string.api_enter_key)
+                        return@Button
+                    }
+                    if (apiUrl.isBlank()) {
+                        status = context.getString(R.string.api_enter_url)
+                        return@Button
+                    }
+                    if (modelName.isBlank()) {
+                        status = context.getString(R.string.api_enter_model)
+                        return@Button
+                    }
+                    isTesting = true
+                    status = context.getString(R.string.api_testing)
                     scope.launch {
-                        val err = testApi(
-                            apiUrl.trimEnd('/') + selectedProvider.chatPath,
-                            apiKey, modelName, selectedProvider
-                        )
+                        val err =
+                            testApi(
+                                apiUrl.trimEnd('/') + selectedProvider.chatPath,
+                                apiKey,
+                                modelName,
+                                selectedProvider,
+                            )
                         isTesting = false
                         if (err == null) {
                             when (selectedProvider) {
@@ -281,19 +319,23 @@ fun ApiSettingsScreen(
                 enabled = !isTesting,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(Dimens.CornerLg),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF1A73E8), contentColor = Color.White
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1A73E8),
+                        contentColor = Color.White,
+                    ),
             ) {
                 if (isTesting) {
                     CircularProgressIndicator(
-                        color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp)
+                        color = Color.White,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(20.dp),
                     )
                 } else {
                     Text(
                         stringResource(R.string.api_save),
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
@@ -306,7 +348,7 @@ fun ApiSettingsScreen(
                 text = stringResource(R.string.api_config_tip),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = Dimens.SpaceXs)
+                modifier = Modifier.padding(horizontal = Dimens.SpaceXs),
             )
             OutlinedButton(
                 onClick = {
@@ -324,12 +366,12 @@ fun ApiSettingsScreen(
                     status = context.getString(R.string.api_cleared)
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(Dimens.CornerLg)
+                shape = RoundedCornerShape(Dimens.CornerLg),
             ) {
                 Text(
                     text = stringResource(R.string.api_clear_config),
                     style = MaterialTheme.typography.labelLarge,
-                    color = Color(0xFFE53935)
+                    color = Color(0xFFE53935),
                 )
             }
         }
@@ -345,69 +387,31 @@ fun ApiSettingsScreen(
 @Composable
 private fun ProviderSelector(
     selected: LLMProvider,
-    onSelected: (LLMProvider) -> Unit
+    onSelected: (LLMProvider) -> Unit,
 ) {
     val corner = Dimens.SettingsCardCorner
     var expanded by remember { mutableStateOf(false) }
 
-    val triggerShape = if (expanded) RoundedCornerShape(corner, corner, 0.dp, 0.dp)
-    else RoundedCornerShape(corner)
+    val triggerShape =
+        if (expanded) {
+            RoundedCornerShape(corner, corner, 0.dp, 0.dp)
+        } else {
+            RoundedCornerShape(corner)
+        }
     val panelShape = RoundedCornerShape(0.dp, 0.dp, corner, corner)
 
     Column(modifier = Modifier.fillMaxWidth()) {
         // 触发框
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .shadow(
-                    if (expanded) 0.dp else Dimens.GlassShadowElevation,
-                    triggerShape,
-                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
-                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f)
-                )
-                .clip(triggerShape)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
-                .border(
-                    BorderStroke(
-                        1.dp,
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.White.copy(alpha = Dimens.GlassHighlightAlpha),
-                                Color.White.copy(alpha = 0.15f)
-                            )
-                        )
-                    ), triggerShape
-                )
-                .clickable { expanded = !expanded }
-        ) {
-            Row(
-                modifier = Modifier
+            modifier =
+                Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.api_provider, selected.displayName),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium
-                )
-                Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp
-                    else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        // 下拉面板：与触发框无缝拼接，底部 20dp 圆角
-        if (expanded) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(panelShape)
+                    .shadow(
+                        if (expanded) 0.dp else Dimens.GlassShadowElevation,
+                        triggerShape,
+                        ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
+                        spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f),
+                    ).clip(triggerShape)
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
                     .border(
                         BorderStroke(
@@ -415,50 +419,108 @@ private fun ProviderSelector(
                             Brush.verticalGradient(
                                 listOf(
                                     Color.White.copy(alpha = Dimens.GlassHighlightAlpha),
-                                    Color.White.copy(alpha = 0.15f)
-                                )
-                            )
-                        ), panelShape
-                    )
+                                    Color.White.copy(alpha = 0.15f),
+                                ),
+                            ),
+                        ),
+                        triggerShape,
+                    ).clickable { expanded = !expanded },
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.api_provider, selected.displayName),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                )
+                Icon(
+                    imageVector =
+                        if (expanded) {
+                            Icons.Default.KeyboardArrowUp
+                        } else {
+                            Icons.Default.KeyboardArrowDown
+                        },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        // 下拉面板：与触发框无缝拼接，底部 20dp 圆角
+        if (expanded) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(panelShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                        .border(
+                            BorderStroke(
+                                1.dp,
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.White.copy(alpha = Dimens.GlassHighlightAlpha),
+                                        Color.White.copy(alpha = 0.15f),
+                                    ),
+                                ),
+                            ),
+                            panelShape,
+                        ),
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        // 必须限高：本面板嵌在整页 verticalScroll 内，外层会传下无限高度约束，
-                        // 内层 verticalScroll 收到无限高度会直接抛 IllegalStateException（点击展开即闪退）
-                        .heightIn(max = 420.dp)
-                        .verticalScroll(rememberScrollState())
-                        .padding(vertical = Dimens.SpaceXs)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            // 必须限高：本面板嵌在整页 verticalScroll 内，外层会传下无限高度约束，
+                            // 内层 verticalScroll 收到无限高度会直接抛 IllegalStateException（点击展开即闪退）
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(vertical = Dimens.SpaceXs),
                 ) {
                     LLMProvider.entries.forEach { provider ->
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onSelected(provider)
-                                    expanded = false
-                                }
-                                .padding(
-                                    horizontal = Dimens.SettingsRowPaddingH,
-                                    vertical = Dimens.SpaceMd
-                                ),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onSelected(provider)
+                                        expanded = false
+                                    }.padding(
+                                        horizontal = Dimens.SettingsRowPaddingH,
+                                        vertical = Dimens.SpaceMd,
+                                    ),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)
+                            horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
                         ) {
                             Text(
                                 text = provider.displayName,
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = if (provider == selected) Color(0xFF1A73E8)
-                                else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (provider == selected) FontWeight.SemiBold
-                                else FontWeight.Normal
+                                color =
+                                    if (provider == selected) {
+                                        Color(0xFF1A73E8)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                fontWeight =
+                                    if (provider == selected) {
+                                        FontWeight.SemiBold
+                                    } else {
+                                        FontWeight.Normal
+                                    },
                             )
                             if (provider == selected) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
                                     tint = Color(0xFF1A73E8),
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(18.dp),
                                 )
                             }
                         }
@@ -490,78 +552,98 @@ private fun ModelInputCard(
     isFetching: Boolean,
     note: String?,
     noteIsError: Boolean,
-    onFetch: () -> Unit
+    onFetch: () -> Unit,
 ) {
     val shape = RoundedCornerShape(Dimens.SettingsCardCorner)
     Box(
-        modifier = Modifier.fillMaxWidth()
-            .shadow(Dimens.GlassShadowElevation, shape = shape,
-                ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
-                spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f))
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
-            .border(BorderStroke(1.dp, Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f))
-            )), shape = shape)
-            .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .shadow(
+                    Dimens.GlassShadowElevation,
+                    shape = shape,
+                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
+                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f),
+                ).clip(shape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                .border(
+                    BorderStroke(
+                        1.dp,
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f)),
+                        ),
+                    ),
+                    shape = shape,
+                ).padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
     ) {
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)) {
             // 标题行：label + 「拉取」按钮
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(label, style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 // 拉取按钮：实时请求服务商 /models 接口
                 Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(Dimens.CornerMd))
-                        .clickable(enabled = !isFetching, onClick = onFetch)
-                        .padding(horizontal = Dimens.SpaceXs, vertical = 2.dp),
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(Dimens.CornerMd))
+                            .clickable(enabled = !isFetching, onClick = onFetch)
+                            .padding(horizontal = Dimens.SpaceXs, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     if (isFetching) {
                         CircularProgressIndicator(
-                            color = Color(0xFF1A73E8), strokeWidth = 2.dp,
-                            modifier = Modifier.size(14.dp)
+                            color = Color(0xFF1A73E8),
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(14.dp),
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = null,
                             tint = Color(0xFF1A73E8),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(16.dp),
                         )
                     }
                     Text(
                         text = stringResource(R.string.api_model_fetch),
                         style = MaterialTheme.typography.labelMedium,
                         color = Color(0xFF1A73E8),
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
 
             // 模型名自由输入框
             OutlinedTextField(
-                value = value, onValueChange = onValueChange,
+                value = value,
+                onValueChange = onValueChange,
                 placeholder = {
-                    Text(placeholder, style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
+                    Text(
+                        placeholder,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    )
                 },
                 shape = RoundedCornerShape(Dimens.CornerMd),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF1A73E8),
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                    cursorColor = Color(0xFF1A73E8),
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent
-                ),
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF1A73E8),
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        cursorColor = Color(0xFF1A73E8),
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                    ),
                 textStyle = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
 
             // 拉取状态/错误提示行
@@ -570,72 +652,90 @@ private fun ModelInputCard(
                     text = note,
                     style = MaterialTheme.typography.bodySmall,
                     color = if (noteIsError) Color(0xFFE53935) else Color(0xFF2EB89A),
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
             }
 
             // 可选模型列表（就地展开，点选填入输入框）
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onExpandedChange(!expanded) }
-                    .padding(vertical = 2.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onExpandedChange(!expanded) }
+                        .padding(vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = if (models.isEmpty()) stringResource(R.string.api_model_fetch_empty_hint)
-                    else stringResource(R.string.api_model_preset_hint),
+                    text =
+                        if (models.isEmpty()) {
+                            stringResource(R.string.api_model_fetch_empty_hint)
+                        } else {
+                            stringResource(R.string.api_model_preset_hint)
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 Spacer(modifier = Modifier.width(Dimens.SpaceSm))
                 Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp
-                    else Icons.Default.KeyboardArrowDown,
+                    imageVector =
+                        if (expanded) {
+                            Icons.Default.KeyboardArrowUp
+                        } else {
+                            Icons.Default.KeyboardArrowDown
+                        },
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             if (expanded && models.isNotEmpty()) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        // 必须限高：本卡嵌在整页 verticalScroll 内，外层传下无限高度约束，
-                        // 内层 verticalScroll 收到无限高度会抛 IllegalStateException（展开即闪退）
-                        .heightIn(max = 360.dp)
-                        .verticalScroll(rememberScrollState())
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            // 必须限高：本卡嵌在整页 verticalScroll 内，外层传下无限高度约束，
+                            // 内层 verticalScroll 收到无限高度会抛 IllegalStateException（展开即闪退）
+                            .heightIn(max = 360.dp)
+                            .verticalScroll(rememberScrollState()),
                 ) {
                     models.forEachIndexed { index, m ->
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onValueChange(m)
-                                    onExpandedChange(false)
-                                }
-                                .padding(vertical = Dimens.SpaceSm),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onValueChange(m)
+                                        onExpandedChange(false)
+                                    }.padding(vertical = Dimens.SpaceSm),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)
+                            horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
                         ) {
                             Text(
                                 text = m,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (m == value) Color(0xFF1A73E8)
-                                else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (m == value) FontWeight.SemiBold
-                                else FontWeight.Normal,
-                                maxLines = 1
+                                color =
+                                    if (m == value) {
+                                        Color(0xFF1A73E8)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                fontWeight =
+                                    if (m == value) {
+                                        FontWeight.SemiBold
+                                    } else {
+                                        FontWeight.Normal
+                                    },
+                                maxLines = 1,
                             )
                             if (m == value) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
                                     tint = Color(0xFF1A73E8),
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(18.dp),
                                 )
                             }
                         }
@@ -650,72 +750,100 @@ private fun ModelInputCard(
 }
 
 private suspend fun testApi(
-    url: String, key: String, model: String, provider: LLMProvider
-): String? = withContext(Dispatchers.IO) {
-    try {
-        val body = """{"model":"$model","messages":[{"role":"user","content":"hi"}],"max_tokens":5}"""
-        val conn = URL(url).openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"; conn.doOutput = true
-        conn.setRequestProperty("Content-Type", "application/json")
-        when (provider) {
-            LLMProvider.CLAUDE -> {
-                conn.setRequestProperty("x-api-key", key)
-                conn.setRequestProperty("anthropic-version", "2023-06-01")
+    url: String,
+    key: String,
+    model: String,
+    provider: LLMProvider,
+): String? =
+    withContext(Dispatchers.IO) {
+        try {
+            val body = """{"model":"$model","messages":[{"role":"user","content":"hi"}],"max_tokens":5}"""
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            when (provider) {
+                LLMProvider.CLAUDE -> {
+                    conn.setRequestProperty("x-api-key", key)
+                    conn.setRequestProperty("anthropic-version", "2023-06-01")
+                }
+                else -> conn.setRequestProperty("Authorization", "Bearer $key")
             }
-            else -> conn.setRequestProperty("Authorization", "Bearer $key")
+            conn.outputStream.write(body.toByteArray(Charsets.UTF_8))
+            val code = conn.responseCode
+            if (code == 200) null else "HTTP $code"
+        } catch (e: Exception) {
+            e.message ?: "连接失败"
         }
-        conn.outputStream.write(body.toByteArray(Charsets.UTF_8))
-        val code = conn.responseCode
-        if (code == 200) null else "HTTP $code"
-    } catch (e: Exception) { e.message ?: "连接失败" }
-}
+    }
 
 @Composable
 private fun ApiInputCard(
-    label: String, placeholder: String, value: String,
-    onValueChange: (String) -> Unit, isPassword: Boolean = false,
-    helperText: String? = null
+    label: String,
+    placeholder: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    isPassword: Boolean = false,
+    helperText: String? = null,
 ) {
     val shape = RoundedCornerShape(Dimens.SettingsCardCorner)
     Box(
-        modifier = Modifier.fillMaxWidth()
-            .shadow(Dimens.GlassShadowElevation, shape = shape,
-                ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
-                spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f))
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
-            .border(BorderStroke(1.dp, Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f))
-            )), shape = shape)
-            .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .shadow(
+                    Dimens.GlassShadowElevation,
+                    shape = shape,
+                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
+                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f),
+                ).clip(shape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                .border(
+                    BorderStroke(
+                        1.dp,
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f)),
+                        ),
+                    ),
+                    shape = shape,
+                ).padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
     ) {
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)) {
-            Text(label, style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+            )
             OutlinedTextField(
-                value = value, onValueChange = onValueChange,
+                value = value,
+                onValueChange = onValueChange,
                 placeholder = {
-                    Text(placeholder, style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
+                    Text(
+                        placeholder,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    )
                 },
                 visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
                 shape = RoundedCornerShape(Dimens.CornerMd),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF1A73E8),
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                    cursorColor = Color(0xFF1A73E8),
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent
-                ),
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF1A73E8),
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        cursorColor = Color(0xFF1A73E8),
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                    ),
                 textStyle = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
             if (helperText != null) {
                 Text(
                     text = helperText,
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF2EB89A),
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
             }
         }
@@ -725,25 +853,35 @@ private fun ApiInputCard(
 @Composable
 private fun ApiSettingsTopBar(onBack: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(Dimens.PersonalizationTopBarHeight)
-            .padding(horizontal = Dimens.SpaceXs),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(Dimens.PersonalizationTopBarHeight)
+                .padding(horizontal = Dimens.SpaceXs),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier.size(Dimens.TopAppBarIconBox).clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                .clickable(onClick = onBack),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(Dimens.TopAppBarIconBox)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                    .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack,
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = stringResource(R.string.api_back_cd),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp))
+                modifier = Modifier.size(22.dp),
+            )
         }
         Spacer(Modifier.width(Dimens.SpaceSm))
-        Text(stringResource(R.string.api_title),
+        Text(
+            stringResource(R.string.api_title),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground)
+            color = MaterialTheme.colorScheme.onBackground,
+        )
     }
 }

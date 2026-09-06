@@ -12,7 +12,5 @@ data class VadResult(
         return hasSpeech == other.hasSpeech && audioData.contentEquals(other.audioData)
     }
 
-    override fun hashCode(): Int {
-        return hasSpeech.hashCode() * 31 + audioData.contentHashCode()
-    }
+    override fun hashCode(): Int = hasSpeech.hashCode() * 31 + audioData.contentHashCode()
 }

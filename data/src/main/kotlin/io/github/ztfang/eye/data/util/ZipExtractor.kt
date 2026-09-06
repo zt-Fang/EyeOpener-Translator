@@ -8,12 +8,15 @@ import java.util.zip.ZipInputStream
 
 /** zip 解压（Vosk 模型包） */
 object ZipExtractor {
-
     private const val TAG = "ZipExtractor"
 
     /** 解压 zip 到 destDir；stripTopLevelDir=true 时去掉 zip 内顶层目录（Vosk zip 通常包一层） */
-    fun extract(zipFile: File, destDir: File, stripTopLevelDir: Boolean = true): Result<Unit> {
-        return runCatching {
+    fun extract(
+        zipFile: File,
+        destDir: File,
+        stripTopLevelDir: Boolean = true,
+    ): Result<Unit> =
+        runCatching {
             if (!zipFile.exists()) {
                 throw IOException("Zip file not found: ${zipFile.absolutePath}")
             }
@@ -53,5 +56,4 @@ object ZipExtractor {
         }.onFailure {
             Log.e(TAG, "Extract failed: ${it.message}", it)
         }
-    }
 }

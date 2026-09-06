@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<baseline version="1.0">
+    <file name="src/main/kotlin/io/github/ztfang/eye/engine/ModelPreparer.kt">
+        <error line="165" column="141" source="standard:max-line-length" />
+    </file>
+    <file name="src/main/kotlin/io/github/ztfang/eye/engine/asr/NativeAudioProcessor.kt">
+        <error line="12" column="17" source="standard:property-naming" />
+    </file>
+</baseline>

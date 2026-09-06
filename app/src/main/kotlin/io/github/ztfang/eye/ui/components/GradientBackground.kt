@@ -17,19 +17,22 @@ import androidx.compose.ui.graphics.Color
 @Composable
 fun GradientBackground(
     modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
-    val gradient = Brush.verticalGradient(
-        colorStops = arrayOf(
-            0.0f to Color(0xFFE8F1FF),  // 顶部:浅蓝
-            0.5f to Color(0xFFF4F8FF),  // 中段:过渡
-            1.0f to Color(0xFFFAFCFF),  // 底部:近白
+    val gradient =
+        Brush.verticalGradient(
+            colorStops =
+                arrayOf(
+                    0.0f to Color(0xFFE8F1FF), // 顶部:浅蓝
+                    0.5f to Color(0xFFF4F8FF), // 中段:过渡
+                    1.0f to Color(0xFFFAFCFF), // 底部:近白
+                ),
         )
-    )
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(gradient)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(gradient),
     ) {
         content()
     }

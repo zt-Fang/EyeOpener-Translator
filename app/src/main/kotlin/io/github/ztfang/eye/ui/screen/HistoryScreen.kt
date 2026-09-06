@@ -29,16 +29,16 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,7 +48,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -71,7 +70,7 @@ import java.util.Locale
 @Composable
 fun HistoryScreen(
     historyRepository: HistoryRepository,
-    onBack: () -> Unit
+    onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val records by historyRepository.getAllRecords().collectAsState(initial = emptyList())
@@ -83,11 +82,12 @@ fun HistoryScreen(
     // 清除全部确认弹窗：删除不可撤销，必须二次确认
     var pendingClearAll by remember { mutableStateOf(false) }
 
-    val filteredRecords = if (filterFavorite) {
-        records.filter { it.isFavorite }
-    } else {
-        records
-    }
+    val filteredRecords =
+        if (filterFavorite) {
+            records.filter { it.isFavorite }
+        } else {
+            records
+        }
 
     BackHandler { onBack() }
 
@@ -97,40 +97,41 @@ fun HistoryScreen(
             onBack = onBack,
             onClearAll = { pendingClearAll = true },
             // 用【总】记录数决定删除按钮可用性：收藏筛选下当前列表为空时，仍应能清除全部
-            recordCount = records.size
+            recordCount = records.size,
         )
 
         // 筛选/导出工具栏常驻：旧实现把它放在非空分支里，导致"收藏"筛选且无收藏时
         // 页面只剩空态图标，没有任何控件能切回"全部"，成为死胡同。
         HistoryToolbar(
-            modifier = Modifier.padding(
-                horizontal = Dimens.ScreenPaddingH,
-                vertical = Dimens.SpaceSm
-            ),
+            modifier =
+                Modifier.padding(
+                    horizontal = Dimens.ScreenPaddingH,
+                    vertical = Dimens.SpaceSm,
+                ),
             filterFavorite = filterFavorite,
             onFilterChange = { filterFavorite = it },
             onExportAll = { pendingExportAll = true },
-            recordCount = filteredRecords.size
+            recordCount = filteredRecords.size,
         )
 
         // ========== 记录列表区 ==========
         if (filteredRecords.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         Icons.Filled.CopyAll,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                     )
                     Spacer(modifier = Modifier.height(Dimens.SpaceMd))
                     Text(
                         text = stringResource(R.string.history_empty),
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                     )
                 }
             }
@@ -138,10 +139,11 @@ fun HistoryScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    horizontal = Dimens.ScreenPaddingH,
-                    vertical = Dimens.SpaceSm
-                )
+                contentPadding =
+                    androidx.compose.foundation.layout.PaddingValues(
+                        horizontal = Dimens.ScreenPaddingH,
+                        vertical = Dimens.SpaceSm,
+                    ),
             ) {
                 items(filteredRecords) { record ->
                     HistoryItem(
@@ -161,7 +163,7 @@ fun HistoryScreen(
                             CoroutineScope(Dispatchers.IO).launch {
                                 historyRepository.deleteRecord(record)
                             }
-                        }
+                        },
                     )
                 }
             }
@@ -184,7 +186,7 @@ fun HistoryScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingExportSingle = null }) { Text("Cancel") }
-            }
+            },
         )
     }
 
@@ -204,7 +206,7 @@ fun HistoryScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingExportAll = false }) { Text("Cancel") }
-            }
+            },
         )
     }
 
@@ -228,7 +230,7 @@ fun HistoryScreen(
                 TextButton(onClick = { pendingClearAll = false }) {
                     Text(stringResource(R.string.common_cancel))
                 }
-            }
+            },
         )
     }
 }
@@ -238,27 +240,33 @@ fun HistoryScreen(
  * 与个性化设置页等其他设置页风格一致。
  */
 @Composable
-private fun HistoryTopBar(onBack: () -> Unit, onClearAll: () -> Unit, recordCount: Int) {
+private fun HistoryTopBar(
+    onBack: () -> Unit,
+    onClearAll: () -> Unit,
+    recordCount: Int,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(Dimens.PersonalizationTopBarHeight)
-            .padding(horizontal = Dimens.SpaceXs),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(Dimens.PersonalizationTopBarHeight)
+                .padding(horizontal = Dimens.SpaceXs),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier
-                .size(Dimens.TopAppBarIconBox)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                .clickable(onClick = onBack),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(Dimens.TopAppBarIconBox)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                    .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = stringResource(R.string.history_back_cd),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(22.dp),
             )
         }
         Spacer(Modifier.width(Dimens.SpaceSm))
@@ -267,22 +275,23 @@ private fun HistoryTopBar(onBack: () -> Unit, onClearAll: () -> Unit, recordCoun
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         if (recordCount > 0) {
             Box(
-                modifier = Modifier
-                    .size(Dimens.TopAppBarIconBox)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                    .clickable(onClick = onClearAll),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(Dimens.TopAppBarIconBox)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                        .clickable(onClick = onClearAll),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Delete,
                     contentDescription = "Clear all",
                     tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
@@ -299,70 +308,81 @@ private fun HistoryToolbar(
     onFilterChange: (Boolean) -> Unit,
     onExportAll: () -> Unit,
     recordCount: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = "$recordCount records",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Spacer(modifier = Modifier.height(Dimens.SpaceSm))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Button(
                 onClick = { onFilterChange(false) },
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (!filterFavorite)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.surfaceVariant
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor =
+                            if (!filterFavorite) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                    ),
             ) {
                 Text(
                     stringResource(R.string.history_filter_all),
-                    color = if (!filterFavorite)
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurface,
-                    fontSize = 14.sp
+                    color =
+                        if (!filterFavorite) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    fontSize = 14.sp,
                 )
             }
             Button(
                 onClick = { onFilterChange(true) },
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (filterFavorite)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.surfaceVariant
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor =
+                            if (filterFavorite) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                    ),
             ) {
                 Text(
                     stringResource(R.string.history_filter_favorite),
-                    color = if (filterFavorite)
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurface,
-                    fontSize = 14.sp
+                    color =
+                        if (filterFavorite) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    fontSize = 14.sp,
                 )
             }
             Button(
                 onClick = onExportAll,
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                    ),
             ) {
                 Text(stringResource(R.string.history_export), color = MaterialTheme.colorScheme.onPrimary, fontSize = 14.sp)
             }
@@ -376,34 +396,34 @@ fun HistoryItem(
     onFavorite: () -> Unit,
     onCopy: () -> Unit,
     onExport: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         shadowElevation = 2.dp,
-        color = MaterialTheme.colorScheme.surface
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Column(modifier = Modifier.padding(Dimens.SpaceMd)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = formatTime(record.timestamp),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(
                     onClick = onFavorite,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(32.dp),
                 ) {
                     Icon(
                         if (record.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                         contentDescription = stringResource(R.string.history_favorite),
                         modifier = Modifier.size(18.dp),
-                        tint = if (record.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (record.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -416,7 +436,7 @@ fun HistoryItem(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 3,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
 
             // 译文
@@ -430,7 +450,7 @@ fun HistoryItem(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
 
@@ -439,16 +459,28 @@ fun HistoryItem(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onCopy, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.CopyAll, contentDescription = stringResource(R.string.history_copy), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        Icons.Filled.CopyAll,
+                        contentDescription = stringResource(R.string.history_copy),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 IconButton(onClick = onExport, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.Download, contentDescription = stringResource(R.string.history_export), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        Icons.Filled.Download,
+                        contentDescription = stringResource(R.string.history_export),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.history_delete), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = stringResource(R.string.history_delete),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -460,24 +492,31 @@ private fun formatTime(timestamp: Long): String {
     return sdf.format(timestamp)
 }
 
-private fun copyToClipboard(context: Context, text: String) {
+private fun copyToClipboard(
+    context: Context,
+    text: String,
+) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("translation", text))
     Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
 }
 
 /** 导出目录：getExternalFilesDir(null)/Exports/，须与 res/xml/file_paths.xml 的 exports 条目一致 */
-private fun exportDir(context: Context): File =
-    File(context.getExternalFilesDir(null), "Exports").apply { mkdirs() }
+private fun exportDir(context: Context): File = File(context.getExternalFilesDir(null), "Exports").apply { mkdirs() }
 
 /**
  * 生成可被外部应用读取的 content:// URI。
  * Android 7+ 直接用 Uri.fromFile 跨进程分享会抛 FileUriExposedException（导出必崩）。
  */
-private fun shareFileUri(context: Context, file: File): Uri =
-    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+private fun shareFileUri(
+    context: Context,
+    file: File,
+): Uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 
-private fun exportRecord(context: Context, record: HistoryRecord) {
+private fun exportRecord(
+    context: Context,
+    record: HistoryRecord,
+) {
     val text = """Source: ${record.sourceText}
 Translation: ${record.translatedText}
 Time: ${formatTime(record.timestamp)}
@@ -487,14 +526,18 @@ Time: ${formatTime(record.timestamp)}
     FileOutputStream(file).use { it.write(text.toByteArray()) }
     Toast.makeText(context, "Exported: $fileName", Toast.LENGTH_LONG).show()
 
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(shareFileUri(context, file), "text/plain")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
+    val intent =
+        Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(shareFileUri(context, file), "text/plain")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
     context.startActivity(Intent.createChooser(intent, "Open file"))
 }
 
-private fun exportAllRecords(context: Context, records: List<HistoryRecord>) {
+private fun exportAllRecords(
+    context: Context,
+    records: List<HistoryRecord>,
+) {
     val sb = StringBuilder()
     records.forEachIndexed { index, record ->
         sb.append("=== Record ${index + 1} ===\n")
@@ -509,9 +552,10 @@ private fun exportAllRecords(context: Context, records: List<HistoryRecord>) {
     FileOutputStream(file).use { it.write(sb.toString().toByteArray()) }
     Toast.makeText(context, "Exported ${records.size} records: $fileName", Toast.LENGTH_LONG).show()
 
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(shareFileUri(context, file), "text/plain")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
+    val intent =
+        Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(shareFileUri(context, file), "text/plain")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
     context.startActivity(Intent.createChooser(intent, "Open file"))
 }

@@ -45,79 +45,84 @@ import io.github.ztfang.eye.ui.theme.Dimens
 fun OverlayToggleCard(
     running: Boolean,
     onToggle: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val statusText = if (running) {
-        stringResource(R.string.overlay_status_running)
-    } else {
-        stringResource(R.string.overlay_status_stopped)
-    }
+    val statusText =
+        if (running) {
+            stringResource(R.string.overlay_status_running)
+        } else {
+            stringResource(R.string.overlay_status_stopped)
+        }
     val accentColor by animateColorAsState(
         targetValue = if (running) Color(0xFF1A73E8) else Color(0xFF8FA3BF),
         animationSpec = tween(durationMillis = 280),
-        label = "overlay-accent"
+        label = "overlay-accent",
     )
 
     GlassCard(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(Dimens.OverlayToggleHeight)
-            .clickable { onToggle(!running) },
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(Dimens.OverlayToggleHeight)
+                .clickable { onToggle(!running) },
         cornerRadius = Dimens.CornerXl,
-        contentPadding = Dimens.CardPadding
+        contentPadding = Dimens.CardPadding,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier
-                    .size(Dimens.OverlayToggleIconBox)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                accentColor,
-                                accentColor.copy(alpha = 0.65f),
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(Dimens.OverlayToggleIconBox)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors =
+                                    listOf(
+                                        accentColor,
+                                        accentColor.copy(alpha = 0.65f),
+                                    ),
+                            ),
+                        ),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Subtitles,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(Dimens.OverlayToggleIcon)
+                    modifier = Modifier.size(Dimens.OverlayToggleIcon),
                 )
             }
             Spacer(modifier = Modifier.width(Dimens.SpaceMd))
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Center,
             ) {
                 Text(
                     text = stringResource(R.string.overlay_toggle_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
                 Spacer(modifier = Modifier.height(Dimens.SpaceXxs))
                 Text(
                     text = "$statusText · ${stringResource(R.string.overlay_toggle_hint)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Switch(
                 checked = running,
                 onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = Color(0xFF1A73E8),
-                    uncheckedThumbColor = Color.White,
-                    uncheckedTrackColor = Color(0xFFB8C2D1),
-                )
+                colors =
+                    SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFF1A73E8),
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = Color(0xFFB8C2D1),
+                    ),
             )
         }
     }

@@ -7,5 +7,5 @@ data class TranslationResult(
     val sourceLanguage: String,
     val targetLanguage: String,
     val engine: TranslationEngine,
-    val isFinal: Boolean = false     // false = 临时翻译
+    val isFinal: Boolean = false, // false = 临时翻译
 )

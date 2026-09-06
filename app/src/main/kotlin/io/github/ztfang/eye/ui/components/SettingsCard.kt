@@ -33,33 +33,34 @@ fun SettingsCard(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = Dimens.SettingsCardCorner,
     contentPadding: Dp = Dimens.SettingsCardPadding,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(cornerRadius)
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = Dimens.GlassShadowElevation,
-                shape = shape,
-                ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
-                spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f),
-            )
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
-            .border(
-                BorderStroke(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = Dimens.GlassHighlightAlpha),
-                            Color.White.copy(alpha = 0.15f),
-                        )
-                    )
-                ),
-                shape = shape
-            )
-            .padding(contentPadding)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .shadow(
+                    elevation = Dimens.GlassShadowElevation,
+                    shape = shape,
+                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
+                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f),
+                ).clip(shape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                .border(
+                    BorderStroke(
+                        width = 1.dp,
+                        brush =
+                            Brush.verticalGradient(
+                                colors =
+                                    listOf(
+                                        Color.White.copy(alpha = Dimens.GlassHighlightAlpha),
+                                        Color.White.copy(alpha = 0.15f),
+                                    ),
+                            ),
+                    ),
+                    shape = shape,
+                ).padding(contentPadding),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             content()

@@ -9,11 +9,11 @@ import org.junit.Test
 
 /** SherpaOnnxModel 枚举与语言集合的完整性测试。 */
 class SherpaOnnxModelTest {
-
     @Test
     fun `NEMOTRON_LANGUAGES contains ready plus broad`() {
-        val expected = SherpaOnnxModel.NEMOTRON_READY_LANGUAGES +
-            SherpaOnnxModel.NEMOTRON_BROAD_LANGUAGES
+        val expected =
+            SherpaOnnxModel.NEMOTRON_READY_LANGUAGES +
+                SherpaOnnxModel.NEMOTRON_BROAD_LANGUAGES
         assertEquals(expected, SherpaOnnxModel.NEMOTRON_LANGUAGES)
     }
 
@@ -75,7 +75,7 @@ class SherpaOnnxModelTest {
         assertEquals(SherpaOnnxModel.BN_VOSK_2026_02_09, SherpaOnnxModel.DEFAULT_BN)
         assertEquals(
             SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8,
-            SherpaOnnxModel.DEFAULT_MULTILINGUAL
+            SherpaOnnxModel.DEFAULT_MULTILINGUAL,
         )
     }
 

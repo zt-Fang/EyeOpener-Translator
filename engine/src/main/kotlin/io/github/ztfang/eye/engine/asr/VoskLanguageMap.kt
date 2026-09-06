@@ -9,23 +9,13 @@ object VoskLanguageMap {
 
     fun getAllSupported(): List<VoskLanguage> = VoskLanguage.getAll()
 
-    fun isMlKitSupported(code: String): Boolean {
-        return getByCode(code)?.mlkitSupported ?: false
-    }
+    fun isMlKitSupported(code: String): Boolean = getByCode(code)?.mlkitSupported ?: false
 
-    fun getModelName(code: String): String? {
-        return getByCode(code)?.modelName
-    }
+    fun getModelName(code: String): String? = getByCode(code)?.modelName
 
-    fun getModelUrl(code: String): String? {
-        return getByCode(code)?.modelUrl
-    }
+    fun getModelUrl(code: String): String? = getByCode(code)?.modelUrl
 
-    fun getSizeBytes(code: String): Long {
-        return getByCode(code)?.sizeBytes ?: 0L
-    }
+    fun getSizeBytes(code: String): Long = getByCode(code)?.sizeBytes ?: 0L
 
-    fun getDisplayName(code: String): String {
-        return getByCode(code)?.displayName ?: code
-    }
+    fun getDisplayName(code: String): String = getByCode(code)?.displayName ?: code
 }

@@ -278,13 +278,12 @@ enum class VoskLanguage(
         // 官方数据 58M
         sizeBytes = 58 * 1024 * 1024,
         mlkitSupported = true,
-    );
+    ),
+    ;
 
     companion object {
         /** 按语言代码查找枚举（不区分大小写） */
-        fun fromCode(code: String): VoskLanguage? {
-            return entries.find { it.code.equals(code, ignoreCase = true) }
-        }
+        fun fromCode(code: String): VoskLanguage? = entries.find { it.code.equals(code, ignoreCase = true) }
 
         /** 获取全部支持的语言列表 */
         fun getAll(): List<VoskLanguage> = entries.toList()

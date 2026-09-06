@@ -9,14 +9,13 @@ import io.github.ztfang.eye.R
 
 /**
  * 悬浮字幕运行时权限策略工具类。
- * 
+ *
  * Activity 层负责通过 Activity Result API 实际请求权限；本工具类仅检查状态并生成标准请求列表。
- * 
+ *
  * 无法在运行时授予且需要跳转设置页面的权限（如 SYSTEM_ALERT_WINDOW、MANAGE_EXTERNAL_STORAGE）
  * 不在此处理，直接调用 [Settings.canDrawOverlays] 等方法。
  */
 object PermissionHelper {
-
     /**
      * 当前 Android 版本下启动悬浮字幕所需的最小运行时权限列表。
      *
@@ -45,18 +44,21 @@ object PermissionHelper {
      * 权限说明字符串资源 ID，与 [requiredRuntimePermissions] 返回顺序一致，
      * 用于在请求权限前向用户展示说明。
      */
-    fun rationaleResIdFor(permission: String): Int = when (permission) {
-        Manifest.permission.RECORD_AUDIO ->
-            R.string.permission_rationale_record_audio
-        Manifest.permission.POST_NOTIFICATIONS ->
-            R.string.permission_rationale_post_notifications
-        else -> R.string.permission_rationale_generic
-    }
+    fun rationaleResIdFor(permission: String): Int =
+        when (permission) {
+            Manifest.permission.RECORD_AUDIO ->
+                R.string.permission_rationale_record_audio
+            Manifest.permission.POST_NOTIFICATIONS ->
+                R.string.permission_rationale_post_notifications
+            else -> R.string.permission_rationale_generic
+        }
 
     /**
      * 权限说明字符串，与 [requiredRuntimePermissions] 返回顺序一致，
      * 用于在请求权限前向用户展示说明。
      */
-    fun rationaleFor(context: Context, permission: String): String =
-        context.getString(rationaleResIdFor(permission))
+    fun rationaleFor(
+        context: Context,
+        permission: String,
+    ): String = context.getString(rationaleResIdFor(permission))
 }

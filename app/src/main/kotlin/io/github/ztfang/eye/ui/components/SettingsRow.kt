@@ -2,7 +2,6 @@ package io.github.ztfang.eye.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -49,15 +47,16 @@ fun SettingsRow(
     accent: AccentTone = AccentTone.Blue,
     value: String? = null,
     valueColor: Color? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(Dimens.SettingsRowHeight)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SettingsRowPaddingV),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(Dimens.SettingsRowHeight)
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SettingsRowPaddingV),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         AccentIconBox(icon = icon, tone = accent)
         Spacer(modifier = Modifier.size(Dimens.SettingsRowInternalGap))
@@ -66,13 +65,13 @@ fun SettingsRow(
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         if (value != null) {
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,
-                color = valueColor ?: MaterialTheme.colorScheme.onSurfaceVariant
+                color = valueColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.size(Dimens.SettingsValueTextGap))
         }
@@ -80,7 +79,7 @@ fun SettingsRow(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            modifier = Modifier.size(Dimens.SettingsChevronSize)
+            modifier = Modifier.size(Dimens.SettingsChevronSize),
         )
     }
 }
@@ -96,15 +95,16 @@ fun SettingsToggleRow(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     accent: AccentTone = AccentTone.Blue,
-    enabled: Boolean = true
+    enabled: Boolean = true,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(Dimens.SettingsRowHeight)
-            .clickable(enabled = enabled) { onCheckedChange(!checked) }
-            .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SettingsRowPaddingV),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(Dimens.SettingsRowHeight)
+                .clickable(enabled = enabled) { onCheckedChange(!checked) }
+                .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SettingsRowPaddingV),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         AccentIconBox(icon = icon, tone = accent)
         Spacer(modifier = Modifier.size(Dimens.SettingsRowInternalGap))
@@ -113,18 +113,19 @@ fun SettingsToggleRow(
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             enabled = enabled,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFF1A73E8),
-                uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = Color(0xFFB8C2D1),
-            )
+            colors =
+                SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = Color(0xFF1A73E8),
+                    uncheckedThumbColor = Color.White,
+                    uncheckedTrackColor = Color(0xFFB8C2D1),
+                ),
         )
     }
 }
@@ -133,7 +134,10 @@ fun SettingsToggleRow(
  * 7 种 pastel 主题色。所有图标盒都是同一种渐变风格(亮端 → 暗端),
  * 区别仅在色相,保证视觉一致。
  */
-enum class AccentTone(val start: Color, val end: Color) {
+enum class AccentTone(
+    val start: Color,
+    val end: Color,
+) {
     Blue(Color(0xFF4FA3FF), Color(0xFF1A73E8)),
     Purple(Color(0xFFB197FC), Color(0xFF8B7FD8)),
     Mint(Color(0xFF7FDCC4), Color(0xFF2EB89A)),
@@ -144,23 +148,27 @@ enum class AccentTone(val start: Color, val end: Color) {
 }
 
 @Composable
-private fun AccentIconBox(icon: ImageVector, tone: AccentTone) {
+private fun AccentIconBox(
+    icon: ImageVector,
+    tone: AccentTone,
+) {
     Box(
-        modifier = Modifier
-            .size(Dimens.SettingsIconBox)
-            .clip(RoundedCornerShape(Dimens.CornerSm))
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(tone.start, tone.end)
-                )
-            ),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(Dimens.SettingsIconBox)
+                .clip(RoundedCornerShape(Dimens.CornerSm))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(tone.start, tone.end),
+                    ),
+                ),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = Color.White,
-            modifier = Modifier.size(Dimens.SettingsIconSize)
+            modifier = Modifier.size(Dimens.SettingsIconSize),
         )
     }
 }

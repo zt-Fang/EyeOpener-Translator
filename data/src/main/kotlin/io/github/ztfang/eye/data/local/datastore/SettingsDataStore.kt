@@ -18,8 +18,9 @@ import kotlinx.coroutines.flow.map
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "eye_opener_settings")
 
 /** 设置持久化存储；API Key 等敏感字段经 [CryptoManager] 加密后存入 */
-class SettingsDataStore(private val context: Context) {
-
+class SettingsDataStore(
+    private val context: Context,
+) {
     /** 敏感字段加密器 */
     private val crypto = CryptoManager()
 
@@ -48,6 +49,7 @@ class SettingsDataStore(private val context: Context) {
     // ============ API Key（读取时自动解密） ============
     val openAiKey: Flow<String> = context.dataStore.data.map { crypto.decrypt(it[OPENAI_KEY] ?: "") }
     val claudeKey: Flow<String> = context.dataStore.data.map { crypto.decrypt(it[CLAUDE_KEY] ?: "") }
+
     // 记录哪个服务商配置了 openAiKey，用于显示时判断是否回显
     val openAiKeyProvider: Flow<String> = context.dataStore.data.map { it[OPENAI_KEY_PROVIDER] ?: "" }
 
@@ -56,26 +58,43 @@ class SettingsDataStore(private val context: Context) {
         Log.i(TAG, "写入设置: displayMode=$mode")
         context.dataStore.edit { it[DISPLAY_MODE] = mode }
     }
-    suspend fun setOverlayX(x: Int) { context.dataStore.edit { it[OVERLAY_X] = x } }
-    suspend fun setOverlayY(y: Int) { context.dataStore.edit { it[OVERLAY_Y] = y } }
-    suspend fun setOverlayWidth(width: Int) { context.dataStore.edit { it[OVERLAY_WIDTH] = width } }
-    suspend fun setOverlayHeight(height: Int) { context.dataStore.edit { it[OVERLAY_HEIGHT] = height } }
+
+    suspend fun setOverlayX(x: Int) {
+        context.dataStore.edit { it[OVERLAY_X] = x }
+    }
+
+    suspend fun setOverlayY(y: Int) {
+        context.dataStore.edit { it[OVERLAY_Y] = y }
+    }
+
+    suspend fun setOverlayWidth(width: Int) {
+        context.dataStore.edit { it[OVERLAY_WIDTH] = width }
+    }
+
+    suspend fun setOverlayHeight(height: Int) {
+        context.dataStore.edit { it[OVERLAY_HEIGHT] = height }
+    }
+
     suspend fun setSourceLang(code: String) {
         Log.i(TAG, "写入设置: sourceLanguage=$code")
         context.dataStore.edit { it[SOURCE_LANG] = code }
     }
+
     suspend fun setTargetLang(code: String) {
         Log.i(TAG, "写入设置: targetLanguage=$code")
         context.dataStore.edit { it[TARGET_LANG] = code }
     }
+
     suspend fun setTranslationEngine(engine: String) {
         Log.i(TAG, "写入设置: translationEngine=$engine")
         context.dataStore.edit { it[TRANSLATION_ENGINE] = engine }
     }
+
     suspend fun setCloudTranslationProvider(provider: String) {
         Log.i(TAG, "写入设置: cloudTranslationProvider=$provider")
         context.dataStore.edit { it[CLOUD_TRANSLATION_PROVIDER] = provider }
     }
+
     suspend fun setCloudTranslationApiKey(key: String) {
         context.dataStore.edit {
             it[CLOUD_TRANSLATION_API_KEY] = if (key.isBlank()) "" else crypto.encrypt(key)
@@ -85,9 +104,11 @@ class SettingsDataStore(private val context: Context) {
     suspend fun setOpenAiKey(key: String) {
         context.dataStore.edit { it[OPENAI_KEY] = if (key.isBlank()) "" else crypto.encrypt(key) }
     }
+
     suspend fun setClaudeKey(key: String) {
         context.dataStore.edit { it[CLAUDE_KEY] = if (key.isBlank()) "" else crypto.encrypt(key) }
     }
+
     suspend fun setOpenAiKeyProvider(provider: String) {
         context.dataStore.edit { it[OPENAI_KEY_PROVIDER] = provider }
     }
@@ -95,17 +116,21 @@ class SettingsDataStore(private val context: Context) {
     // ============ 个性化设置 ============
     // 颜色索引 0-5（对应 SwatchPalette 6 色），默认 1（蓝）
     val accentColorIndex: Flow<Int> = context.dataStore.data.map { it[ACCENT_COLOR_INDEX] ?: 1 }
+
     // 背景透明度 0..1，默认 0.75
     val backgroundTransparency: Flow<Float> = context.dataStore.data.map { it[BACKGROUND_TRANSPARENCY] ?: 0.75f }
+
     // 字体大小（sp，连续值 12f..32f），默认 18f
     val fontSize: Flow<Float> = context.dataStore.data.map { it[FONT_SIZE] ?: 18f }
 
     suspend fun setAccentColorIndex(index: Int) {
         context.dataStore.edit { it[ACCENT_COLOR_INDEX] = index.coerceIn(0, 5) }
     }
+
     suspend fun setBackgroundTransparency(value: Float) {
         context.dataStore.edit { it[BACKGROUND_TRANSPARENCY] = value.coerceIn(0f, 1f) }
     }
+
     suspend fun setFontSize(value: Float) {
         context.dataStore.edit { it[FONT_SIZE] = value.coerceIn(12f, 32f) }
     }
@@ -127,7 +152,8 @@ class SettingsDataStore(private val context: Context) {
         Log.i(TAG, "写入设置: interfaceLanguage=$language")
         context.dataStore.edit { it[INTERFACE_LANGUAGE] = language }
         // 同步写入 SharedPreferences，供 Application.attachBaseContext() 读取
-        context.getSharedPreferences("eye_opener_settings", Context.MODE_PRIVATE)
+        context
+            .getSharedPreferences("eye_opener_settings", Context.MODE_PRIVATE)
             .edit()
             .putString("interface_language", language)
             .apply()
@@ -138,14 +164,26 @@ class SettingsDataStore(private val context: Context) {
     val llmModel: Flow<String> = context.dataStore.data.map { it[LLM_MODEL] ?: "" }
     val llmProvider: Flow<String> = context.dataStore.data.map { it[LLM_PROVIDER] ?: "OPEN_AI" }
 
-    suspend fun setLlmUrl(v: String) { context.dataStore.edit { it[LLM_URL] = v } }
-    suspend fun setLlmModel(v: String) { context.dataStore.edit { it[LLM_MODEL] = v } }
-    suspend fun setLlmProvider(v: String) { context.dataStore.edit { it[LLM_PROVIDER] = v } }
+    suspend fun setLlmUrl(v: String) {
+        context.dataStore.edit { it[LLM_URL] = v }
+    }
+
+    suspend fun setLlmModel(v: String) {
+        context.dataStore.edit { it[LLM_MODEL] = v }
+    }
+
+    suspend fun setLlmProvider(v: String) {
+        context.dataStore.edit { it[LLM_PROVIDER] = v }
+    }
 
     // ============ 引导开关 ============
+
     /** 是否显示首次引导，默认 true（显示） */
     val showOnboarding: Flow<Boolean> = context.dataStore.data.map { it[SHOW_ONBOARDING] ?: true }
-    suspend fun setShowOnboarding(show: Boolean) { context.dataStore.edit { it[SHOW_ONBOARDING] = show } }
+
+    suspend fun setShowOnboarding(show: Boolean) {
+        context.dataStore.edit { it[SHOW_ONBOARDING] = show }
+    }
 
     companion object {
         private const val TAG = "SettingsDataStore"

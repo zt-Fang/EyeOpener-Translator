@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -45,25 +44,25 @@ fun LanguageSwitcher(
     onSourceClick: () -> Unit,
     onTargetClick: () -> Unit,
     onSwapClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)
+        horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
     ) {
         LanguageCard(
             label = sourceLabel,
             language = sourceSubtitle,
             onClick = onSourceClick,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         SwapButton(onClick = onSwapClick)
         LanguageCard(
             label = targetLabel,
             language = targetSubtitle,
             modifier = Modifier.weight(1f),
-            onClick = onTargetClick
+            onClick = onTargetClick,
         )
     }
 }
@@ -74,51 +73,53 @@ private fun LanguageCard(
     language: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = Dimens.CornerLg
+    cornerRadius: Dp = Dimens.CornerLg,
 ) {
     GlassCard(
-        modifier = modifier
-            .heightIn(min = Dimens.LanguageCardMinHeight)
-            .clickable(onClick = onClick),
+        modifier =
+            modifier
+                .heightIn(min = Dimens.LanguageCardMinHeight)
+                .clickable(onClick = onClick),
         cornerRadius = cornerRadius,
-        contentPadding = Dimens.SpaceMd
+        contentPadding = Dimens.SpaceMd,
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)
+            verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
         ) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(Dimens.LanguageCardFlagSize)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(
-                                        Color(0xFF1A73E8).copy(alpha = 0.85f),
-                                        Color(0xFF4FA3FF).copy(alpha = 0.85f),
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .size(Dimens.LanguageCardFlagSize)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            Color(0xFF1A73E8).copy(alpha = 0.85f),
+                                            Color(0xFF4FA3FF).copy(alpha = 0.85f),
+                                        ),
+                                    ),
+                                ),
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = language.take(1),
                             color = Color.White,
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
                         )
                     }
                     Text(
@@ -126,14 +127,14 @@ private fun LanguageCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1
+                        maxLines = 1,
                     )
                 }
                 Icon(
                     imageVector = Icons.Filled.ArrowDropDown,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(Dimens.SpaceLg)
+                    modifier = Modifier.size(Dimens.SpaceLg),
                 )
             }
         }
@@ -143,25 +144,25 @@ private fun LanguageCard(
 @Composable
 private fun SwapButton(onClick: () -> Unit) {
     Box(
-        modifier = Modifier
-            .size(Dimens.SwapButtonSize)
-            .clip(CircleShape)
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        Color(0xFF1A73E8),
-                        Color(0xFF4FA3FF),
-                    )
-                )
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(Dimens.SwapButtonSize)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0xFF1A73E8),
+                            Color(0xFF4FA3FF),
+                        ),
+                    ),
+                ).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = Icons.Filled.SwapHoriz,
             contentDescription = stringResource(R.string.language_swap_cd),
             tint = Color.White,
-            modifier = Modifier.size(Dimens.SwapButtonIcon)
+            modifier = Modifier.size(Dimens.SwapButtonIcon),
         )
     }
 }

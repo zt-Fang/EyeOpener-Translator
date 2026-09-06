@@ -51,10 +51,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.ztfang.eye.R
+import io.github.ztfang.eye.domain.model.AsrRoutingTable
 import io.github.ztfang.eye.domain.model.ModelCatalog
 import io.github.ztfang.eye.domain.model.ModelState
 import io.github.ztfang.eye.domain.model.ModelStatus
-import io.github.ztfang.eye.domain.model.AsrRoutingTable
 import io.github.ztfang.eye.domain.model.SherpaOnnxModel
 import io.github.ztfang.eye.domain.model.VoskLanguage
 import io.github.ztfang.eye.ui.theme.Dimens
@@ -81,7 +81,7 @@ private const val TAG_UI = "LocalModelsScreen"
 private data class PendingDelete(
     val modelName: String,
     val title: String,
-    val sizeText: String
+    val sizeText: String,
 )
 
 /**
@@ -94,7 +94,7 @@ private data class PendingDelete(
 fun LocalModelsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    settingsViewModel: SettingsViewModel = hiltViewModel()
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val allModels by settingsViewModel.allModels.collectAsStateWithLifecycle(emptyList())
     val downloadProgressMap by settingsViewModel.downloadProgressMap.collectAsStateWithLifecycle(emptyMap())
@@ -104,51 +104,67 @@ fun LocalModelsScreen(
 
     // 监听变化打日志（UI层可观测性，方便定位按钮不显示问题）
     androidx.compose.runtime.LaunchedEffect(allModels, downloadProgressMap) {
-        val summary = allModels.joinToString { "[${it.modelName}=${it.status.name}@${it.progress} localPathExists=${it.localPath?.let { p -> java.io.File(p).exists() }}]" }
+        val summary =
+            allModels.joinToString {
+                "[${it.modelName}=${it.status.name}@${it.progress} localPathExists=${it.localPath?.let { p ->
+                    java.io.File(p).exists()
+                }}]"
+            }
         Log.d(TAG_UI, "[UI_STATE] allModels=${allModels.size}: $summary")
-        Log.d(TAG_UI, "[UI_STATE] downloadProgressMap=${downloadProgressMap.size}: ${downloadProgressMap.keys.joinToString { "$it=${downloadProgressMap[it]?.fraction}" }}")
+        Log.d(
+            TAG_UI,
+            "[UI_STATE] downloadProgressMap=${downloadProgressMap.size}: ${downloadProgressMap.keys.joinToString {
+                "$it=${downloadProgressMap[it]?.fraction}"
+            }}",
+        )
     }
 
     // Vosk 列表仅保留 Sherpa-ONNX 未覆盖的语言（精确匹配，保留 en-in 等变体）
-    val voskLanguages = remember {
-        VoskLanguage.getAll().filter { it.code !in SHERPA_COVERED_LANGS }
-    }
+    val voskLanguages =
+        remember {
+            VoskLanguage.getAll().filter { it.code !in SHERPA_COVERED_LANGS }
+        }
     // 模型顺序：中英文 → 多语种 → 孟加拉语
-    val sherpaOnnxModels = remember {
-        settingsViewModel.getSherpaOnnxModels().sortedWith(compareBy {
-            when (it) {
-                SherpaOnnxModel.X_ASR_ZH_EN_960MS -> 0
-                SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8 -> 1
-                SherpaOnnxModel.BN_VOSK_2026_02_09 -> 2
-                else -> 99
-            }
-        })
-    }
+    val sherpaOnnxModels =
+        remember {
+            settingsViewModel.getSherpaOnnxModels().sortedWith(
+                compareBy {
+                    when (it) {
+                        SherpaOnnxModel.X_ASR_ZH_EN_960MS -> 0
+                        SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8 -> 1
+                        SherpaOnnxModel.BN_VOSK_2026_02_09 -> 2
+                        else -> 99
+                    }
+                },
+            )
+        }
 
     Column(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize(),
     ) {
         // 顶部栏：圆形玻璃返回按钮 + 标题
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(Dimens.PersonalizationTopBarHeight)
-                .padding(horizontal = Dimens.SpaceXs),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(Dimens.PersonalizationTopBarHeight)
+                    .padding(horizontal = Dimens.SpaceXs),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier
-                    .size(Dimens.TopAppBarIconBox)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                    .clickable(onClick = onBack),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(Dimens.TopAppBarIconBox)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                        .clickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.personalization_back_cd),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(22.dp),
                 )
             }
             Spacer(Modifier.width(Dimens.SpaceSm))
@@ -156,7 +172,7 @@ fun LocalModelsScreen(
                 text = stringResource(R.string.settings_row_local),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
             )
         }
 
@@ -164,17 +180,18 @@ fun LocalModelsScreen(
 
         // 网络提示：多语种模型需访问 HuggingFace
         Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Dimens.ScreenPaddingH),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Dimens.ScreenPaddingH),
             shape = RoundedCornerShape(Dimens.CornerMd),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
         ) {
             Text(
                 text = stringResource(R.string.local_model_huggingface_tip),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.padding(horizontal = Dimens.SpaceMd, vertical = Dimens.SpaceSm)
+                modifier = Modifier.padding(horizontal = Dimens.SpaceMd, vertical = Dimens.SpaceSm),
             )
         }
 
@@ -183,11 +200,12 @@ fun LocalModelsScreen(
         // 直接列出所有模型
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Dimens.ScreenPaddingH)
-                .weight(1f),
-            contentPadding = PaddingValues(bottom = Dimens.SpaceLg)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Dimens.ScreenPaddingH)
+                    .weight(1f),
+            contentPadding = PaddingValues(bottom = Dimens.SpaceLg),
         ) {
             // Sherpa-ONNX 系列模型
             items(sherpaOnnxModels) { model ->
@@ -200,42 +218,48 @@ fun LocalModelsScreen(
                 // 关键UI判断日志（SideEffect：每次组合成功后执行）
                 androidx.compose.runtime.SideEffect {
                     Log.d(TAG_UI, "[UI_SHERPA] ${model.modelId.take(30)}...: modelName=$modelName")
-                    Log.d(TAG_UI, "    allModels中是否存在=${modelState != null}" +
+                    Log.d(
+                        TAG_UI,
+                        "    allModels中是否存在=${modelState != null}" +
                             " status=${modelState?.status?.name} progress=${modelState?.progress}" +
                             " localPath=${modelState?.localPath}" +
-                            " localPath.exists=${modelState?.localPath?.let { File(it).exists() }}")
+                            " localPath.exists=${modelState?.localPath?.let { File(it).exists() }}",
+                    )
                     Log.d(TAG_UI, "    计算结果: isDownloaded=$isDownloaded  isDownloading=$isDownloading  progress=$progress")
                 }
 
                 // 每个模型独立配色：X-ASR 青绿、Nemotron NVIDIA绿、BN 橙黄
-                val (accentStart, accentEnd) = when (model) {
-                    SherpaOnnxModel.X_ASR_ZH_EN_960MS ->
-                        Color(0xFF4DD0E1) to Color(0xFF81C784)
-                    SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8 ->
-                        Color(0xFF76B900) to Color(0xFF4CAF50)
-                    SherpaOnnxModel.BN_VOSK_2026_02_09 ->
-                        Color(0xFFFFB74D) to Color(0xFFFF8A65)
-                    else ->
-                        Color(0xFF4DD0E1) to Color(0xFF81C784)
-                }
+                val (accentStart, accentEnd) =
+                    when (model) {
+                        SherpaOnnxModel.X_ASR_ZH_EN_960MS ->
+                            Color(0xFF4DD0E1) to Color(0xFF81C784)
+                        SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8 ->
+                            Color(0xFF76B900) to Color(0xFF4CAF50)
+                        SherpaOnnxModel.BN_VOSK_2026_02_09 ->
+                            Color(0xFFFFB74D) to Color(0xFFFF8A65)
+                        else ->
+                            Color(0xFF4DD0E1) to Color(0xFF81C784)
+                    }
                 // 标题国际化：X-ASR / Nemotron 走 strings.xml，BN 用原生孟加拉文
-                val modelTitle = when (model) {
-                    SherpaOnnxModel.X_ASR_ZH_EN_960MS ->
-                        stringResource(R.string.local_model_x_asr_name)
-                    SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8 ->
-                        stringResource(R.string.local_model_nemotron_name)
-                    else -> model.displayName
-                }
+                val modelTitle =
+                    when (model) {
+                        SherpaOnnxModel.X_ASR_ZH_EN_960MS ->
+                            stringResource(R.string.local_model_x_asr_name)
+                        SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8 ->
+                            stringResource(R.string.local_model_nemotron_name)
+                        else -> model.displayName
+                    }
                 // 副标题说明该模型负责的语种，避免用户下错（多语种不覆盖中英文）
-                val modelSubtitle = when (model) {
-                    SherpaOnnxModel.X_ASR_ZH_EN_960MS ->
-                        stringResource(R.string.local_model_subtitle_x_asr)
-                    SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8 ->
-                        stringResource(R.string.local_model_subtitle_nemotron)
-                    SherpaOnnxModel.BN_VOSK_2026_02_09 ->
-                        stringResource(R.string.local_model_subtitle_bn)
-                    else -> null
-                }
+                val modelSubtitle =
+                    when (model) {
+                        SherpaOnnxModel.X_ASR_ZH_EN_960MS ->
+                            stringResource(R.string.local_model_subtitle_x_asr)
+                        SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8 ->
+                            stringResource(R.string.local_model_subtitle_nemotron)
+                        SherpaOnnxModel.BN_VOSK_2026_02_09 ->
+                            stringResource(R.string.local_model_subtitle_bn)
+                        else -> null
+                    }
                 val sizeText = "${(model.sizeBytes / 1024 / 1024)} MB"
                 ModelRowItem(
                     title = modelTitle,
@@ -248,7 +272,7 @@ fun LocalModelsScreen(
                     progress = progress,
                     onDownload = { settingsViewModel.downloadSherpaOnnxModel(model.modelId) },
                     onCancel = { settingsViewModel.cancelModelDownload(modelName) },
-                    onDelete = { pendingDelete = PendingDelete(modelName, modelTitle, sizeText) }
+                    onDelete = { pendingDelete = PendingDelete(modelName, modelTitle, sizeText) },
                 )
             }
 
@@ -263,10 +287,13 @@ fun LocalModelsScreen(
                 // Vosk UI判断日志（SideEffect：每次组合成功后执行）
                 androidx.compose.runtime.SideEffect {
                     Log.d(TAG_UI, "[UI_VOSK] ${lang.code}: modelName=$modelName")
-                    Log.d(TAG_UI, "    allModels中是否存在=${modelState != null}" +
+                    Log.d(
+                        TAG_UI,
+                        "    allModels中是否存在=${modelState != null}" +
                             " status=${modelState?.status?.name} progress=${modelState?.progress}" +
                             " localPath=${modelState?.localPath}" +
-                            " localPath.exists=${modelState?.localPath?.let { File(it).exists() }}")
+                            " localPath.exists=${modelState?.localPath?.let { File(it).exists() }}",
+                    )
                     Log.d(TAG_UI, "    计算结果: isDownloaded=$isDownloaded  isDownloading=$isDownloading  progress=$progress")
                 }
 
@@ -281,7 +308,7 @@ fun LocalModelsScreen(
                     progress = progress,
                     onDownload = { settingsViewModel.downloadVoskModel(lang.code) },
                     onCancel = { settingsViewModel.cancelModelDownload(modelName) },
-                    onDelete = { pendingDelete = PendingDelete(modelName, lang.displayName, sizeText) }
+                    onDelete = { pendingDelete = PendingDelete(modelName, lang.displayName, sizeText) },
                 )
             }
         }
@@ -293,9 +320,12 @@ fun LocalModelsScreen(
             title = { Text(text = stringResource(R.string.local_model_delete_title)) },
             text = {
                 Text(
-                    text = stringResource(
-                        R.string.local_model_delete_msg, target.title, target.sizeText
-                    )
+                    text =
+                        stringResource(
+                            R.string.local_model_delete_msg,
+                            target.title,
+                            target.sizeText,
+                        ),
                 )
             },
             confirmButton = {
@@ -310,7 +340,7 @@ fun LocalModelsScreen(
                 TextButton(onClick = { pendingDelete = null }) {
                     Text(text = stringResource(R.string.common_cancel))
                 }
-            }
+            },
         )
     }
 }
@@ -356,18 +386,23 @@ private fun ModelState?.isInProgress(): Boolean {
 }
 
 /** HSV → Compose Color 转换 */
-private fun hsvToColor(h: Float, s: Float, v: Float): Color {
+private fun hsvToColor(
+    h: Float,
+    s: Float,
+    v: Float,
+): Color {
     val c = v * s
     val hp = h / 60f
     val x = c * (1 - abs(hp % 2 - 1))
-    val (r, g, b) = when (hp.toInt()) {
-        0 -> Triple(c, x, 0f)
-        1 -> Triple(x, c, 0f)
-        2 -> Triple(0f, c, x)
-        3 -> Triple(0f, x, c)
-        4 -> Triple(x, 0f, c)
-        else -> Triple(c, 0f, x)
-    }
+    val (r, g, b) =
+        when (hp.toInt()) {
+            0 -> Triple(c, x, 0f)
+            1 -> Triple(x, c, 0f)
+            2 -> Triple(0f, c, x)
+            3 -> Triple(0f, x, c)
+            4 -> Triple(x, 0f, c)
+            else -> Triple(c, 0f, x)
+        }
     val m = v - c
     return Color(r + m, g + m, b + m)
 }
@@ -387,40 +422,42 @@ private fun ModelRowItem(
     subtitle: String? = null,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(Dimens.CornerLg))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.85f),
-                        Color.White.copy(alpha = 0.15f),
-                    )
-                ),
-                shape = RoundedCornerShape(Dimens.CornerLg)
-            )
-            .padding(horizontal = Dimens.SpaceMd, vertical = Dimens.SpaceSm),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Dimens.CornerLg))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
+                .border(
+                    width = 1.dp,
+                    brush =
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.85f),
+                                Color.White.copy(alpha = 0.15f),
+                            ),
+                        ),
+                    shape = RoundedCornerShape(Dimens.CornerLg),
+                ).padding(horizontal = Dimens.SpaceMd, vertical = Dimens.SpaceSm),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // 左侧：语言图标 + 名称 + 大小
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         ) {
             Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(accentStart, accentEnd))),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Brush.linearGradient(listOf(accentStart, accentEnd))),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = if (downloaded) Icons.Filled.Check else Icons.Filled.Download,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
             }
             Spacer(modifier = Modifier.width(Dimens.SpaceSm))
@@ -429,7 +466,7 @@ private fun ModelRowItem(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
                 Spacer(modifier = Modifier.height(Dimens.SpaceXxs))
                 // 副标题（模型类型描述），无则显示大小；单行省略，避免挤压下载进度区
@@ -439,15 +476,19 @@ private fun ModelRowItem(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(modifier = Modifier.height(Dimens.SpaceXxs))
                 }
                 Text(
                     text = size,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (downloaded) accentEnd.copy(alpha = 0.75f)
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                    color =
+                        if (downloaded) {
+                            accentEnd.copy(alpha = 0.75f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                 )
             }
         }
@@ -456,14 +497,15 @@ private fun ModelRowItem(
         if (downloading) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.width(80.dp)
+                modifier = Modifier.width(80.dp),
             ) {
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(percent = 50)),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(percent = 50)),
                     color = accentEnd,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 )
@@ -471,50 +513,50 @@ private fun ModelRowItem(
                 Text(
                     text = "${(progress * 100).toInt()}%",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             // 取消按钮（下载中）
             IconButton(
                 onClick = onCancel,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(32.dp),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
                     contentDescription = stringResource(R.string.local_model_action_cancel),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
         } else {
             // 右侧：上下排列的按钮（下载 / 删除）
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXxs)
+                verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXxs),
             ) {
                 if (!downloaded) {
                     IconButton(
                         onClick = onDownload,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Download,
                             contentDescription = stringResource(R.string.local_model_action_download),
                             tint = accentEnd,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
                 if (downloaded) {
                     IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
                             contentDescription = stringResource(R.string.local_model_action_delete),
                             tint = Color(0xFFE57373),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }

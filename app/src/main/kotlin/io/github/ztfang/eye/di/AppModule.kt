@@ -2,8 +2,13 @@ package io.github.ztfang.eye.di
 
 import android.content.Context
 import androidx.room.Room
-import io.github.ztfang.eye.data.local.datastore.SettingsDataStore
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
 import io.github.ztfang.eye.data.local.database.AppDatabase
+import io.github.ztfang.eye.data.local.datastore.SettingsDataStore
 import io.github.ztfang.eye.data.repository.HistoryRepositoryImpl
 import io.github.ztfang.eye.data.repository.ModelRepositoryImpl
 import io.github.ztfang.eye.data.repository.SettingsRepositoryImpl
@@ -14,17 +19,11 @@ import io.github.ztfang.eye.domain.repository.HistoryRepository
 import io.github.ztfang.eye.domain.repository.ModelRepository
 import io.github.ztfang.eye.domain.repository.SettingsRepository
 import io.github.ztfang.eye.domain.usecase.translation.TranslateUseCase
-import io.github.ztfang.eye.engine.asr.SherpaOnnxAsrEngine
 import io.github.ztfang.eye.engine.asr.VoskAsrEngine
 import io.github.ztfang.eye.engine.translation.cloud.CloudTranslationEngine
 import io.github.ztfang.eye.engine.translation.llm.LLMTranslationEngine
 import io.github.ztfang.eye.engine.translation.mlkit.MlKitTranslationEngine
 import io.github.ztfang.eye.engine.vad.SileroVadEngine
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
@@ -38,16 +37,17 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-
     /** 提供 SettingsDataStore 单例，用于偏好设置存储 */
     @Provides @Singleton
-    fun provideSettingsDataStore(@ApplicationContext context: Context): SettingsDataStore
-        = SettingsDataStore(context)
+    fun provideSettingsDataStore(
+        @ApplicationContext context: Context,
+    ): SettingsDataStore = SettingsDataStore(context)
 
     /** 提供 ModelRepository 单例，管理模型文件下载与路径查询 */
     @Provides @Singleton
-    fun provideModelRepository(@ApplicationContext context: Context): ModelRepository
-        = ModelRepositoryImpl(context)
+    fun provideModelRepository(
+        @ApplicationContext context: Context,
+    ): ModelRepository = ModelRepositoryImpl(context)
 
     /** 提供 SettingsRepository 单例，封装 DataStore 读写接口 */
     @Provides @Singleton
@@ -61,14 +61,16 @@ object AppModule {
      * （schema 基线见 data/schemas/）。
      */
     @Provides @Singleton
-    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, "eye.db")
+    fun provideAppDatabase(
+        @ApplicationContext context: Context,
+    ): AppDatabase =
+        Room
+            .databaseBuilder(context, AppDatabase::class.java, "eye.db")
             .build()
 
     /** 提供 HistoryDao */
     @Provides @Singleton
-    fun provideHistoryDao(db: AppDatabase): io.github.ztfang.eye.data.local.dao.HistoryDao =
-        db.historyDao()
+    fun provideHistoryDao(db: AppDatabase): io.github.ztfang.eye.data.local.dao.HistoryDao = db.historyDao()
 
     /** 提供 HistoryRepository 单例 */
     @Provides @Singleton
@@ -89,16 +91,18 @@ object AppModule {
      */
     @Provides @Singleton
     fun provideOkHttpClient(): OkHttpClient {
-        val builder = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+        val builder =
+            OkHttpClient
+                .Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
         // 仅 DEBUG 构建开启详细日志（避免 release 泄露 API Key）
         if (io.github.ztfang.eye.BuildConfig.DEBUG) {
             builder.addInterceptor(
                 HttpLoggingInterceptor().apply {
                     level = HttpLoggingInterceptor.Level.HEADERS
-                }
+                },
             )
         }
         return builder.build()
@@ -114,11 +118,13 @@ object AppModule {
     fun provideTranslateUseCase(
         mlkit: MlKitTranslationEngine,
         cloud: CloudTranslationEngine,
-        ai: LLMTranslationEngine
-    ): TranslateUseCase = TranslateUseCase(mapOf(
-        TranslationEngine.LOCAL to mlkit,
-        TranslationEngine.CLOUD to cloud,
-        TranslationEngine.AI to ai
-    ))
+        ai: LLMTranslationEngine,
+    ): TranslateUseCase =
+        TranslateUseCase(
+            mapOf(
+                TranslationEngine.LOCAL to mlkit,
+                TranslationEngine.CLOUD to cloud,
+                TranslationEngine.AI to ai,
+            ),
+        )
 }
-

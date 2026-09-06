@@ -14,12 +14,11 @@ import javax.crypto.spec.GCMParameterSpec
  * 输出格式: Base64(IV + ciphertext + tag)；GCM 要求 IV 12 字节、tag 128 bit。
  */
 class CryptoManager {
-
     companion object {
         private const val KEY_ALIAS = "eye_opener_api_key"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
-        private const val GCM_IV_LENGTH = 12   // GCM 推荐 96 bit
+        private const val GCM_IV_LENGTH = 12 // GCM 推荐 96 bit
         private const val GCM_TAG_LENGTH = 128
     }
 
@@ -54,7 +53,7 @@ class CryptoManager {
             cipher.init(
                 Cipher.DECRYPT_MODE,
                 getSecretKey(),
-                GCMParameterSpec(GCM_TAG_LENGTH, iv)
+                GCMParameterSpec(GCM_TAG_LENGTH, iv),
             )
             String(cipher.doFinal(data), Charsets.UTF_8)
         } catch (e: Exception) {
@@ -66,27 +65,29 @@ class CryptoManager {
     /** Keystore 无密钥时生成 AES-256/GCM 密钥 */
     private fun ensureKeyExists() {
         if (keyStore.containsAlias(KEY_ALIAS)) return
-        val keyGenerator = KeyGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_AES,
-            ANDROID_KEYSTORE
-        )
-        keyGenerator.init(
-            KeyGenParameterSpec.Builder(
-                KEY_ALIAS,
-                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        val keyGenerator =
+            KeyGenerator.getInstance(
+                KeyProperties.KEY_ALGORITHM_AES,
+                ANDROID_KEYSTORE,
             )
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+        keyGenerator.init(
+            KeyGenParameterSpec
+                .Builder(
+                    KEY_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+                ).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
-                .build()
+                .build(),
         )
         keyGenerator.generateKey()
     }
 
     private fun getSecretKey(): SecretKey {
-        val entry = keyStore.getEntry(KEY_ALIAS, null)
-            as? KeyStore.SecretKeyEntry
-            ?: throw IllegalStateException("Keystore 密钥不存在: $KEY_ALIAS")
+        val entry =
+            keyStore.getEntry(KEY_ALIAS, null)
+                as? KeyStore.SecretKeyEntry
+                ?: throw IllegalStateException("Keystore 密钥不存在: $KEY_ALIAS")
         return entry.secretKey
     }
 }

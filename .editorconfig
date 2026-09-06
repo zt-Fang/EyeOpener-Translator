@@ -1,0 +1,5 @@
+root = true
+
+[*.{kt,kts}]
+# Compose 惯例：@Composable 函数允许大写驼峰命名，豁免 ktlint 函数命名检查
+ktlint_function_naming_ignore_when_annotated_with = Composable

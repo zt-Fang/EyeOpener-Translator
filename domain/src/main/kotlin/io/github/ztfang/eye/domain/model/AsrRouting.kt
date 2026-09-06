@@ -22,11 +22,10 @@ data class AsrRoute(
     val languageCode: String,
     val engine: AsrEngineType,
     /** Sherpa-ONNX 模型 ID；Vosk 兜底为 null */
-    val modelId: String?
+    val modelId: String?,
 )
 
 object AsrRoutingTable {
-
     /** X-ASR 覆盖语言（zh/en 共享同一模型） */
     private val X_ASR_LANGS = setOf("zh", "en")
 
@@ -39,29 +38,37 @@ object AsrRoutingTable {
             for (lang in X_ASR_LANGS) {
                 put(
                     lang,
-                    AsrRoute(lang, AsrEngineType.SHERPA_ONNX,
-                        SherpaOnnxModel.X_ASR_ZH_EN_960MS.modelId)
+                    AsrRoute(
+                        lang,
+                        AsrEngineType.SHERPA_ONNX,
+                        SherpaOnnxModel.X_ASR_ZH_EN_960MS.modelId,
+                    ),
                 )
             }
             put(
                 BN_LANG,
-                AsrRoute(BN_LANG, AsrEngineType.SHERPA_ONNX_BN,
-                    SherpaOnnxModel.BN_VOSK_2026_02_09.modelId)
+                AsrRoute(
+                    BN_LANG,
+                    AsrEngineType.SHERPA_ONNX_BN,
+                    SherpaOnnxModel.BN_VOSK_2026_02_09.modelId,
+                ),
             )
             for (lang in SherpaOnnxModel.NEMOTRON_LANGUAGES
                 .filter { it !in X_ASR_LANGS && it != BN_LANG }) {
                 put(
                     lang,
-                    AsrRoute(lang, AsrEngineType.SHERPA_ONNX_NEMOTRON,
-                        SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.modelId)
+                    AsrRoute(
+                        lang,
+                        AsrEngineType.SHERPA_ONNX_NEMOTRON,
+                        SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.modelId,
+                    ),
                 )
             }
         }
     }
 
     /** 某语言的完整路由；未显式声明的语言一律回退 Vosk */
-    fun forLanguage(code: String): AsrRoute =
-        explicitRoutes[code] ?: AsrRoute(code, AsrEngineType.VOSK, null)
+    fun forLanguage(code: String): AsrRoute = explicitRoutes[code] ?: AsrRoute(code, AsrEngineType.VOSK, null)
 
     /** 语言 → 引擎 */
     fun engineFor(code: String): AsrEngineType = forLanguage(code).engine

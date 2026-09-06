@@ -38,39 +38,41 @@ private val NeutralVariantDark = Color(0xFF49454F)
 private val NeutralVariantLight = Color(0xFFE7E0EC)
 
 // ---------- M3 ColorScheme ----------
-private val DarkColors = darkColorScheme(
-    primary = EyeBlue80,
-    onPrimary = NeutralDark,
-    primaryContainer = EyeBlue40,
-    onPrimaryContainer = NeutralLight,
-    secondary = EyeTeal80,
-    onSecondary = NeutralDark,
-    tertiary = EyeAmber80,
-    onTertiary = NeutralDark,
-    background = NeutralDark,
-    onBackground = NeutralLight,
-    surface = NeutralDark,
-    onSurface = NeutralLight,
-    surfaceVariant = NeutralVariantDark,
-    onSurfaceVariant = NeutralLight
-)
+private val DarkColors =
+    darkColorScheme(
+        primary = EyeBlue80,
+        onPrimary = NeutralDark,
+        primaryContainer = EyeBlue40,
+        onPrimaryContainer = NeutralLight,
+        secondary = EyeTeal80,
+        onSecondary = NeutralDark,
+        tertiary = EyeAmber80,
+        onTertiary = NeutralDark,
+        background = NeutralDark,
+        onBackground = NeutralLight,
+        surface = NeutralDark,
+        onSurface = NeutralLight,
+        surfaceVariant = NeutralVariantDark,
+        onSurfaceVariant = NeutralLight,
+    )
 
-private val LightColors = lightColorScheme(
-    primary = EyeBlue40,
-    onPrimary = NeutralLight,
-    primaryContainer = EyeBlue80,
-    onPrimaryContainer = NeutralDark,
-    secondary = EyeTeal40,
-    onSecondary = NeutralLight,
-    tertiary = EyeAmber40,
-    onTertiary = NeutralLight,
-    background = NeutralLight,
-    onBackground = NeutralDark,
-    surface = NeutralLight,
-    onSurface = NeutralDark,
-    surfaceVariant = NeutralVariantLight,
-    onSurfaceVariant = NeutralDark
-)
+private val LightColors =
+    lightColorScheme(
+        primary = EyeBlue40,
+        onPrimary = NeutralLight,
+        primaryContainer = EyeBlue80,
+        onPrimaryContainer = NeutralDark,
+        secondary = EyeTeal40,
+        onSecondary = NeutralLight,
+        tertiary = EyeAmber40,
+        onTertiary = NeutralLight,
+        background = NeutralLight,
+        onBackground = NeutralDark,
+        surface = NeutralLight,
+        onSurface = NeutralDark,
+        surfaceVariant = NeutralVariantLight,
+        onSurfaceVariant = NeutralDark,
+    )
 
 /**
  * App 全局主题入口。
@@ -82,21 +84,25 @@ private val LightColors = lightColorScheme(
 fun EyeTheme(
     darkTheme: Boolean? = null,
     dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val resolvedDark = darkTheme ?: isSystemInDarkTheme()
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (resolvedDark) dynamicDarkColorScheme(context)
-            else dynamicLightColorScheme(context)
+    val colorScheme =
+        when {
+            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                val context = LocalContext.current
+                if (resolvedDark) {
+                    dynamicDarkColorScheme(context)
+                } else {
+                    dynamicLightColorScheme(context)
+                }
+            }
+            resolvedDark -> DarkColors
+            else -> LightColors
         }
-        resolvedDark -> DarkColors
-        else -> LightColors
-    }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        content = content
+        content = content,
     )
 }

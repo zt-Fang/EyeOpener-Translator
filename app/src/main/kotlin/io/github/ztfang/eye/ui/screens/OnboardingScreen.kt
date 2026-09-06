@@ -64,9 +64,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun OnboardingScreen(
-    onFinished: () -> Unit
-) {
+fun OnboardingScreen(onFinished: () -> Unit) {
     val pagerState = rememberPagerState(pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
 
@@ -81,21 +79,23 @@ fun OnboardingScreen(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFE8F1FF),
-                        Color(0xFFF4F8FF),
-                        Color(0xFFFAFCFF),
-                    )
-                )
-            )
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors =
+                            listOf(
+                                Color(0xFFE8F1FF),
+                                Color(0xFFF4F8FF),
+                                Color(0xFFFAFCFF),
+                            ),
+                    ),
+                ),
     ) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         ) { page ->
             when (page) {
                 0 -> WelcomePage()
@@ -106,65 +106,68 @@ fun OnboardingScreen(
 
         // 底部指示器 + 按钮（使用 Box 替代 Button，避免默认 elevation/shadow 被导航栏裁剪）
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(horizontal = Dimens.ScreenPaddingH)
-                .padding(top = 16.dp, bottom = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = Dimens.ScreenPaddingH)
+                    .padding(top = 16.dp, bottom = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 页面指示器
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 repeat(3) { index ->
                     val isSelected = pagerState.currentPage == index
                     Box(
-                        modifier = Modifier
-                            .size(if (isSelected) 12.dp else 8.dp)
-                            .clip(CircleShape)
-                            .then(
-                                if (isSelected) {
-                                    Modifier.background(
-                                        Brush.horizontalGradient(
-                                            colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2))
+                        modifier =
+                            Modifier
+                                .size(if (isSelected) 12.dp else 8.dp)
+                                .clip(CircleShape)
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.background(
+                                            Brush.horizontalGradient(
+                                                colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2)),
+                                            ),
                                         )
-                                    )
-                                } else {
-                                    Modifier.background(
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                                    )
-                                }
-                            )
+                                    } else {
+                                        Modifier.background(
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                        )
+                                    },
+                                ),
                     )
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
             // 主按钮（渐变背景，无默认阴影，避免底部被裁剪）
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2), Color(0xFFF093FB))
-                        )
-                    )
-                    .clickable(onClick = { nextPage() }, role = Role.Button),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2), Color(0xFFF093FB)),
+                            ),
+                        ).clickable(onClick = { nextPage() }, role = Role.Button),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = when (pagerState.currentPage) {
-                        0 -> stringResource(R.string.onboarding_get_started)
-                        1 -> stringResource(R.string.onboarding_next)
-                        else -> stringResource(R.string.onboarding_start_using)
-                    },
+                    text =
+                        when (pagerState.currentPage) {
+                            0 -> stringResource(R.string.onboarding_get_started)
+                            1 -> stringResource(R.string.onboarding_next)
+                            else -> stringResource(R.string.onboarding_start_using)
+                        },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = Color.White,
                 )
             }
             // 跳过按钮（最后一页不显示）
@@ -172,7 +175,7 @@ fun OnboardingScreen(
                 TextButton(onClick = onFinished) {
                     Text(
                         text = stringResource(R.string.onboarding_skip),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     )
                 }
             }
@@ -187,19 +190,20 @@ fun OnboardingScreen(
 @Composable
 private fun WelcomePage() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = Dimens.ScreenPaddingH)
-            .padding(top = 48.dp, bottom = 240.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.ScreenPaddingH)
+                .padding(top = 48.dp, bottom = 240.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // 大图标：使用桌面图标（蓝紫渐变+白色眼睛）
         Image(
             painter = painterResource(id = R.mipmap.ic_launcher),
             contentDescription = null,
             modifier = Modifier.size(96.dp),
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.Crop,
         )
         Spacer(modifier = Modifier.height(28.dp))
         Text(
@@ -207,33 +211,33 @@ private fun WelcomePage() {
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = stringResource(R.string.onboarding_welcome_subtitle),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
         )
         Spacer(modifier = Modifier.height(36.dp))
         // 特性列表（三张独立卡片）
         FeatureCard(
             icon = Icons.Filled.Subtitles,
             title = stringResource(R.string.onboarding_feature_subtitles_title),
-            desc = stringResource(R.string.onboarding_feature_subtitles_desc)
+            desc = stringResource(R.string.onboarding_feature_subtitles_desc),
         )
         Spacer(modifier = Modifier.height(12.dp))
         FeatureCard(
             icon = Icons.Filled.AutoAwesome,
             title = stringResource(R.string.onboarding_feature_engines_title),
-            desc = stringResource(R.string.onboarding_feature_engines_desc)
+            desc = stringResource(R.string.onboarding_feature_engines_desc),
         )
         Spacer(modifier = Modifier.height(12.dp))
         FeatureCard(
             icon = Icons.Filled.Language,
             title = stringResource(R.string.onboarding_feature_langs_title),
-            desc = stringResource(R.string.onboarding_feature_langs_desc)
+            desc = stringResource(R.string.onboarding_feature_langs_desc),
         )
     }
 }
@@ -242,36 +246,41 @@ private fun WelcomePage() {
  * 特性卡片：简洁风格，白色背景 + 圆角 + 细描边。
  */
 @Composable
-private fun FeatureCard(icon: ImageVector, title: String, desc: String) {
+private fun FeatureCard(
+    icon: ImageVector,
+    title: String,
+    desc: String,
+) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(16.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(16.dp),
+                ).padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2))
-                        )
-                    ),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2)),
+                            ),
+                        ),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(26.dp),
                 )
             }
             Spacer(modifier = Modifier.width(16.dp))
@@ -280,13 +289,13 @@ private fun FeatureCard(icon: ImageVector, title: String, desc: String) {
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = desc,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -298,44 +307,50 @@ private fun FeatureCard(icon: ImageVector, title: String, desc: String) {
 // ---------------------------------------------------------------------------
 
 /** 语言项（纯展示用） */
-private data class LangItem(val displayName: String, val nativeName: String)
+private data class LangItem(
+    val displayName: String,
+    val nativeName: String,
+)
 
 /** 示例源语言（ASR 识别） */
-private val SampleSourceLangs = listOf(
-    LangItem("中文", "中文"),
-    LangItem("英语", "English"),
-    LangItem("日语", "日本語"),
-    LangItem("韩语", "한국어")
-)
+private val SampleSourceLangs =
+    listOf(
+        LangItem("中文", "中文"),
+        LangItem("英语", "English"),
+        LangItem("日语", "日本語"),
+        LangItem("韩语", "한국어"),
+    )
 
 /** 示例目标语言（翻译输出） */
-private val SampleTargetLangs = listOf(
-    LangItem("中文", "中文"),
-    LangItem("英语", "English"),
-    LangItem("日语", "日本語"),
-    LangItem("韩语", "한국어")
-)
+private val SampleTargetLangs =
+    listOf(
+        LangItem("中文", "中文"),
+        LangItem("英语", "English"),
+        LangItem("日语", "日本語"),
+        LangItem("韩语", "한국어"),
+    )
 
 @Composable
 private fun LanguageIntroPage() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = Dimens.ScreenPaddingH)
-            .padding(top = 48.dp, bottom = 240.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.ScreenPaddingH)
+                .padding(top = 48.dp, bottom = 240.dp),
     ) {
         Text(
             text = stringResource(R.string.onboarding_lang_title),
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.onboarding_lang_subtitle),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(28.dp))
 
@@ -344,12 +359,12 @@ private fun LanguageIntroPage() {
             text = stringResource(R.string.onboarding_lang_source),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
         )
         Spacer(modifier = Modifier.height(12.dp))
         LanguageGrid(
             languages = SampleSourceLangs,
-            selectedIndex = 0
+            selectedIndex = 0,
         )
 
         Spacer(modifier = Modifier.height(28.dp))
@@ -359,21 +374,22 @@ private fun LanguageIntroPage() {
             text = stringResource(R.string.onboarding_lang_target),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
         )
         Spacer(modifier = Modifier.height(12.dp))
         LanguageGrid(
             languages = SampleTargetLangs,
-            selectedIndex = 0
+            selectedIndex = 0,
         )
 
         Spacer(modifier = Modifier.height(28.dp))
 
         // 使用提示卡片（渐变背景）
         GradientTipCard(
-            gradient = Brush.horizontalGradient(
-                colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2))
-            )
+            gradient =
+                Brush.horizontalGradient(
+                    colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2)),
+                ),
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
@@ -381,7 +397,7 @@ private fun LanguageIntroPage() {
                         imageVector = Icons.Filled.AutoAwesome,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(24.dp),
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
@@ -389,16 +405,17 @@ private fun LanguageIntroPage() {
                             text = stringResource(R.string.onboarding_lang_tip_title),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color.White
+                            color = Color.White,
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "• ${stringResource(R.string.onboarding_lang_tip_local)}\n\n" +
+                            text =
+                                "• ${stringResource(R.string.onboarding_lang_tip_local)}\n\n" +
                                     "• ${stringResource(R.string.onboarding_lang_tip_cloud)}\n\n" +
                                     "• ${stringResource(R.string.onboarding_lang_tip_ai)}\n\n" +
                                     "• ${stringResource(R.string.onboarding_lang_tip_asr)}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.85f)
+                            color = Color.White.copy(alpha = 0.85f),
                         )
                     }
                 }
@@ -411,7 +428,7 @@ private fun LanguageIntroPage() {
 @Composable
 private fun LanguageGrid(
     languages: List<LangItem>,
-    selectedIndex: Int
+    selectedIndex: Int,
 ) {
     val rows = languages.chunked(2)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -421,44 +438,50 @@ private fun LanguageGrid(
                     val index = rowIdx * 2 + colIdx
                     val isSelected = index == selectedIndex
                     Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(
-                                if (isSelected) Color.White
-                                else Color.White.copy(alpha = 0.6f)
-                            )
-                            .border(
-                                width = if (isSelected) 2.dp else 1.dp,
-                                color = if (isSelected) Color(0xFF667EEA)
-                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .padding(vertical = 14.dp, horizontal = 12.dp),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (isSelected) {
+                                        Color.White
+                                    } else {
+                                        Color.White.copy(alpha = 0.6f)
+                                    },
+                                ).border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color =
+                                        if (isSelected) {
+                                            Color(0xFF667EEA)
+                                        } else {
+                                            MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                        },
+                                    shape = RoundedCornerShape(14.dp),
+                                ).padding(vertical = 14.dp, horizontal = 12.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             if (isSelected) {
                                 Icon(
                                     imageVector = Icons.Filled.Check,
                                     contentDescription = null,
                                     tint = Color(0xFF667EEA),
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(18.dp),
                                 )
                             }
                             Text(
                                 text = lang.displayName,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onBackground
+                                color = MaterialTheme.colorScheme.onBackground,
                             )
                             Text(
                                 text = lang.nativeName,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -478,23 +501,24 @@ private fun LanguageGrid(
 @Composable
 private fun SubtitleIntroPage() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = Dimens.ScreenPaddingH)
-            .padding(top = 48.dp, bottom = 240.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.ScreenPaddingH)
+                .padding(top = 48.dp, bottom = 240.dp),
     ) {
         Text(
             text = stringResource(R.string.onboarding_overlay_title),
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.onboarding_overlay_subtitle),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(28.dp))
 
@@ -502,43 +526,44 @@ private fun SubtitleIntroPage() {
         StepCard(
             step = "01",
             title = stringResource(R.string.onboarding_overlay_step1_title),
-            desc = stringResource(R.string.onboarding_overlay_step1_desc)
+            desc = stringResource(R.string.onboarding_overlay_step1_desc),
         )
         Spacer(modifier = Modifier.height(12.dp))
         StepCard(
             step = "02",
             title = stringResource(R.string.onboarding_overlay_step2_title),
-            desc = stringResource(R.string.onboarding_overlay_step2_desc)
+            desc = stringResource(R.string.onboarding_overlay_step2_desc),
         )
         Spacer(modifier = Modifier.height(12.dp))
         StepCard(
             step = "03",
             title = stringResource(R.string.onboarding_overlay_step3_title),
-            desc = stringResource(R.string.onboarding_overlay_step3_desc)
+            desc = stringResource(R.string.onboarding_overlay_step3_desc),
         )
         Spacer(modifier = Modifier.height(12.dp))
         StepCard(
             step = "04",
             title = stringResource(R.string.onboarding_overlay_step4_title),
-            desc = stringResource(R.string.onboarding_overlay_step4_desc)
+            desc = stringResource(R.string.onboarding_overlay_step4_desc),
         )
         Spacer(modifier = Modifier.height(28.dp))
 
         // 底部提示（渐变背景）
         GradientTipCard(
-            gradient = Brush.horizontalGradient(
-                colors = listOf(Color(0xFFF093FB), Color(0xFF764BA2))
-            )
+            gradient =
+                Brush.horizontalGradient(
+                    colors = listOf(Color(0xFFF093FB), Color(0xFF764BA2)),
+                ),
         ) {
             Row(
                 modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.Top,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Subtitles,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
@@ -546,13 +571,13 @@ private fun SubtitleIntroPage() {
                         text = stringResource(R.string.onboarding_overlay_cta_title),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White
+                        color = Color.White,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = stringResource(R.string.onboarding_overlay_cta_desc),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = Color.White.copy(alpha = 0.8f),
                     )
                 }
             }
@@ -564,36 +589,41 @@ private fun SubtitleIntroPage() {
  * 步骤卡片：简洁风格，白色背景 + 圆角 + 细描边。
  */
 @Composable
-private fun StepCard(step: String, title: String, desc: String) {
+private fun StepCard(
+    step: String,
+    title: String,
+    desc: String,
+) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(16.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(16.dp),
+                ).padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2))
-                        )
-                    ),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2)),
+                            ),
+                        ),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = step,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color.White,
                 )
             }
             Spacer(modifier = Modifier.width(14.dp))
@@ -602,13 +632,13 @@ private fun StepCard(step: String, title: String, desc: String) {
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = desc,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -621,13 +651,14 @@ private fun StepCard(step: String, title: String, desc: String) {
 @Composable
 private fun GradientTipCard(
     gradient: Brush,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(gradient)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(gradient),
     ) {
         content()
     }

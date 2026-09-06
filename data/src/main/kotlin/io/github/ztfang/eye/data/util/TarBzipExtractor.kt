@@ -11,12 +11,15 @@ import java.io.IOException
 
 /** tar.bz2 解压（Sherpa-ONNX 模型包），依赖 Apache Commons Compress */
 object TarBzipExtractor {
-
     private const val TAG = "TarBzipExtractor"
 
     /** 解压 tar.bz2 到 destDir；stripTopLevelDir=true 时去掉 tar 内顶层目录 */
-    fun extract(tarBzFile: File, destDir: File, stripTopLevelDir: Boolean = true): Result<Unit> {
-        return runCatching {
+    fun extract(
+        tarBzFile: File,
+        destDir: File,
+        stripTopLevelDir: Boolean = true,
+    ): Result<Unit> =
+        runCatching {
             if (!tarBzFile.exists()) {
                 throw IOException("Tar.bz2 file not found: ${tarBzFile.absolutePath}")
             }
@@ -28,14 +31,17 @@ object TarBzipExtractor {
                         TarArchiveInputStream(bzIn).use { tarIn ->
                             var entry = tarIn.nextTarEntry
                             while (entry != null) {
-                                val entryName = if (stripTopLevelDir) {
-                                    val slashIdx = entry.name.indexOf('/')
-                                    if (slashIdx > 0 && slashIdx < entry.name.length - 1)
-                                        entry.name.substring(slashIdx + 1)
-                                    else entry.name
-                                } else {
-                                    entry.name
-                                }
+                                val entryName =
+                                    if (stripTopLevelDir) {
+                                        val slashIdx = entry.name.indexOf('/')
+                                        if (slashIdx > 0 && slashIdx < entry.name.length - 1) {
+                                            entry.name.substring(slashIdx + 1)
+                                        } else {
+                                            entry.name
+                                        }
+                                    } else {
+                                        entry.name
+                                    }
 
                                 if (entryName.isBlank() || entryName == "/") {
                                     entry = tarIn.nextTarEntry
@@ -67,5 +73,4 @@ object TarBzipExtractor {
         }.onFailure { e ->
             Log.e(TAG, "Extract failed: ${e.message}", e)
         }
-    }
 }

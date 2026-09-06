@@ -1,29 +1,27 @@
 package io.github.ztfang.eye
 
 /** 主 Activity：底部导航（字幕/助手/设置）+ 权限处理 + 悬浮窗开关 + 语言/引擎选择。 */
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
-
-import android.content.Context
-import android.content.Intent
 import android.Manifest
 import android.app.DownloadManager
-import android.net.Uri
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.util.Log
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import android.content.pm.PackageManager
-import androidx.appcompat.app.AppCompatActivity
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.clickable
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,31 +41,26 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CopyAll
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.CopyAll
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,11 +70,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -89,56 +81,58 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import android.widget.Toast
+import dagger.hilt.android.AndroidEntryPoint
+import io.github.ztfang.eye.domain.model.TranslationEngine
 import io.github.ztfang.eye.ui.components.AccentTone
-import io.github.ztfang.eye.util.PermissionHelper
 import io.github.ztfang.eye.ui.components.AssistantTopBar
 import io.github.ztfang.eye.ui.components.ChatBubble
 import io.github.ztfang.eye.ui.components.EngineAccent
 import io.github.ztfang.eye.ui.components.EngineCard
-import io.github.ztfang.eye.ui.components.GlassCard
 import io.github.ztfang.eye.ui.components.GradientBackground
 import io.github.ztfang.eye.ui.components.LanguageSwitcher
 import io.github.ztfang.eye.ui.components.MessageInputBar
 import io.github.ztfang.eye.ui.components.OverlayToggleCard
 import io.github.ztfang.eye.ui.components.SettingsCard
-import io.github.ztfang.eye.ui.screen.HistoryScreen
 import io.github.ztfang.eye.ui.components.SettingsRow
 import io.github.ztfang.eye.ui.components.TopAppBar
+import io.github.ztfang.eye.ui.screen.HistoryScreen
 import io.github.ztfang.eye.ui.screens.ApiSettingsScreen
 import io.github.ztfang.eye.ui.screens.CloudTranslationSettingsScreen
 import io.github.ztfang.eye.ui.screens.LocalModelsScreen
 import io.github.ztfang.eye.ui.screens.OnboardingScreen
 import io.github.ztfang.eye.ui.screens.PersonalizationScreen
 import io.github.ztfang.eye.ui.theme.Dimens
-
-import io.github.ztfang.eye.domain.model.TranslationEngine
 import io.github.ztfang.eye.ui.theme.EyeTheme
 import io.github.ztfang.eye.util.LocaleHelper
+import io.github.ztfang.eye.util.PermissionHelper
 import io.github.ztfang.eye.viewmodel.SubtitleManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
     @Inject lateinit var subtitleManager: SubtitleManager
+
     @Inject lateinit var historyRepository: io.github.ztfang.eye.domain.repository.HistoryRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // 获取外部跳转参数，支持从其他地方直接跳转到指定页面
@@ -157,14 +151,25 @@ class MainActivity : AppCompatActivity() {
  * 导航屏幕定义，使用 sealed class 确保类型安全
  * 每个 Screen 包含路由路径、标题资源ID和图标
  */
-sealed class Screen(val route: String, val title: Int, val icon: ImageVector) {
-    object Subtitle : Screen("subtitle", R.string.tab_subtitle, Icons.Filled.Subtitles)     // 字幕主屏
-    object Assistant : Screen("assistant", R.string.tab_assistant, Icons.Filled.Star)       // AI助手屏
-    object Settings : Screen("settings", R.string.tab_settings, Icons.Filled.Settings)     // 设置屏
-    object LocalModels : Screen("local_models", R.string.settings_row_local, Icons.Filled.Subtitles)    // 本地模型设置
-    object ApiSettings : Screen("api_settings", R.string.settings_row_api, Icons.Filled.Settings)        // API设置
+sealed class Screen(
+    val route: String,
+    val title: Int,
+    val icon: ImageVector,
+) {
+    object Subtitle : Screen("subtitle", R.string.tab_subtitle, Icons.Filled.Subtitles) // 字幕主屏
+
+    object Assistant : Screen("assistant", R.string.tab_assistant, Icons.Filled.Star) // AI助手屏
+
+    object Settings : Screen("settings", R.string.tab_settings, Icons.Filled.Settings) // 设置屏
+
+    object LocalModels : Screen("local_models", R.string.settings_row_local, Icons.Filled.Subtitles) // 本地模型设置
+
+    object ApiSettings : Screen("api_settings", R.string.settings_row_api, Icons.Filled.Settings) // API设置
+
     object CloudTranslation : Screen("cloud_translation", R.string.settings_row_cloud, Icons.Filled.Language) // 云端翻译设置
+
     object Personalization : Screen("personalization", R.string.personalization_entry, Icons.Filled.Person) // 个性化设置
+
     object History : Screen("history", R.string.settings_row_history, Icons.Filled.CopyAll) // 历史记录
 }
 
@@ -178,7 +183,7 @@ fun EyeOpenerApp(
     initialRoute: String? = null,
     subtitleManager: SubtitleManager,
     historyRepository: io.github.ztfang.eye.domain.repository.HistoryRepository,
-    settingsViewModel: io.github.ztfang.eye.viewmodel.SettingsViewModel = hiltViewModel()
+    settingsViewModel: io.github.ztfang.eye.viewmodel.SettingsViewModel = hiltViewModel(),
 ) {
     // 创建导航控制器，管理应用内页面跳转
     val navController = rememberNavController()
@@ -188,7 +193,7 @@ fun EyeOpenerApp(
     val showOnboarding by settingsViewModel.showOnboarding.collectAsState(initial = true)
     if (showOnboarding) {
         OnboardingScreen(
-            onFinished = { settingsViewModel.setShowOnboarding(false) }
+            onFinished = { settingsViewModel.setShowOnboarding(false) },
         )
         return
     }
@@ -206,18 +211,18 @@ fun EyeOpenerApp(
     Scaffold(
         bottomBar = {
             Column(
-                modifier = Modifier.imePadding()
+                modifier = Modifier.imePadding(),
             ) {
                 BottomNavigationBar(navController = navController)
             }
         },
-        containerColor = Color.Transparent
+        containerColor = Color.Transparent,
     ) { innerPadding ->
         // 导航主机，定义所有页面路由和对应的 Composable
         NavHost(
             navController = navController,
-            startDestination = Screen.Subtitle.route,  // 默认启动页为字幕主屏
-            modifier = Modifier.padding(innerPadding)
+            startDestination = Screen.Subtitle.route, // 默认启动页为字幕主屏
+            modifier = Modifier.padding(innerPadding),
         ) {
             // 三个主 Tab 页面
             composable(Screen.Subtitle.route) {
@@ -225,7 +230,7 @@ fun EyeOpenerApp(
                     subtitleManager = subtitleManager,
                     onNavigateToLocal = { navController.navigate(Screen.LocalModels.route) },
                     onNavigateToApi = { navController.navigate(Screen.ApiSettings.route) },
-                    onNavigateToCloud = { navController.navigate(Screen.CloudTranslation.route) }
+                    onNavigateToCloud = { navController.navigate(Screen.CloudTranslation.route) },
                 )
             }
             composable(Screen.Assistant.route) { AssistantScreen() }
@@ -242,23 +247,26 @@ fun EyeOpenerApp(
                         context.startActivity(feedbackIntent)
                     },
                     onShareClick = {
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TITLE, context.getString(R.string.app_name))
-                            putExtra(
-                                Intent.EXTRA_TEXT,
-                                context.getString(R.string.share_intro, context.getString(R.string.app_name)) +
+                        val shareIntent =
+                            Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TITLE, context.getString(R.string.app_name))
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    context.getString(R.string.share_intro, context.getString(R.string.app_name)) +
                                         "${context.getString(R.string.app_tagline)}\n" +
                                         "${context.getString(R.string.share_desc)}\n\n" +
-                                        "${context.getString(R.string.share_github)}：https://github.com/zt-Fang/EyeOpener-Translator/releases\n" +
+                                        "${context.getString(
+                                            R.string.share_github,
+                                        )}：https://github.com/zt-Fang/EyeOpener-Translator/releases\n" +
                                         "${context.getString(R.string.share_lanzou)}" +
                                         "${context.getString(R.string.share_link)}https://eyeopener.lanzoul.com/b01d72jymf\n" +
-                                        "${context.getString(R.string.share_password)}7856"
-                            )
-                        }
+                                        "${context.getString(R.string.share_password)}7856",
+                                )
+                            }
                         val chooser = Intent.createChooser(shareIntent, context.getString(R.string.share_title))
                         context.startActivity(chooser)
-                    }
+                    },
                 )
             }
             // 设置子页面，通过 popBackStack 返回上一级
@@ -274,13 +282,13 @@ fun EyeOpenerApp(
             composable(Screen.Personalization.route) {
                 PersonalizationScreen(
                     onBack = { navController.popBackStack() },
-                    subtitleManager = subtitleManager
+                    subtitleManager = subtitleManager,
                 )
             }
             composable(Screen.History.route) {
                 HistoryScreen(
                     historyRepository = historyRepository,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
                 )
             }
         }
@@ -307,7 +315,7 @@ fun BottomNavigationBar(navController: NavController) {
                     Icon(
                         screen.icon,
                         contentDescription = stringResource(screen.title),
-                        modifier = Modifier.size(Dimens.SpaceLg)
+                        modifier = Modifier.size(Dimens.SpaceLg),
                     )
                 },
                 label = { Text(stringResource(screen.title)) },
@@ -324,7 +332,7 @@ fun BottomNavigationBar(navController: NavController) {
                             restoreState = true
                         }
                     }
-                }
+                },
             )
         }
     }
@@ -332,12 +340,11 @@ fun BottomNavigationBar(navController: NavController) {
 
 // ============================== 字幕主屏 ==============================
 
-
 data class MlKitLanguage(
     val code: String,
     val displayName: String,
     val nativeName: String,
-    val chineseName: String
+    val chineseName: String,
 )
 
 object MlKitLanguages {
@@ -426,19 +433,55 @@ object MlKitLanguages {
      * 主语种口径：去 en-in 变体；BN Vosk 视为孟加拉语在 Vosk 路径下的实现。
      * ASR 引擎由源语言自动决定（resolveAsrEngine），与翻译模式解耦。
      */
-    val VOSK_SOURCE_LANGUAGES: List<MlKitLanguage> = listOf(
-        // Vosk 33（含 en-in 变体）
-        CHINESE, ENGLISH, INDIA_ENGLISH, GERMAN, FRENCH, SPANISH, PORTUGUESE,
-        RUSSIAN, TURKISH, VIETNAMESE, ITALIAN, DUTCH, CATALAN, ARABIC, GREEK,
-        PERSIAN, FILIPINO, UKRAINIAN, KAZAKH, SWEDISH, JAPANESE, ESPERANTO,
-        HINDI, CZECH, POLISH, UZBEK, KOREAN, TAJIK, KYRGYZ, GEORGIAN,
-        BRETON, GUJARATI, TELUGU,
-        // BN Vosk 模型（孟加拉语，未下载则不可识别）
-        BENGALI,
-        // Nemotron-only 9（Vosk 不支持，需下载 Nemotron 3.5 模型）
-        DANISH, NORWEGIAN_BOKMAL, BULGARIAN, FINNISH, CROATIAN, SLOVAK,
-        HUNGARIAN, ROMANIAN, ESTONIAN
-    )
+    val VOSK_SOURCE_LANGUAGES: List<MlKitLanguage> =
+        listOf(
+            // Vosk 33（含 en-in 变体）
+            CHINESE,
+            ENGLISH,
+            INDIA_ENGLISH,
+            GERMAN,
+            FRENCH,
+            SPANISH,
+            PORTUGUESE,
+            RUSSIAN,
+            TURKISH,
+            VIETNAMESE,
+            ITALIAN,
+            DUTCH,
+            CATALAN,
+            ARABIC,
+            GREEK,
+            PERSIAN,
+            FILIPINO,
+            UKRAINIAN,
+            KAZAKH,
+            SWEDISH,
+            JAPANESE,
+            ESPERANTO,
+            HINDI,
+            CZECH,
+            POLISH,
+            UZBEK,
+            KOREAN,
+            TAJIK,
+            KYRGYZ,
+            GEORGIAN,
+            BRETON,
+            GUJARATI,
+            TELUGU,
+            // BN Vosk 模型（孟加拉语，未下载则不可识别）
+            BENGALI,
+            // Nemotron-only 9（Vosk 不支持，需下载 Nemotron 3.5 模型）
+            DANISH,
+            NORWEGIAN_BOKMAL,
+            BULGARIAN,
+            FINNISH,
+            CROATIAN,
+            SLOVAK,
+            HUNGARIAN,
+            ROMANIAN,
+            ESTONIAN,
+        )
 
     /**
      * 目标语言列表：LOCAL/CLOUD/AI 引擎共用的统一目标语言集合。
@@ -447,19 +490,76 @@ object MlKitLanguages {
      * - ML Kit / DeepL / Papago 遇到不支持的语种时 supportsLanguage 返回 false，由 UseCase 静默跳过
      * - 百度 / Azure / AI 支持几乎所有语种
      */
-    val MLKIT_TARGET_LANGUAGES: List<MlKitLanguage> = listOf(
-        AFRIKAANS, ALBANIAN, AMHARIC, ARABIC, ARMENIAN, AZERBAIJANI,
-        BASQUE, BELARUSIAN, BENGALI, BOSNIAN, BULGARIAN, CATALAN,
-        CHINESE, CROATIAN, CZECH, DANISH, DUTCH, ENGLISH,
-        ESTONIAN, FINNISH, FRENCH, GALICIAN, GEORGIAN, GERMAN, GREEK,
-        GUJARATI, HAITIAN_CREOLE, HEBREW, HINDI, HUNGARIAN, ICELANDIC,
-        INDONESIAN, IRISH, ITALIAN, JAPANESE, KANNADA, KAZAKH, KHMER, KOREAN,
-        KYRGYZ, LATVIAN, LITHUANIAN, MACEDONIAN, MALAY, MALTESE,
-        MARATHI, NORWEGIAN, PERSIAN, POLISH, PORTUGUESE, PUNJABI,
-        ROMANIAN, RUSSIAN, SLOVAK, SPANISH, SWAHILI, SWEDISH, TAGALOG,
-        TAMIL, TELUGU, THAI, TURKISH, UKRAINIAN, URDU, UZBEK,
-        VIETNAMESE, WELSH
-    )
+    val MLKIT_TARGET_LANGUAGES: List<MlKitLanguage> =
+        listOf(
+            AFRIKAANS,
+            ALBANIAN,
+            AMHARIC,
+            ARABIC,
+            ARMENIAN,
+            AZERBAIJANI,
+            BASQUE,
+            BELARUSIAN,
+            BENGALI,
+            BOSNIAN,
+            BULGARIAN,
+            CATALAN,
+            CHINESE,
+            CROATIAN,
+            CZECH,
+            DANISH,
+            DUTCH,
+            ENGLISH,
+            ESTONIAN,
+            FINNISH,
+            FRENCH,
+            GALICIAN,
+            GEORGIAN,
+            GERMAN,
+            GREEK,
+            GUJARATI,
+            HAITIAN_CREOLE,
+            HEBREW,
+            HINDI,
+            HUNGARIAN,
+            ICELANDIC,
+            INDONESIAN,
+            IRISH,
+            ITALIAN,
+            JAPANESE,
+            KANNADA,
+            KAZAKH,
+            KHMER,
+            KOREAN,
+            KYRGYZ,
+            LATVIAN,
+            LITHUANIAN,
+            MACEDONIAN,
+            MALAY,
+            MALTESE,
+            MARATHI,
+            NORWEGIAN,
+            PERSIAN,
+            POLISH,
+            PORTUGUESE,
+            PUNJABI,
+            ROMANIAN,
+            RUSSIAN,
+            SLOVAK,
+            SPANISH,
+            SWAHILI,
+            SWEDISH,
+            TAGALOG,
+            TAMIL,
+            TELUGU,
+            THAI,
+            TURKISH,
+            UKRAINIAN,
+            URDU,
+            UZBEK,
+            VIETNAMESE,
+            WELSH,
+        )
 }
 
 @Composable
@@ -468,21 +568,28 @@ fun LanguagePickerDialog(
     selected: MlKitLanguage,
     languages: List<MlKitLanguage>,
     onSelect: (MlKitLanguage) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
-    val appLocales = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
+    val appLocales =
+        androidx.appcompat.app.AppCompatDelegate
+            .getApplicationLocales()
     val isChineseLocale = appLocales.isEmpty || appLocales[0]?.language == "zh"
     // 搜索关键词（顶部固定搜索框，支持模糊搜索 nativeName / english displayName / chineseName / language code）
     var keyword by remember { mutableStateOf("") }
-    val filtered = remember(keyword, languages) {
-        val k = keyword.trim().lowercase()
-        if (k.isEmpty()) languages else languages.filter { l ->
-            l.code.lowercase().contains(k) ||
-                    l.displayName.lowercase().contains(k) ||
-                    l.nativeName.lowercase().contains(k) ||
-                    l.chineseName.lowercase().contains(k)
+    val filtered =
+        remember(keyword, languages) {
+            val k = keyword.trim().lowercase()
+            if (k.isEmpty()) {
+                languages
+            } else {
+                languages.filter { l ->
+                    l.code.lowercase().contains(k) ||
+                        l.displayName.lowercase().contains(k) ||
+                        l.nativeName.lowercase().contains(k) ||
+                        l.chineseName.lowercase().contains(k)
+                }
+            }
         }
-    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = title, style = MaterialTheme.typography.titleLarge) },
@@ -497,7 +604,7 @@ fun LanguagePickerDialog(
                         Text(
                             text = stringResource(R.string.language_search_hint),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     },
                     leadingIcon = {
@@ -505,7 +612,7 @@ fun LanguagePickerDialog(
                             imageVector = Icons.Filled.Search,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(Dimens.SpaceMd)
+                            modifier = Modifier.size(Dimens.SpaceMd),
                         )
                     },
                     trailingIcon = {
@@ -515,31 +622,33 @@ fun LanguagePickerDialog(
                                     imageVector = Icons.Filled.Clear,
                                     contentDescription = stringResource(R.string.common_cancel),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(Dimens.SpaceMd)
+                                    modifier = Modifier.size(Dimens.SpaceMd),
                                 )
                             }
                         }
                     },
                     singleLine = true,
                     shape = RoundedCornerShape(Dimens.CornerMd),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                    )
+                    colors =
+                        OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        ),
                 )
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().height(400.dp),
-                    verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXxs)
+                    verticalArrangement = Arrangement.spacedBy(Dimens.SpaceXxs),
                 ) {
                     items(filtered, key = { it.code }) { lang ->
                         val isSelected = lang.code == selected.code
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(Dimens.CornerMd))
-                                .clickable { onSelect(lang) }
-                                .padding(horizontal = Dimens.SpaceSm, vertical = Dimens.SpaceSm),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(Dimens.CornerMd))
+                                    .clickable { onSelect(lang) }
+                                    .padding(horizontal = Dimens.SpaceSm, vertical = Dimens.SpaceSm),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             // 仅显示语言文字名称（不显示语言代码徽标），勾选图标在右侧
                             Column(modifier = Modifier.weight(1f)) {
@@ -547,13 +656,17 @@ fun LanguagePickerDialog(
                                     text = if (isChineseLocale) lang.chineseName else lang.displayName,
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onBackground
+                                    color =
+                                        if (isSelected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onBackground
+                                        },
                                 )
                                 Text(
                                     text = if (isChineseLocale) "${lang.nativeName} · ${lang.displayName}" else lang.nativeName,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = LocalContentColor.current.copy(alpha = 0.6f)
+                                    color = LocalContentColor.current.copy(alpha = 0.6f),
                                 )
                             }
                             if (isSelected) {
@@ -561,7 +674,7 @@ fun LanguagePickerDialog(
                                     imageVector = Icons.Filled.Check,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(Dimens.SpaceLg)
+                                    modifier = Modifier.size(Dimens.SpaceLg),
                                 )
                             }
                         }
@@ -573,7 +686,7 @@ fun LanguagePickerDialog(
             TextButton(onClick = onDismiss) {
                 Text(stringResource(android.R.string.cancel))
             }
-        }
+        },
     )
 }
 
@@ -584,7 +697,7 @@ fun SubtitleScreen(
     onNavigateToLocal: () -> Unit = {},
     onNavigateToApi: () -> Unit = {},
     onNavigateToCloud: () -> Unit = {},
-    settingsViewModel: io.github.ztfang.eye.viewmodel.SettingsViewModel = hiltViewModel()
+    settingsViewModel: io.github.ztfang.eye.viewmodel.SettingsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     // 悬浮字幕开关状态
@@ -593,12 +706,14 @@ fun SubtitleScreen(
     val subtitleState by subtitleManager.subtitleState.collectAsState()
     val selectedEngine = subtitleState.engine
     // 根据语言代码查找对应的 MlKitLanguage
-    val sourceLang = remember(subtitleState.sourceLanguage) {
-        MlKitLanguages.VOSK_SOURCE_LANGUAGES.find { it.code == subtitleState.sourceLanguage } ?: MlKitLanguages.ENGLISH
-    }
-    val targetLang = remember(subtitleState.targetLanguage) {
-        MlKitLanguages.MLKIT_TARGET_LANGUAGES.find { it.code == subtitleState.targetLanguage } ?: MlKitLanguages.CHINESE
-    }
+    val sourceLang =
+        remember(subtitleState.sourceLanguage) {
+            MlKitLanguages.VOSK_SOURCE_LANGUAGES.find { it.code == subtitleState.sourceLanguage } ?: MlKitLanguages.ENGLISH
+        }
+    val targetLang =
+        remember(subtitleState.targetLanguage) {
+            MlKitLanguages.MLKIT_TARGET_LANGUAGES.find { it.code == subtitleState.targetLanguage } ?: MlKitLanguages.CHINESE
+        }
     // 语言选择器弹窗状态
     var showSourcePicker by remember { mutableStateOf(false) }
     var showTargetPicker by remember { mutableStateOf(false) }
@@ -632,48 +747,50 @@ fun SubtitleScreen(
         }
     }
 
-
     /**
      * 批量请求悬浮字幕所需的所有运行时权限（主要是录音权限）
      * 如果权限已全部授予，直接启动 Service；否则在用户拒绝后引导到系统设置
      */
-    val overlayPermissionsLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        val micGranted = results[Manifest.permission.RECORD_AUDIO] == true
-        if (micGranted) {
-            // 权限获取成功，开启悬浮字幕
-            isOverlayOn = true
-            subtitleManager.setOverlayActive(true)
-            context.startService(Intent(context, FloatingSubtitleService::class.java))
-        } else {
-            // 用户拒绝权限，引导到应用设置页面手动授权
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", context.packageName, null)
+    val overlayPermissionsLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions(),
+        ) { results ->
+            val micGranted = results[Manifest.permission.RECORD_AUDIO] == true
+            if (micGranted) {
+                // 权限获取成功，开启悬浮字幕
+                isOverlayOn = true
+                subtitleManager.setOverlayActive(true)
+                context.startService(Intent(context, FloatingSubtitleService::class.java))
+            } else {
+                // 用户拒绝权限，引导到应用设置页面手动授权
+                val intent =
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    }
+                context.startActivity(intent)
+                Toast
+                    .makeText(
+                        context,
+                        context.getString(R.string.tip_mic_permission_required),
+                        Toast.LENGTH_LONG,
+                    ).show()
             }
-            context.startActivity(intent)
-            Toast.makeText(
-                context,
-                context.getString(R.string.tip_mic_permission_required),
-                Toast.LENGTH_LONG
-            ).show()
         }
-    }
 
     /**
      * 助手界面麦克风权限请求启动器（单独申请 RECORD_AUDIO）
      * 用户从助手界面长按麦克风按钮时，如果没有权限则触发此请求
      */
-    val micPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            Toast.makeText(context, context.getString(R.string.tip_mic_permission_granted), Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, context.getString(R.string.tip_mic_permission_denied), Toast.LENGTH_LONG).show()
+    val micPermissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            if (granted) {
+                Toast.makeText(context, context.getString(R.string.tip_mic_permission_granted), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, context.getString(R.string.tip_mic_permission_denied), Toast.LENGTH_LONG).show()
+            }
         }
-    }
-
 
     /**
      * 启动悬浮字幕 Service（权限与音频源均已就绪）
@@ -692,25 +809,26 @@ fun SubtitleScreen(
      *       否则抛出 SecurityException。Service 成为 FGS 后会自行创建实例。
      * 应用内声音模式下：授权成功才启动 Service，拒绝则不开启悬浮窗
      */
-    val mediaProjectionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        // MediaProjection 授权回调诊断：确认回调是否触发（vivo 杀进程会导致回调丢失）
-        Log.i("MediaProjection", "授权回调触发: resultCode=${result.resultCode}, hasData=${result.data != null}")
-        if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
-            // 授权成功，保存 token 并启动 Service
-            Log.i("MediaProjection", "授权成功: resultCode=${result.resultCode}")
-            subtitleManager.saveMediaProjectionToken(result.resultCode, result.data)
-            Log.i("MediaProjection", "saveMediaProjectionToken 完成, hasToken=${subtitleManager.hasMediaProjectionToken()}")
-            startOverlayService()
-        } else {
-            // 用户拒绝授权，不开启悬浮窗，不降级到麦克风
-            Log.i("MediaProjection", "用户拒绝授权，取消开启悬浮窗")
-            isOverlayOn = false
-            subtitleManager.setOverlayActive(false)
-            Toast.makeText(context, context.getString(R.string.tip_screen_record_denied), Toast.LENGTH_LONG).show()
+    val mediaProjectionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            // MediaProjection 授权回调诊断：确认回调是否触发（vivo 杀进程会导致回调丢失）
+            Log.i("MediaProjection", "授权回调触发: resultCode=${result.resultCode}, hasData=${result.data != null}")
+            if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
+                // 授权成功，保存 token 并启动 Service
+                Log.i("MediaProjection", "授权成功: resultCode=${result.resultCode}")
+                subtitleManager.saveMediaProjectionToken(result.resultCode, result.data)
+                Log.i("MediaProjection", "saveMediaProjectionToken 完成, hasToken=${subtitleManager.hasMediaProjectionToken()}")
+                startOverlayService()
+            } else {
+                // 用户拒绝授权，不开启悬浮窗，不降级到麦克风
+                Log.i("MediaProjection", "用户拒绝授权，取消开启悬浮窗")
+                isOverlayOn = false
+                subtitleManager.setOverlayActive(false)
+                Toast.makeText(context, context.getString(R.string.tip_screen_record_denied), Toast.LENGTH_LONG).show()
+            }
         }
-    }
 
     /**
      * 发起 MediaProjection 授权请求（开启悬浮字幕时拦截授权）。
@@ -718,8 +836,9 @@ fun SubtitleScreen(
      * 系统不支持时也不降级，直接提示无法开启。
      */
     fun requestMediaProjectionForOverlay() {
-        val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE)
-            as? MediaProjectionManager
+        val projectionManager =
+            context.getSystemService(Context.MEDIA_PROJECTION_SERVICE)
+                as? MediaProjectionManager
         if (projectionManager == null) {
             // 系统不支持 MediaProjection，不降级到麦克风，直接拒绝开启
             Log.i("MediaProjection", "系统不支持 MediaProjection，取消开启")
@@ -741,8 +860,9 @@ fun SubtitleScreen(
         val missing = PermissionHelper.missingPermissions(ctx)
         if (missing.isEmpty()) {
             // 麦克风权限齐全，检查音频输入源
-            val needMediaProjection = subtitleManager.audioSource.value == 1 &&
-                !subtitleManager.hasMediaProjectionToken()
+            val needMediaProjection =
+                subtitleManager.audioSource.value == 1 &&
+                    !subtitleManager.hasMediaProjectionToken()
             if (needMediaProjection) {
                 // 应用内声音模式但未授权 MediaProjection
                 // 先请求授权，授权成功后再启动 Service；拒绝则不开启
@@ -764,14 +884,15 @@ fun SubtitleScreen(
      * 悬浮窗权限请求启动器
      * 用户从系统设置返回后，检查权限是否已授予
      */
-    val overlayPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        if (Settings.canDrawOverlays(context)) {
-            // 悬浮窗权限已授予，继续检查麦克风权限
-            checkMicAndStart(context)
+    val overlayPermissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.StartActivityForResult(),
+        ) {
+            if (Settings.canDrawOverlays(context)) {
+                // 悬浮窗权限已授予，继续检查麦克风权限
+                checkMicAndStart(context)
+            }
         }
-    }
 
     /**
      * 悬浮字幕开关逻辑
@@ -782,10 +903,11 @@ fun SubtitleScreen(
         if (enable) {
             // 开启流程：先检查悬浮窗权限
             if (!Settings.canDrawOverlays(context)) {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:${context.packageName}")
-                )
+                val intent =
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}"),
+                    )
                 overlayPermissionLauncher.launch(intent)
             } else {
                 // 悬浮窗权限已存在，检查麦克风权限
@@ -801,15 +923,16 @@ fun SubtitleScreen(
 
     // UI 布局：顶部标题栏 + 悬浮字幕开关 + 引擎选择 + 语言切换
     Column(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(top = Dimens.ScreenPaddingTop),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(top = Dimens.ScreenPaddingTop),
             verticalArrangement = Arrangement.spacedBy(Dimens.SectionGap),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 顶部标题栏（右上角：问号图标，点击重新显示引导页）
             item {
@@ -817,7 +940,7 @@ fun SubtitleScreen(
                     rightIcon = Icons.Filled.HelpOutline,
                     onRightClick = {
                         settingsViewModel.setShowOnboarding(true)
-                    }
+                    },
                 )
             }
 
@@ -826,7 +949,7 @@ fun SubtitleScreen(
                 OverlayToggleCard(
                     running = isOverlayOn,
                     onToggle = { toggleOverlay(it) },
-                    modifier = Modifier.padding(horizontal = Dimens.ScreenPaddingH)
+                    modifier = Modifier.padding(horizontal = Dimens.ScreenPaddingH),
                 )
             }
 
@@ -850,16 +973,18 @@ fun SubtitleScreen(
                         // 主动触发模型准备
                         subtitleManager.ensureModelsLoaded()
                     },
-                    modifier = Modifier.padding(horizontal = Dimens.ScreenPaddingH)
+                    modifier = Modifier.padding(horizontal = Dimens.ScreenPaddingH),
                 )
             }
 
             // 语言切换器（源语言和目标语言）
             item {
                 Column(
-                    modifier = Modifier.padding(horizontal = Dimens.ScreenPaddingH)
+                    modifier = Modifier.padding(horizontal = Dimens.ScreenPaddingH),
                 ) {
-                    val appLocales = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
+                    val appLocales =
+                        androidx.appcompat.app.AppCompatDelegate
+                            .getApplicationLocales()
                     val isChineseLocale = appLocales.isEmpty || appLocales[0]?.language == "zh"
                     LanguageSwitcher(
                         sourceLabel = stringResource(R.string.language_source_label),
@@ -873,40 +998,43 @@ fun SubtitleScreen(
                             val canSwap = MlKitLanguages.VOSK_SOURCE_LANGUAGES.any { it.code == tgt }
                             if (!canSwap) {
                                 val langName = if (isChineseLocale) targetLang.chineseName else targetLang.displayName
-                                Toast.makeText(
-                                    context,
-                                    "Target language ($langName) does not support speech recognition. Cannot swap.",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                Toast
+                                    .makeText(
+                                        context,
+                                        "Target language ($langName) does not support speech recognition. Cannot swap.",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
                                 return@LanguageSwitcher
                             }
                             val src = subtitleState.sourceLanguage
                             subtitleManager.updateSourceLanguage(tgt)
                             subtitleManager.updateTargetLanguage(src)
-                        }
+                        },
                     )
                     // 语言选择区下方温馨提示框
                     Spacer(modifier = Modifier.height(Dimens.SpaceSm))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                        ),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                        )
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                            ),
+                        border =
+                            BorderStroke(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                            ),
                     ) {
                         Row(
                             modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.Top
+                            verticalAlignment = Alignment.Top,
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Info,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(20.dp),
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -914,51 +1042,54 @@ fun SubtitleScreen(
                                     text = stringResource(R.string.common_tips_title),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
-                                        modifier = Modifier
-                                            .size(4.dp)
-                                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                                            .clip(CircleShape)
+                                        modifier =
+                                            Modifier
+                                                .size(4.dp)
+                                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                                .clip(CircleShape),
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = stringResource(R.string.language_tip_network),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
-                                        modifier = Modifier
-                                            .size(4.dp)
-                                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                                            .clip(CircleShape)
+                                        modifier =
+                                            Modifier
+                                                .size(4.dp)
+                                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                                .clip(CircleShape),
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = stringResource(R.string.language_tip_fast_mode),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
-                                        modifier = Modifier
-                                            .size(4.dp)
-                                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                                            .clip(CircleShape)
+                                        modifier =
+                                            Modifier
+                                                .size(4.dp)
+                                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                                .clip(CircleShape),
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = stringResource(R.string.language_tip_audio_permission),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                                     )
                                 }
                             }
@@ -981,12 +1112,14 @@ fun SubtitleScreen(
                 // 更新到 SettingsRepository（DataStore），通过 Flow 自动同步到 UI
                 subtitleManager.updateSourceLanguage(it.code)
                 // 源语言切换：触发 ASR 模型检查（未下载则弹窗提示用户前往下载）
-                val locales = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
+                val locales =
+                    androidx.appcompat.app.AppCompatDelegate
+                        .getApplicationLocales()
                 val isZh = locales.isEmpty || locales[0]?.language == "zh"
                 subtitleManager.checkAsrModel(it.code, if (isZh) it.chineseName else it.displayName)
                 showSourcePicker = false
             },
-            onDismiss = { showSourcePicker = false }
+            onDismiss = { showSourcePicker = false },
         )
     }
     // 目标语言选择弹窗
@@ -1000,7 +1133,7 @@ fun SubtitleScreen(
                 subtitleManager.updateTargetLanguage(it.code)
                 showTargetPicker = false
             },
-            onDismiss = { showTargetPicker = false }
+            onDismiss = { showTargetPicker = false },
         )
     }
 
@@ -1022,7 +1155,7 @@ fun SubtitleScreen(
                 TextButton(onClick = { showLlmConfigAlert = false }) {
                     Text(text = stringResource(R.string.common_cancel))
                 }
-            }
+            },
         )
     }
 
@@ -1044,7 +1177,7 @@ fun SubtitleScreen(
                 TextButton(onClick = { showCloudConfigAlert = false }) {
                     Text(text = stringResource(R.string.cloud_cancel))
                 }
-            }
+            },
         )
     }
 
@@ -1059,16 +1192,19 @@ fun SubtitleScreen(
             text = {
                 Column {
                     Text(
-                        text = stringResource(
-                            R.string.asr_model_not_downloaded_msg,
-                            req.languageDisplayName, req.modelDisplayName, sizeText
-                        )
+                        text =
+                            stringResource(
+                                R.string.asr_model_not_downloaded_msg,
+                                req.languageDisplayName,
+                                req.modelDisplayName,
+                                sizeText,
+                            ),
                     )
                     Spacer(modifier = Modifier.height(Dimens.SpaceSm))
                     Text(
                         text = stringResource(R.string.asr_model_not_downloaded_hint),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             },
@@ -1084,7 +1220,7 @@ fun SubtitleScreen(
                 }) {
                     Text(text = stringResource(R.string.asr_model_go_download))
                 }
-            }
+            },
         )
     }
 }
@@ -1094,26 +1230,26 @@ fun SubtitleScreen(
 private fun EngineSection(
     selected: TranslationEngine,
     onSelect: (TranslationEngine) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         // 区域标题
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = stringResource(R.string.engine_section_title),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
             )
         }
         Spacer(modifier = Modifier.height(Dimens.SpaceMd))
         // 三个引擎卡片横向排列
         Row(
             horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             // 本地翻译
             EngineCard(
@@ -1123,7 +1259,7 @@ private fun EngineSection(
                 selected = selected == TranslationEngine.LOCAL,
                 onClick = { onSelect(TranslationEngine.LOCAL) },
                 accent = EngineAccent.Blue,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             // 云端翻译
             EngineCard(
@@ -1133,7 +1269,7 @@ private fun EngineSection(
                 selected = selected == TranslationEngine.CLOUD,
                 onClick = { onSelect(TranslationEngine.CLOUD) },
                 accent = EngineAccent.Orange,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             // AI 翻译
             EngineCard(
@@ -1143,7 +1279,7 @@ private fun EngineSection(
                 selected = selected == TranslationEngine.AI,
                 onClick = { onSelect(TranslationEngine.AI) },
                 accent = EngineAccent.Purple,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -1160,7 +1296,7 @@ private fun EngineSection(
 data class ChatMessage(
     val text: String,
     val isFromUser: Boolean,
-    val timestamp: String = "10:30"
+    val timestamp: String = "10:30",
 )
 
 /** AI 助手页：LLM 多轮对话 + imePadding 跟随软键盘 + 麦克风长按 SpeechRecognizer + 声波动画。 */
@@ -1179,18 +1315,21 @@ fun AssistantScreen() {
     val coroutineScope = rememberCoroutineScope()
 
     // 助手界面麦克风权限请求启动器
-    val micPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            Toast.makeText(context, context.getString(R.string.tip_mic_permission_granted), Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, context.getString(R.string.tip_mic_permission_denied), Toast.LENGTH_LONG).show()
+    val micPermissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            if (granted) {
+                Toast.makeText(context, context.getString(R.string.tip_mic_permission_granted), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, context.getString(R.string.tip_mic_permission_denied), Toast.LENGTH_LONG).show()
+            }
         }
-    }
 
     // 自动滚动到底部
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listState =
+        androidx.compose.foundation.lazy
+            .rememberLazyListState()
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.lastIndex)
@@ -1198,8 +1337,9 @@ fun AssistantScreen() {
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
+        modifier =
+            Modifier
+                .fillMaxSize(),
     ) {
         // 顶部栏（含清除按钮）
         AssistantTopBar(onClearClick = { viewModel.clearMessages() })
@@ -1207,33 +1347,35 @@ fun AssistantScreen() {
         // 消息列表
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
             reverseLayout = false,
-            verticalArrangement = Arrangement.spacedBy(Dimens.MessageSpacing)
+            verticalArrangement = Arrangement.spacedBy(Dimens.MessageSpacing),
         ) {
             items(messages) { msg ->
                 ChatBubble(
                     text = msg.text,
                     timestamp = msg.timestamp,
                     isFromAi = !msg.isFromUser,
-                    isRead = msg.isFromUser
+                    isRead = msg.isFromUser,
                 )
             }
             // 加载中提示
             if (isLoading) {
                 item {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(Dimens.SpaceMd),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(Dimens.SpaceMd),
+                        contentAlignment = Alignment.Center,
                     ) {
                         androidx.compose.material3.CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
                             strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -1272,14 +1414,19 @@ fun AssistantScreen() {
                     isListening = false
                     if (rawResult.isNotBlank()) {
                         val currentText = inputText
-                        inputText = if (currentText.isBlank()) rawResult
-                                    else "$currentText $rawResult"
+                        inputText =
+                            if (currentText.isBlank()) {
+                                rawResult
+                            } else {
+                                "$currentText $rawResult"
+                            }
                     }
                 } else {
-                    val hasPerm = androidx.core.content.ContextCompat.checkSelfPermission(
-                        context,
-                        android.Manifest.permission.RECORD_AUDIO
-                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    val hasPerm =
+                        androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.RECORD_AUDIO,
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
                     if (!hasPerm) {
                         Toast.makeText(context, context.getString(R.string.tip_mic_permission_please), Toast.LENGTH_SHORT).show()
                         micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
@@ -1289,7 +1436,7 @@ fun AssistantScreen() {
                     }
                 }
             },
-            modifier = Modifier
+            modifier = Modifier,
         )
     }
 }
@@ -1299,14 +1446,14 @@ fun AssistantScreen() {
 /** 设置页：界面语言/本地模型/API/个性化/分享/反馈/检查更新入口。 */
 @Composable
 fun SettingsScreen(
-    onLocalClick: () -> Unit = {},      // 点击本地模型设置
-    onApiClick: () -> Unit = {},        // 点击 API 设置
-    onCloudClick: () -> Unit = {},      // 点击云端翻译设置
-    onPersonalizationClick: () -> Unit = {},  // 点击个性化设置
-    onHistoryClick: () -> Unit = {},    // 点击历史记录
-    onFeedbackClick: () -> Unit = {},   // 点击意见反馈
-    onShareClick: () -> Unit = {},      // 点击分享给朋友
-    settingsViewModel: io.github.ztfang.eye.viewmodel.SettingsViewModel = hiltViewModel()
+    onLocalClick: () -> Unit = {}, // 点击本地模型设置
+    onApiClick: () -> Unit = {}, // 点击 API 设置
+    onCloudClick: () -> Unit = {}, // 点击云端翻译设置
+    onPersonalizationClick: () -> Unit = {}, // 点击个性化设置
+    onHistoryClick: () -> Unit = {}, // 点击历史记录
+    onFeedbackClick: () -> Unit = {}, // 点击意见反馈
+    onShareClick: () -> Unit = {}, // 点击分享给朋友
+    settingsViewModel: io.github.ztfang.eye.viewmodel.SettingsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -1329,7 +1476,10 @@ fun SettingsScreen(
      * 语义化版本比较
      * @return remote 比 current 新返回 true
      */
-    fun isNewerVersion(current: String, remote: String): Boolean {
+    fun isNewerVersion(
+        current: String,
+        remote: String,
+    ): Boolean {
         val cur = current.removePrefix("v").split(".").map { it.toIntOrNull() ?: 0 }
         val rem = remote.removePrefix("v").split(".").map { it.toIntOrNull() ?: 0 }
         val maxLen = maxOf(cur.size, rem.size)
@@ -1358,12 +1508,13 @@ fun SettingsScreen(
                 val latest = json.optString("tag_name", json.optString("name", ""))
                 // 提取 release 更新说明（body 字段）
                 val notes = json.optString("body", "").ifBlank { context.getString(R.string.update_no_notes) }
-                val apkAsset = json.getJSONArray("assets").let { arr ->
-                    (0 until arr.length()).firstNotNullOfOrNull { i ->
-                        val obj = arr.getJSONObject(i)
-                        if (obj.getString("name").endsWith(".apk")) obj.getString("browser_download_url") else null
-                    }
-                } ?: json.getString("html_url")
+                val apkAsset =
+                    json.getJSONArray("assets").let { arr ->
+                        (0 until arr.length()).firstNotNullOfOrNull { i ->
+                            val obj = arr.getJSONObject(i)
+                            if (obj.getString("name").endsWith(".apk")) obj.getString("browser_download_url") else null
+                        }
+                    } ?: json.getString("html_url")
                 // 从 BuildConfig 读取当前版本号，替换硬编码
                 val current = BuildConfig.VERSION_NAME
                 if (isNewerVersion(current, latest)) {
@@ -1397,17 +1548,20 @@ fun SettingsScreen(
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                val request = DownloadManager.Request(android.net.Uri.parse(apkUrl)).apply {
-                    setTitle(context.getString(R.string.update_notification_title))
-                    setDescription(context.getString(R.string.update_notification_desc))
-                    // 下载到应用专属目录，无需存储权限
-                    setDestinationInExternalFilesDir(
-                        context, Environment.DIRECTORY_DOWNLOADS, "EyeOpener-update.apk"
-                    )
-                    setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-                    setAllowedOverMetered(true)
-                    setAllowedOverRoaming(true)
-                }
+                val request =
+                    DownloadManager.Request(android.net.Uri.parse(apkUrl)).apply {
+                        setTitle(context.getString(R.string.update_notification_title))
+                        setDescription(context.getString(R.string.update_notification_desc))
+                        // 下载到应用专属目录，无需存储权限
+                        setDestinationInExternalFilesDir(
+                            context,
+                            Environment.DIRECTORY_DOWNLOADS,
+                            "EyeOpener-update.apk",
+                        )
+                        setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                        setAllowedOverMetered(true)
+                        setAllowedOverRoaming(true)
+                    }
                 val id = dm.enqueue(request)
                 downloadId = id
 
@@ -1453,22 +1607,27 @@ fun SettingsScreen(
     /** 调起系统安装器安装已下载的 APK */
     fun installApk() {
         try {
-            val apkFile = java.io.File(
-                context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                "EyeOpener-update.apk"
-            )
+            val apkFile =
+                java.io.File(
+                    context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                    "EyeOpener-update.apk",
+                )
             if (!apkFile.exists()) {
                 downloadState = "dl_error"
                 return
             }
-            val uri = androidx.core.content.FileProvider.getUriForFile(
-                context, "${context.packageName}.fileprovider", apkFile
-            )
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
+            val uri =
+                androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    apkFile,
+                )
+            val intent =
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             context.startActivity(intent)
         } catch (e: Exception) {
             // 安装失败，回退到浏览器下载
@@ -1484,11 +1643,12 @@ fun SettingsScreen(
             text = stringResource(R.string.settings_screen_title),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(
-                start = Dimens.ScreenPaddingH,
-                top = Dimens.ScreenPaddingTop + Dimens.SpaceSm,
-                end = Dimens.ScreenPaddingH
-            )
+            modifier =
+                Modifier.padding(
+                    start = Dimens.ScreenPaddingH,
+                    top = Dimens.ScreenPaddingTop + Dimens.SpaceSm,
+                    end = Dimens.ScreenPaddingH,
+                ),
         )
         Spacer(modifier = Modifier.height(Dimens.SpaceMd))
 
@@ -1496,49 +1656,49 @@ fun SettingsScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(Dimens.SettingsSectionGap),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 第一组设置卡片
             item {
                 SettingsCard(
-                    modifier = Modifier.padding(horizontal = Dimens.ScreenPaddingH)
+                    modifier = Modifier.padding(horizontal = Dimens.ScreenPaddingH),
                 ) {
                     SettingsRow(
                         icon = Icons.Filled.Language,
                         label = stringResource(R.string.settings_row_interface_language),
                         accent = AccentTone.Blue,
                         value = LocaleHelper.getDisplayName(currentLanguage),
-                        onClick = { showLanguagePicker = true }
+                        onClick = { showLanguagePicker = true },
                     )
                     SettingsRow(
                         icon = Icons.Filled.Subtitles,
                         label = stringResource(R.string.settings_row_local),
                         accent = AccentTone.Purple,
-                        onClick = onLocalClick
+                        onClick = onLocalClick,
                     )
                     SettingsRow(
                         icon = Icons.Filled.Settings,
                         label = stringResource(R.string.settings_row_api),
                         accent = AccentTone.Mint,
-                        onClick = onApiClick
+                        onClick = onApiClick,
                     )
                     SettingsRow(
                         icon = Icons.Filled.Language,
                         label = stringResource(R.string.settings_row_cloud),
                         accent = AccentTone.Sky,
-                        onClick = onCloudClick
+                        onClick = onCloudClick,
                     )
                     SettingsRow(
                         icon = Icons.Filled.Person,
                         label = stringResource(R.string.personalization_entry),
                         accent = AccentTone.Pink,
-                        onClick = onPersonalizationClick
+                        onClick = onPersonalizationClick,
                     )
                     SettingsRow(
                         icon = Icons.Filled.CopyAll,
                         label = stringResource(R.string.settings_row_history),
                         accent = AccentTone.Coral,
-                        onClick = onHistoryClick
+                        onClick = onHistoryClick,
                     )
                 }
             }
@@ -1546,42 +1706,44 @@ fun SettingsScreen(
             // 第二组设置卡片
             item {
                 SettingsCard(
-                    modifier = Modifier.padding(horizontal = Dimens.ScreenPaddingH)
+                    modifier = Modifier.padding(horizontal = Dimens.ScreenPaddingH),
                 ) {
                     SettingsRow(
                         icon = Icons.Filled.Share,
                         label = stringResource(R.string.settings_row_share),
                         accent = AccentTone.Sky,
-                        onClick = onShareClick
+                        onClick = onShareClick,
                     )
                     SettingsRow(
                         icon = Icons.Filled.Star,
                         label = stringResource(R.string.settings_row_feedback),
                         accent = AccentTone.Amber,
-                        onClick = onFeedbackClick
+                        onClick = onFeedbackClick,
                     )
-                    val updateValue = when {
-                        downloadState?.startsWith("downloading=") == true -> {
-                            val pct = downloadState?.removePrefix("downloading=") ?: "0"
-                            context.getString(R.string.update_downloading, pct.toIntOrNull() ?: 0)
+                    val updateValue =
+                        when {
+                            downloadState?.startsWith("downloading=") == true -> {
+                                val pct = downloadState?.removePrefix("downloading=") ?: "0"
+                                context.getString(R.string.update_downloading, pct.toIntOrNull() ?: 0)
+                            }
+                            downloadState == "downloaded" -> context.getString(R.string.update_tap_install)
+                            downloadState == "dl_error" -> context.getString(R.string.update_download_failed_retry)
+                            updateState == "checking" -> context.getString(R.string.update_checking)
+                            updateState == "latest" -> context.getString(R.string.update_latest)
+                            updateState == "error" -> context.getString(R.string.update_check_error)
+                            updateState?.startsWith("new=") == true ->
+                                context.getString(R.string.update_new_version, updateState?.removePrefix("new="))
+                            else -> ""
                         }
-                        downloadState == "downloaded" -> context.getString(R.string.update_tap_install)
-                        downloadState == "dl_error" -> context.getString(R.string.update_download_failed_retry)
-                        updateState == "checking" -> context.getString(R.string.update_checking)
-                        updateState == "latest" -> context.getString(R.string.update_latest)
-                        updateState == "error" -> context.getString(R.string.update_check_error)
-                        updateState?.startsWith("new=") == true ->
-                            context.getString(R.string.update_new_version, updateState?.removePrefix("new="))
-                        else -> ""
-                    }
-                    val updateValueColor = when {
-                        downloadState == "downloaded" -> Color(0xFF2E7D32)
-                        downloadState == "dl_error" -> MaterialTheme.colorScheme.error
-                        updateState == "latest" -> Color(0xFF2E7D32)
-                        updateState == "error" -> MaterialTheme.colorScheme.error
-                        updateState?.startsWith("new=") == true -> MaterialTheme.colorScheme.primary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
+                    val updateValueColor =
+                        when {
+                            downloadState == "downloaded" -> Color(0xFF2E7D32)
+                            downloadState == "dl_error" -> MaterialTheme.colorScheme.error
+                            updateState == "latest" -> Color(0xFF2E7D32)
+                            updateState == "error" -> MaterialTheme.colorScheme.error
+                            updateState?.startsWith("new=") == true -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     SettingsRow(
                         icon = Icons.Filled.Refresh,
                         label = stringResource(R.string.settings_row_check_update),
@@ -1606,7 +1768,7 @@ fun SettingsScreen(
                                     doCheckUpdate()
                                 }
                             }
-                        }
+                        },
                     )
                 }
             }
@@ -1626,34 +1788,38 @@ fun SettingsScreen(
                     languages.forEach { (code, name) ->
                         val selected = code == currentLanguage
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(Dimens.CornerMd))
-                                .clickable {
-                                    if (code != currentLanguage) {
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(Dimens.CornerMd))
+                                    .clickable {
+                                        if (code != currentLanguage) {
                                             settingsViewModel.setInterfaceLanguage(code)
                                             LocaleHelper.updateAppLocale(code)
                                             (context as? ComponentActivity)?.recreate()
                                         }
-                                    showLanguagePicker = false
-                                }
-                                .padding(Dimens.SpaceSm),
-                            verticalAlignment = Alignment.CenterVertically
+                                        showLanguagePicker = false
+                                    }.padding(Dimens.SpaceSm),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 text = name,
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.weight(1f),
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (selected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onBackground
+                                color =
+                                    if (selected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onBackground
+                                    },
                             )
                             if (selected) {
                                 Icon(
                                     imageVector = Icons.Filled.Check,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(Dimens.SpaceLg)
+                                    modifier = Modifier.size(Dimens.SpaceLg),
                                 )
                             }
                         }
@@ -1664,7 +1830,7 @@ fun SettingsScreen(
                 TextButton(onClick = { showLanguagePicker = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
-            }
+            },
         )
     }
 
@@ -1678,12 +1844,12 @@ fun SettingsScreen(
                         imageVector = Icons.Filled.Refresh,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(24.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.update_dialog_title),
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.titleLarge,
                     )
                 }
             },
@@ -1694,34 +1860,35 @@ fun SettingsScreen(
                         text = stringResource(R.string.update_dialog_latest, latestVersion ?: ""),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                     // 当前版本
                     Text(
                         text = stringResource(R.string.update_dialog_current, BuildConfig.VERSION_NAME),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     // 更新说明标题
                     Text(
                         text = stringResource(R.string.update_dialog_notes_label),
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
                     )
                     // 更新说明正文（可滚动）
                     val notes = releaseNotes ?: stringResource(R.string.update_no_notes)
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 200.dp)
-                            .verticalScroll(rememberScrollState())
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                                .verticalScroll(rememberScrollState()),
                     ) {
                         Text(
                             text = notes,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.4
+                            lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.4,
                         )
                     }
                 }
@@ -1731,7 +1898,7 @@ fun SettingsScreen(
                     onClick = {
                         showUpdateDialog = false
                         startDownloadApk()
-                    }
+                    },
                 ) {
                     Text(stringResource(R.string.update_action_update_now))
                 }
@@ -1740,7 +1907,7 @@ fun SettingsScreen(
                 TextButton(onClick = { showUpdateDialog = false }) {
                     Text("稍后再说")
                 }
-            }
+            },
         )
     }
 }

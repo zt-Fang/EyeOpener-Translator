@@ -9,12 +9,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
@@ -27,23 +27,21 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import dagger.hilt.android.AndroidEntryPoint
 import io.github.ztfang.eye.domain.model.DisplayMode
 import io.github.ztfang.eye.domain.model.SubtitleLine
 import io.github.ztfang.eye.domain.model.SubtitleType
 import io.github.ztfang.eye.viewmodel.SubtitleManager
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
-import kotlin.math.max
-import kotlin.math.min
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import javax.inject.Inject
+import kotlin.math.max
 
 @AndroidEntryPoint
 class FloatingSubtitleService : Service() {
-
     private var windowManager: WindowManager? = null // 窗口管理器，负责添加、移除和更新悬浮窗
     private var floatingView: View? = null // 悬浮窗根视图
     private var subtitleList: LinearLayout? = null // 字幕内容容器
@@ -52,21 +50,25 @@ class FloatingSubtitleService : Service() {
 
     private val mainHandler = Handler(Looper.getMainLooper()) // 主线程 Handler，用于从协程切回 UI 线程
     private val screenWidthPx: Int // 屏幕宽度（像素），适配 Android 11+ 的窗口指标 API
-        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val windowMetrics = getSystemService(WindowManager::class.java)
-                ?.currentWindowMetrics
-            windowMetrics?.bounds?.width() ?: resources.displayMetrics.widthPixels
-        } else {
-            resources.displayMetrics.widthPixels
-        }
+        get() =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val windowMetrics =
+                    getSystemService(WindowManager::class.java)
+                        ?.currentWindowMetrics
+                windowMetrics?.bounds?.width() ?: resources.displayMetrics.widthPixels
+            } else {
+                resources.displayMetrics.widthPixels
+            }
     private val screenHeightPx: Int // 屏幕高度（像素），适配 Android 11+ 的窗口指标 API
-        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val windowMetrics = getSystemService(WindowManager::class.java)
-                ?.currentWindowMetrics
-            windowMetrics?.bounds?.height() ?: resources.displayMetrics.heightPixels
-        } else {
-            resources.displayMetrics.heightPixels
-        }
+        get() =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val windowMetrics =
+                    getSystemService(WindowManager::class.java)
+                        ?.currentWindowMetrics
+                windowMetrics?.bounds?.height() ?: resources.displayMetrics.heightPixels
+            } else {
+                resources.displayMetrics.heightPixels
+            }
 
     // 最小尺寸:宽 240dp / 高 200dp(顶部条 + 字幕区 + padding)
     private val minWidthPx: Int // 窗口最小宽度（像素）
@@ -97,9 +99,10 @@ class FloatingSubtitleService : Service() {
 
     /** 顶部功能区自动隐藏：语音识别时隐藏，触摸显示，3秒后自动隐藏 */
     private var topActionsView: View? = null
-    private val hideTopActionsRunnable = Runnable {
-        topActionsView?.visibility = View.GONE
-    }
+    private val hideTopActionsRunnable =
+        Runnable {
+            topActionsView?.visibility = View.GONE
+        }
 
     // WakeLock so audio recording is not paused when the screen turns off.
     private var wakeLock: PowerManager.WakeLock? = null
@@ -112,10 +115,13 @@ class FloatingSubtitleService : Service() {
     private var translatingIndicator: android.view.View? = null
 
     // ============ 个性化设置缓存（来自 SettingsRepository，由 Service 订阅） ============
+
     /** 当前背景透明度 0..1，影响悬浮窗背景 alpha */
     @Volatile private var bgTransparency: Float = 0.75f
+
     /** 当前字体大小（sp，连续值 12f..32f），默认 14sp 更紧凑 */
     @Volatile private var fontSize: Float = 14f
+
     /** 当前主色 ARGB，影响按钮图标和译文颜色 */
     @Volatile private var accentColor: Int = 0xFF1A73E8.toInt()
 
@@ -129,9 +135,12 @@ class FloatingSubtitleService : Service() {
         super.onCreate()
         // 【权限排查日志】记录 Service 启动时的关键状态，用于定位闪退
         Log.i(TAG, "========== FloatingSubtitleService onCreate 开始 ==========")
-        Log.i(TAG, "onCreate: SDK=${Build.VERSION.SDK_INT}, " +
+        Log.i(
+            TAG,
+            "onCreate: SDK=${Build.VERSION.SDK_INT}, " +
                 "audioSource=${subtitleManager.audioSource.value}, " +
-                "hasProjection=${subtitleManager.hasMediaProjection()}")
+                "hasProjection=${subtitleManager.hasMediaProjection()}",
+        )
         promoteToForeground()
         acquireWakeLock()
 
@@ -143,25 +152,29 @@ class FloatingSubtitleService : Service() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
         // 根据 Android 版本选择窗口类型：Android 8+ 使用 TYPE_APPLICATION_OVERLAY，旧版本使用 TYPE_PHONE
-        val typeFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else WindowManager.LayoutParams.TYPE_PHONE
+        val typeFlag =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
 
         // FLAG_NOT_FOCUSABLE:不抢输入法焦点
         // FLAG_NOT_TOUCH_MODAL:触摸事件只派发给窗口内
         // FLAG_WATCH_OUTSIDE_TOUCH:接收窗口外触摸(用于边缘检测)
         // FLAG_LAYOUT_IN_SCREEN:窗口坐标基于屏幕
         // PixelFormat.TRANSPARENT:完全透明背景，无系统窗口阴影
-        layoutParams = WindowManager.LayoutParams(
-            defaultWidthPx,
-            defaultHeightPx,
-            typeFlag,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSPARENT
-        )
+        layoutParams =
+            WindowManager.LayoutParams(
+                defaultWidthPx,
+                defaultHeightPx,
+                typeFlag,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSPARENT,
+            )
         layoutParams.gravity = Gravity.TOP or Gravity.START // 窗口定位基准点为左上角
         layoutParams.x = 0
         layoutParams.y = 0
@@ -222,7 +235,7 @@ class FloatingSubtitleService : Service() {
                 mainHandler.post {
                     refreshSubtitleDisplay(
                         state.lines,
-                        state.displayMode
+                        state.displayMode,
                     )
                 }
             }
@@ -250,11 +263,12 @@ class FloatingSubtitleService : Service() {
         serviceScope.launch {
             subtitleManager.isTranslating.collectLatest { isTranslating ->
                 mainHandler.post {
-                    translatingIndicator?.visibility = if (isTranslating) {
-                        android.view.View.VISIBLE
-                    } else {
-                        android.view.View.GONE
-                    }
+                    translatingIndicator?.visibility =
+                        if (isTranslating) {
+                            android.view.View.VISIBLE
+                        } else {
+                            android.view.View.GONE
+                        }
                 }
             }
         }
@@ -296,7 +310,11 @@ class FloatingSubtitleService : Service() {
         subtitleManager.ensureModelsLoaded()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         // Start audio processing in the ViewModel
         subtitleManager.startAudioProcessing()
         return START_STICKY
@@ -337,14 +355,17 @@ class FloatingSubtitleService : Service() {
             if (audioSource == 1 && hasToken) {
                 type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             }
-            Log.i(TAG, "promoteToForeground: SDK=${Build.VERSION.SDK_INT}, " +
-                    "audioSource=$audioSource, hasToken=$hasToken, type=$type")
+            Log.i(
+                TAG,
+                "promoteToForeground: SDK=${Build.VERSION.SDK_INT}, " +
+                    "audioSource=$audioSource, hasToken=$hasToken, type=$type",
+            )
             try {
                 ServiceCompat.startForeground(
                     this,
                     NOTIFICATION_ID,
                     notification,
-                    type
+                    type,
                 )
                 Log.i(TAG, "promoteToForeground: 成功 (type=$type)")
                 // 成为前台服务后，若有待处理的 token 则创建 MediaProjection 实例
@@ -360,7 +381,7 @@ class FloatingSubtitleService : Service() {
                         this,
                         NOTIFICATION_ID,
                         notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
                     )
                     Log.i(TAG, "promoteToForeground: 回退 microphone-only 成功")
                 } catch (e2: Exception) {
@@ -377,27 +398,31 @@ class FloatingSubtitleService : Service() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (mgr.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Floating subtitle",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Active when the live subtitle overlay is running"
-            setShowBadge(false)
-            setSound(null, null)
-        }
+        val channel =
+            NotificationChannel(
+                CHANNEL_ID,
+                "Floating subtitle",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Active when the live subtitle overlay is running"
+                setShowBadge(false)
+                setSound(null, null)
+            }
         mgr.createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
-        val contentIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, io.github.ztfang.eye.MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val contentIntent =
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, io.github.ztfang.eye.MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                },
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        return NotificationCompat
+            .Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("EyeOpener 字幕运行中")
             .setContentText("点击返回应用")
@@ -409,14 +434,16 @@ class FloatingSubtitleService : Service() {
 
     private fun acquireWakeLock() {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "EyeOpener:FloatingSubtitle"
-        ).apply {
-            setReferenceCounted(false)
-            // Cap at 8h to avoid runaway locks if onDestroy fails.
-            acquire(WAKE_LOCK_TIMEOUT_MS)
-        }
+        wakeLock =
+            pm
+                .newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "EyeOpener:FloatingSubtitle",
+                ).apply {
+                    setReferenceCounted(false)
+                    // Cap at 8h to avoid runaway locks if onDestroy fails.
+                    acquire(WAKE_LOCK_TIMEOUT_MS)
+                }
     }
 
     private fun releaseWakeLock() {
@@ -462,10 +489,11 @@ class FloatingSubtitleService : Service() {
         val btnSettings = floatingView?.findViewById<View>(R.id.btn_settings) ?: return
         btnSettings.setOnClickListener {
             try {
-                val intent = Intent(this, io.github.ztfang.eye.MainActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    putExtra("navigate_to", "personalization")
-                }
+                val intent =
+                    Intent(this, io.github.ztfang.eye.MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        putExtra("navigate_to", "personalization")
+                    }
                 startActivity(intent)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to launch settings from overlay", e)
@@ -478,9 +506,10 @@ class FloatingSubtitleService : Service() {
         btnBack.setOnClickListener {
             // 返回主界面（不关闭悬浮窗）
             try {
-                val intent = Intent(this, io.github.ztfang.eye.MainActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                }
+                val intent =
+                    Intent(this, io.github.ztfang.eye.MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    }
                 startActivity(intent)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to launch MainActivity from back button", e)
@@ -505,15 +534,23 @@ class FloatingSubtitleService : Service() {
         try {
             wm.updateViewLayout(view, layoutParams)
         } catch (e: IllegalArgumentException) {
-            Log.e(TAG, "updateViewLayout failed: IllegalArgumentException, " +
-                "x=${layoutParams.x}, y=${layoutParams.y}, w=${layoutParams.width}, h=${layoutParams.height}", e)
+            Log.e(
+                TAG,
+                "updateViewLayout failed: IllegalArgumentException, " +
+                    "x=${layoutParams.x}, y=${layoutParams.y}, w=${layoutParams.width}, h=${layoutParams.height}",
+                e,
+            )
             isAttached = false
         } catch (e: WindowManager.BadTokenException) {
             Log.e(TAG, "updateViewLayout failed: BadTokenException", e)
             isAttached = false
         } catch (e: Exception) {
-            Log.e(TAG, "updateViewLayout failed: unexpected, " +
-                "x=${layoutParams.x}, y=${layoutParams.y}, w=${layoutParams.width}, h=${layoutParams.height}", e)
+            Log.e(
+                TAG,
+                "updateViewLayout failed: unexpected, " +
+                    "x=${layoutParams.x}, y=${layoutParams.y}, w=${layoutParams.width}, h=${layoutParams.height}",
+                e,
+            )
             isAttached = false
         }
     }
@@ -629,8 +666,11 @@ class FloatingSubtitleService : Service() {
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    Log.d(TAG, "ACTION_${event.actionMasked}: dragging=$isDragging, resizing=$isResizing, " +
-                        "x=${layoutParams.x}, y=${layoutParams.y}, w=${layoutParams.width}, h=${layoutParams.height}")
+                    Log.d(
+                        TAG,
+                        "ACTION_${event.actionMasked}: dragging=$isDragging, resizing=$isResizing, " +
+                            "x=${layoutParams.x}, y=${layoutParams.y}, w=${layoutParams.width}, h=${layoutParams.height}",
+                    )
                     if (isAttached) {
                         if (isDragging) saveOverlayPosition()
                         if (isResizing) saveOverlaySize()
@@ -653,8 +693,10 @@ class FloatingSubtitleService : Service() {
         view.getLocationOnScreen(location)
         val x = rawX.toInt()
         val y = rawY.toInt()
-        return x >= location[0] && x <= location[0] + view.width &&
-            y >= location[1] && y <= location[1] + view.height
+        return x >= location[0] &&
+            x <= location[0] + view.width &&
+            y >= location[1] &&
+            y <= location[1] + view.height
     }
 
     private fun createSubtitleView(partialAlpha: Boolean): TextView {
@@ -672,15 +714,16 @@ class FloatingSubtitleService : Service() {
      * 与 PersonalizationScreen 的 SwatchPalette 6 色保持一致：
      * 0=紫 1=蓝 2=绿 3=橙 4=红 5=黑
      */
-    private fun accentColorFromIndex(index: Int): Int = when (index) {
-        0 -> 0xFF8B7FD8.toInt() // 紫
-        1 -> 0xFF1A73E8.toInt() // 蓝
-        2 -> 0xFF2EB89A.toInt() // 绿
-        3 -> 0xFFFF8F00.toInt() // 橙
-        4 -> 0xFFE53935.toInt() // 红
-        5 -> 0xFF2C2C2C.toInt() // 黑
-        else -> 0xFF1A73E8.toInt()
-    }
+    private fun accentColorFromIndex(index: Int): Int =
+        when (index) {
+            0 -> 0xFF8B7FD8.toInt() // 紫
+            1 -> 0xFF1A73E8.toInt() // 蓝
+            2 -> 0xFF2EB89A.toInt() // 绿
+            3 -> 0xFFFF8F00.toInt() // 橙
+            4 -> 0xFFE53935.toInt() // 红
+            5 -> 0xFF2C2C2C.toInt() // 黑
+            else -> 0xFF1A73E8.toInt()
+        }
 
     /**
      * 应用个性化设置到悬浮窗 UI。
@@ -759,7 +802,7 @@ class FloatingSubtitleService : Service() {
      */
     private fun refreshSubtitleDisplay(
         lines: List<SubtitleLine>,
-        displayMode: DisplayMode
+        displayMode: DisplayMode,
     ) {
         val list = subtitleList ?: return
         val hasContent = lines.isNotEmpty()
@@ -784,13 +827,15 @@ class FloatingSubtitleService : Service() {
             val textColor = (alpha shl 24) or 0x00FFFFFF
 
             // 文本容器（垂直）
-            val textContainer = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-            }
+            val textContainer =
+                LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams =
+                        LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                        )
+                }
 
             when (displayMode) {
                 DisplayMode.SOURCE_ONLY -> {
@@ -822,39 +867,46 @@ class FloatingSubtitleService : Service() {
             }
 
             // 蓝绿渐变侧边栏 + 文本内容，水平排列
-            val rowContainer = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-            }
+            val rowContainer =
+                LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    layoutParams =
+                        LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                        )
+                }
 
             // 蓝绿渐变侧边栏：宽度=4dp，高度随文本内容增长
             val density = resources.displayMetrics.density
             val barWidthPx = (4 * density).toInt()
-            val sidebar = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    barWidthPx,
-                    LinearLayout.LayoutParams.MATCH_PARENT
-                )
-                // 青蓝→绿垂直渐变，2dp圆角（参考 sidebar_gradient.xml 原始样式）
-                background = GradientDrawable(
-                    GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(Color.parseColor("#4DD0E1"), Color.parseColor("#81C784"))
-                ).apply { cornerRadius = 2 * density }
-            }
+            val sidebar =
+                View(this).apply {
+                    layoutParams =
+                        LinearLayout.LayoutParams(
+                            barWidthPx,
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                        )
+                    // 青蓝→绿垂直渐变，2dp圆角（参考 sidebar_gradient.xml 原始样式）
+                    background =
+                        GradientDrawable(
+                            GradientDrawable.Orientation.TOP_BOTTOM,
+                            intArrayOf(Color.parseColor("#4DD0E1"), Color.parseColor("#81C784")),
+                        ).apply { cornerRadius = 2 * density }
+                }
             rowContainer.addView(sidebar)
 
             // 文本区域加左边距
-            val textParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                weight = 1f
-                marginStart = (8 * density).toInt()
-            }
+            val textParams =
+                LinearLayout
+                    .LayoutParams(
+                        0,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        weight = 1f
+                        marginStart = (8 * density).toInt()
+                    }
             textContainer.layoutParams = textParams
             rowContainer.addView(textContainer)
 
@@ -862,10 +914,11 @@ class FloatingSubtitleService : Service() {
 
             if (index < lines.size - 1) {
                 val spacer = View(this)
-                spacer.layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    (6 * resources.displayMetrics.density).toInt()
-                )
+                spacer.layoutParams =
+                    LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        (6 * resources.displayMetrics.density).toInt(),
+                    )
                 list.addView(spacer)
             }
         }
@@ -880,8 +933,10 @@ class FloatingSubtitleService : Service() {
         const val TAG = "FloatingSubtitleService"
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "floating_subtitle"
+
         // 8h: longest sensible meeting / lecture session.
         const val WAKE_LOCK_TIMEOUT_MS = 8L * 60L * 60L * 1000L
+
         // 顶部功能区自动隐藏延迟（毫秒）
         const val HIDE_TOP_ACTIONS_DELAY_MS = 3000L
     }

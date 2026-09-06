@@ -2,7 +2,6 @@ package io.github.ztfang.eye.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,15 +45,16 @@ fun MessageInputBar(
     onSend: () -> Unit,
     onMicClick: () -> Unit,
     isListening: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = Dimens.ScreenPaddingH, vertical = Dimens.SpaceXs)
-            .clip(RoundedCornerShape(Dimens.CornerLg))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .heightIn(min = Dimens.InputBarHeight),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = Dimens.ScreenPaddingH, vertical = Dimens.SpaceXs)
+                .clip(RoundedCornerShape(Dimens.CornerLg))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .heightIn(min = Dimens.InputBarHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 输入框
@@ -63,46 +63,66 @@ fun MessageInputBar(
             onValueChange = onTextChange,
             placeholder = {
                 Text(
-                    text = if (isListening) "正在聆听..."
-                           else stringResource(R.string.assistant_input_hint),
+                    text =
+                        if (isListening) {
+                            "正在聆听..."
+                        } else {
+                            stringResource(R.string.assistant_input_hint)
+                        },
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (isListening) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    color =
+                        if (isListening) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        },
                 )
             },
             singleLine = false,
-            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                color = if (isListening) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface,
-            ),
+            textStyle =
+                MaterialTheme.typography.bodyLarge.copy(
+                    color =
+                        if (isListening) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { onSend() }),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                cursorColor = MaterialTheme.colorScheme.primary
-            ),
-            modifier = Modifier.weight(1f)
+            colors =
+                TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                ),
+            modifier = Modifier.weight(1f),
         )
 
         // 麦克风按钮（内嵌）
         Box(
-            modifier = Modifier
-                .padding(end = Dimens.SpaceSm)
-                .size(Dimens.InputBarIconSize + 8.dp)
-                .clip(RoundedCornerShape(Dimens.CornerMd))
-                .clickable(onClick = onMicClick),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .padding(end = Dimens.SpaceSm)
+                    .size(Dimens.InputBarIconSize + 8.dp)
+                    .clip(RoundedCornerShape(Dimens.CornerMd))
+                    .clickable(onClick = onMicClick),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = if (isListening) Icons.Filled.Stop else Icons.Filled.Mic,
-                contentDescription = stringResource(
-                    if (isListening) R.string.assistant_stop_cd else R.string.assistant_voice_cd
-                ),
-                tint = if (isListening) MaterialTheme.colorScheme.error
-                       else Color(0xFF8B7FD8),
+                contentDescription =
+                    stringResource(
+                        if (isListening) R.string.assistant_stop_cd else R.string.assistant_voice_cd,
+                    ),
+                tint =
+                    if (isListening) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        Color(0xFF8B7FD8)
+                    },
                 modifier = Modifier.size(Dimens.InputBarIconSize),
             )
         }
