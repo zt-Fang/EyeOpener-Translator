@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.AlertDialog
@@ -245,6 +246,7 @@ fun LocalModelsScreen(
                     downloading = isDownloading,
                     progress = progress,
                     onDownload = { settingsViewModel.downloadSherpaOnnxModel(model.modelId) },
+                    onCancel = { settingsViewModel.cancelModelDownload(modelName) },
                     onDelete = { pendingDelete = PendingDelete(modelName, modelTitle, sizeText) }
                 )
             }
@@ -277,6 +279,7 @@ fun LocalModelsScreen(
                     downloading = isDownloading,
                     progress = progress,
                     onDownload = { settingsViewModel.downloadVoskModel(lang.code) },
+                    onCancel = { settingsViewModel.cancelModelDownload(modelName) },
                     onDelete = { pendingDelete = PendingDelete(modelName, lang.displayName, sizeText) }
                 )
             }
@@ -375,6 +378,7 @@ private fun ModelRowItem(
     downloading: Boolean,
     progress: Float,
     onDownload: () -> Unit,
+    onCancel: () -> Unit,
     onDelete: () -> Unit,
     subtitle: String? = null,
 ) {
@@ -462,6 +466,18 @@ private fun ModelRowItem(
                     text = "${(progress * 100).toInt()}%",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            // 取消按钮（下载中）
+            IconButton(
+                onClick = onCancel,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.local_model_action_cancel),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         } else {

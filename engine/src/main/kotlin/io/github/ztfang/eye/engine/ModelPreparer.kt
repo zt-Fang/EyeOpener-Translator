@@ -178,7 +178,7 @@ class ModelPreparer @Inject constructor(
             ))
 
         if (!isSherpaOnnxAsrReady(modelId)) {
-            Log.e(TAG, "prepareSherpaOnnxAsr: 模型文件不完整, modelId=$modelId")
+            Log.e(TAG, "[MODEL_CHECK] modelId=$modelId REASON=FILE_MISSING(真未下载/文件不全), dir=${modelDir.absolutePath}")
             return@withContext Result.failure(IllegalStateException(
                 "Sherpa-ONNX 模型未下载: ${model.displayName}"
             ))
@@ -187,7 +187,8 @@ class ModelPreparer @Inject constructor(
         Log.i(TAG, "prepareSherpaOnnxAsr: 模型文件齐全, modelId=$modelId, path=${modelDir.absolutePath}")
         val initResult = sherpaEngine.init(modelDir.absolutePath)
         if (initResult.isFailure) {
-            Log.e(TAG, "prepareSherpaOnnxAsr: 引擎初始化失败: ${initResult.exceptionOrNull()?.message}")
+            val errMsg = initResult.exceptionOrNull()?.message ?: "unknown"
+            Log.e(TAG, "[MODEL_CHECK] modelId=$modelId REASON=INIT_FAILED(文件齐全但引擎初始化失败，非下载问题), dir=${modelDir.absolutePath}, err=$errMsg")
         }
         initResult
     }

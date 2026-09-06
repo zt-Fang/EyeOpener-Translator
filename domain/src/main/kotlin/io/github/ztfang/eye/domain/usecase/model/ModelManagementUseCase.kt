@@ -78,6 +78,11 @@ class ModelManagementUseCase @Inject constructor(
         modelRepository.deleteModel(modelName)
     }
 
+    /** 取消正在进行的模型下载（协作式：下一文件块中断） */
+    fun cancelDownload(modelName: String) {
+        modelRepository.cancelDownload(modelName)
+    }
+
     /** 检查模型是否已下载 */
     suspend fun isModelAvailable(modelName: String): Boolean =
         modelRepository.getModelPath(modelName) != null

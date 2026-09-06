@@ -43,6 +43,9 @@ interface ModelRepository {
     /** 获取模型的本地路径 */
     fun getModelPath(modelName: String): String?
 
+    /** 取消正在进行的模型下载（协作式：下一文件块即中断并清理 .part 暂存，状态回滚 NOT_EXIST） */
+    fun cancelDownload(modelName: String)
+
     /** 下载 zip 并解压到 extractDir（Vosk 等 zip 发布的模型） */
     suspend fun downloadAndExtractZip(
         modelName: String,

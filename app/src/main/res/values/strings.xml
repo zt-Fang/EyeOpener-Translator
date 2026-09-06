@@ -126,6 +126,7 @@
     <!-- 模型下载 -->
     <string name="local_model_action_download">开始下载</string>
     <string name="local_model_action_delete">删除</string>
+    <string name="local_model_action_cancel">取消</string>
     <string name="local_model_huggingface_tip">中英文模型走 ModelScope（国内源）；孟加拉语与多语种模型需访问 HuggingFace，请检查网络环境</string>
     <string name="local_model_x_asr_name">中英文</string>
     <string name="local_model_nemotron_name">多语种(26)</string>

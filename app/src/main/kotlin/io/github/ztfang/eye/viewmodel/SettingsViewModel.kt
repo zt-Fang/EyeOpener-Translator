@@ -21,6 +21,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import java.util.concurrent.ConcurrentHashMap
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -63,6 +64,9 @@ class SettingsViewModel @Inject constructor(
     private val _downloadError = MutableStateFlow<String?>(null)
     val downloadError: StateFlow<String?> = _downloadError.asStateFlow()
 
+    /** 用户主动取消的模型集合（用于在下载结果返回时不显示"下载失败"错误） */
+    private val _cancelledModels = ConcurrentHashMap<String, Boolean>()
+
     /**
      * 下载 Vosk ASR 模型（30–82 MB zip，解压至 filesDir/models/vosk/<lang>/）。
      * 下载中文模型前检查 Sherpa-ONNX 互斥，存在则提示先删除。
@@ -100,8 +104,7 @@ class SettingsViewModel @Inject constructor(
             )
             Log.d(TAG_VM, "[RESULT] downloadVoskModel $languageCode: success=${result.isSuccess}, ex=${result.exceptionOrNull()?.message}")
             result.onFailure { e ->
-                _downloadError.value = "${languageCode.uppercase()} 模型下载失败: ${e.message}"
-                Log.e(TAG_VM, "[FAIL] downloadVoskModel $languageCode", e)
+                reportDownloadError(modelName, e, "${languageCode.uppercase()} 模型下载失败")
             }
             _downloadProgressMap.value = _downloadProgressMap.value - modelName
             Log.d(TAG_VM, "[CLEANUP] vosk $languageCode 从 progressMap 移除, 剩余keys=${_downloadProgressMap.value.keys}")
@@ -142,8 +145,7 @@ class SettingsViewModel @Inject constructor(
                 )
                 Log.d(TAG_VM, "[RESULT] sherpa-files $modelId: success=${result.isSuccess}, ex=${result.exceptionOrNull()?.message}")
                 result.onFailure { e ->
-                    _downloadError.value = "Sherpa-ONNX 模型下载失败: ${e.message}"
-                    Log.e(TAG_VM, "[FAIL] downloadSherpaOnnxFiles $modelId", e)
+                    reportDownloadError(modelName, e, "Sherpa-ONNX 模型下载失败")
                 }
                 _downloadProgressMap.value = _downloadProgressMap.value - modelName
                 Log.d(TAG_VM, "[CLEANUP] sherpa-files $modelId 从 progressMap 移除, 剩余keys=${_downloadProgressMap.value.keys}")
@@ -178,8 +180,7 @@ class SettingsViewModel @Inject constructor(
             )
             Log.d(TAG_VM, "[RESULT] sherpa-tar $modelId: success=${result.isSuccess}, ex=${result.exceptionOrNull()?.message}")
             result.onFailure { e ->
-                _downloadError.value = "Sherpa-ONNX 模型下载失败: ${e.message}"
-                Log.e(TAG_VM, "[FAIL] downloadAndExtractSherpaOnnx $modelId", e)
+                reportDownloadError(modelName, e, "Sherpa-ONNX 模型下载失败")
             }
             _downloadProgressMap.value = _downloadProgressMap.value - modelName
             Log.d(TAG_VM, "[CLEANUP] sherpa-tar $modelId 从 progressMap 移除, 剩余keys=${_downloadProgressMap.value.keys}")
@@ -192,6 +193,28 @@ class SettingsViewModel @Inject constructor(
     fun deleteModel(name: String) {
         viewModelScope.launch {
             modelManagementUseCase.removeModel(name)
+        }
+    }
+
+    /** 取消正在进行的模型下载（协作式：仓库下一文件块中断并清理 .part，状态回滚 NOT_EXIST） */
+    fun cancelModelDownload(modelName: String) {
+        Log.w(TAG_VM, "[CANCEL] cancelModelDownload: $modelName")
+        _cancelledModels[modelName] = true
+        modelManagementUseCase.cancelDownload(modelName)
+        // 立即从进度映射移除，UI 取消按钮即时消失
+        _downloadProgressMap.value = _downloadProgressMap.value - modelName
+    }
+
+    /**
+     * 统一处理下载结果：用户主动取消时不显示"下载失败"错误，仅记录日志。
+     */
+    private fun reportDownloadError(modelName: String, e: Throwable, label: String) {
+        if (_cancelledModels.remove(modelName) == true) {
+            _downloadError.value = null
+            Log.i(TAG_VM, "[CANCELLED] $modelName: 下载已被用户取消，不显示错误（${e.message}）")
+        } else {
+            _downloadError.value = "$label: ${e.message}"
+            Log.e(TAG_VM, "[FAIL] $modelName", e)
         }
     }
 

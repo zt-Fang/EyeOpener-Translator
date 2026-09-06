@@ -22,6 +22,8 @@ import java.io.IOException
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 模型仓库实现。目录约定（须与 [ModelPreparer] 一致，否则下载后找不到文件）：
@@ -30,6 +32,9 @@ import java.net.URL
  * - 状态：filesDir/models/{modelName}/state.json
  * 下载完成后把 {modelName}/ 暂存目录迁移到上述真实目录，localPath 指向真实路径。
  */
+/** 用户主动取消下载时抛出，区别于网络/IO 错误（不会误报为 ERROR，状态回滚 NOT_EXIST）。 */
+private class DownloadCancelledException(message: String) : Exception(message)
+
 class ModelRepositoryImpl(private val context: Context) : ModelRepository {
 
     private val modelsBaseDir: File get() = File(context.filesDir, "models")
@@ -89,6 +94,9 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
 
     /** 内存中维护最新模型状态 */
     private val _modelsFlow = MutableStateFlow<Map<String, ModelState>>(emptyMap())
+
+    /** 下载取消标志：modelName → 是否请求取消（协作式：downloadOneFile 每写一块检查一次） */
+    private val cancelFlags = ConcurrentHashMap<String, AtomicBoolean>()
 
     override fun observeModel(modelName: String): Flow<ModelState> =
         _modelsFlow.map { it[modelName] ?: ModelState(modelName, ModelStatus.NOT_EXIST) }
@@ -183,13 +191,15 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                     target = target,
                     onBytes = { fileRead, fileSize ->
                         emit(spec.relativePath, fileRead, fileSize)
-                    }
+                    },
+                    modelName = modelName
                 )
                 onFileComplete(spec.relativePath)
                 val actualFileBytes = target.length()
+                // 先 emit 再累加：避免 bytes = aggregate(已含 actualFileBytes) + actualFileBytes 重复计算
+                emit(spec.relativePath, actualFileBytes, actualFileBytes, isFinal = true)
                 aggregateDownloaded += actualFileBytes
                 Log.i(TAG, "[DL_FILE_DONE] $modelName: 文件(${index+1}/${files.size}) ${spec.relativePath}, actualBytes=$actualFileBytes, aggregateAfter=$aggregateDownloaded")
-                emit(spec.relativePath, actualFileBytes, actualFileBytes, isFinal = true)
             }
 
             // 迁移暂存目录 → ModelPreparer 真实读取目录，否则 prepareAsr 找不到文件
@@ -223,6 +233,12 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                 Log.i(TAG, "下载成功: model=$modelName, localPath(ASR真实目录)=$realPath")
                 Result.success(state)
             }
+        } catch (e: DownloadCancelledException) {
+            Log.w(TAG, "[CANCEL] 下载被用户取消: $modelName, 清理 .part 并重置状态为 NOT_EXIST")
+            cleanupPartialFiles(dir)
+            cancelFlags.remove(modelName)
+            updateState(modelName, ModelStatus.NOT_EXIST)
+            Result.failure(e)
         } catch (e: Exception) {
             Log.e(TAG, "Download failed for $modelName: ${e.message}", e)
             updateState(modelName, ModelStatus.ERROR, errorMessage = e.message ?: "Unknown error")
@@ -291,12 +307,14 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                     target = target,
                     onBytes = { fileRead, fileSize ->
                         emit(spec.relativePath, fileRead, fileSize)
-                    }
+                    },
+                    modelName = modelName
                 )
                 val actualFileBytes = target.length()
-                aggregateDownloaded += actualFileBytes
-                Log.i(TAG, "[DL_FILE_DONE] $modelName: 文件(${index+1}/${files.size}) ${spec.relativePath}, actualBytes=$actualFileBytes, aggregateAfter=$aggregateDownloaded")
+                // 先 emit 再累加：避免 bytes = aggregate(已含 actualFileBytes) + actualFileBytes 重复计算
+                Log.i(TAG, "[DL_FILE_DONE] $modelName: 文件(${index+1}/${files.size}) ${spec.relativePath}, actualBytes=$actualFileBytes, aggregateBefore=$aggregateDownloaded")
                 emit(spec.relativePath, actualFileBytes, actualFileBytes, isFinal = true)
+                aggregateDownloaded += actualFileBytes
             }
 
             // 全部下完后做完整性校验
@@ -345,6 +363,12 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                     Result.success(state)
                 }
             }
+        } catch (e: DownloadCancelledException) {
+            Log.w(TAG, "[CANCEL] 多文件下载被用户取消: $modelName, 清理 .part 并重置状态为 NOT_EXIST")
+            cleanupPartialFiles(dir)
+            cancelFlags.remove(modelName)
+            updateState(modelName, ModelStatus.NOT_EXIST)
+            Result.failure(e)
         } catch (e: Exception) {
             Log.e(TAG, "[DL_FAIL] $modelName: 多文件下载失败: ${e.javaClass.simpleName}: ${e.message}; 累计bytes=$aggregateDownloaded/$totalSizeAllFiles; 正在尝试的文件=${runCatching { files.getOrNull(files.indexOfFirst { !File(dir, it.relativePath).exists() })?.relativePath }.getOrNull()}", e)
             updateState(modelName, ModelStatus.ERROR, errorMessage = e.message ?: "Unknown error")
@@ -362,7 +386,8 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         spec: ModelFileSpec,
         target: File,
         onBytes: (bytesRead: Long, totalBytes: Long) -> Unit,
-        allowResume: Boolean = true
+        allowResume: Boolean = true,
+        modelName: String
     ) {
         val host = runCatching { URL(spec.url).host }.getOrNull()
         if (host == null || host !in ALLOWED_DOWNLOAD_HOSTS) {
@@ -393,7 +418,7 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             conn.disconnect()
             if (allowResume) {
                 Log.w(TAG, "[DL_416] ${spec.relativePath}: .part 无法续传，删除后重新下载")
-                downloadOneFile(spec, target, onBytes, allowResume = false)
+                downloadOneFile(spec, target, onBytes, allowResume = false, modelName = modelName)
                 return
             }
             throw IOException("HTTP 416 for ${spec.url}")
@@ -445,6 +470,11 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                     output.write(buffer, 0, read)
                     total += read
                     onBytes(total, totalBytes)
+                    // 协作式取消：用户点「取消」后下一文件块即中断（最快一个 64KB chunk 内响应）
+                    if (cancelFlags[modelName]?.get() == true) {
+                        Log.w(TAG, "[CANCEL] downloadOneFile 检测到取消: model=$modelName, file=${spec.relativePath}, 已下=$total/$totalBytes")
+                        throw DownloadCancelledException("Download cancelled: $modelName")
+                    }
                 }
                 output.flush()
             }
@@ -527,6 +557,21 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         return if (exists) dir.absolutePath else null
     }
 
+    override fun cancelDownload(modelName: String) {
+        cancelFlags.getOrPut(modelName) { AtomicBoolean(false) }.set(true)
+        Log.w(TAG, "[CANCEL] cancelDownload 请求: $modelName（下一文件块将中断并清理 .part）")
+    }
+
+    /** 删除目录下所有 .part 暂存文件（取消下载后清理，避免残留半截文件被误判完整） */
+    private fun cleanupPartialFiles(dir: File) {
+        runCatching {
+            dir.listFiles()?.filter { it.name.endsWith(".part") }?.forEach { f ->
+                val ok = f.delete()
+                Log.i(TAG, "[CANCEL] 删除暂存: ${f.absolutePath}, ok=$ok")
+            }
+        }
+    }
+
     /** 下载 zip → 解压到 extractDir → 更新状态 */
     override suspend fun downloadAndExtractZip(
         modelName: String,
@@ -561,7 +606,8 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                             speedBytesPerSec = if (elapsed > 0) clampedRead / elapsed else 0L
                         )
                     )
-                }
+                },
+                modelName = modelName
             )
             Log.i(TAG, "Zip download complete: ${zipFile.absolutePath}")
 
@@ -596,11 +642,18 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             updateState(state)
             state
         }.onFailure { e ->
-            Log.e(TAG, "downloadAndExtractZip failed for $modelName: ${e.message}", e)
-            updateState(modelName, ModelStatus.ERROR, errorMessage = e.message ?: "Unknown error")
-            // 清理残留文件
-            zipFile.delete()
-            if (destDir.exists()) destDir.deleteRecursively()
+            if (e is DownloadCancelledException) {
+                Log.w(TAG, "[CANCEL] zip 下载被用户取消: $modelName, 清理并重置 NOT_EXIST")
+                cleanupPartialFiles(zipFile.parentFile ?: modelsBaseDir)
+                cancelFlags.remove(modelName)
+                updateState(modelName, ModelStatus.NOT_EXIST)
+            } else {
+                Log.e(TAG, "downloadAndExtractZip failed for $modelName: ${e.message}", e)
+                updateState(modelName, ModelStatus.ERROR, errorMessage = e.message ?: "Unknown error")
+                // 清理残留文件
+                zipFile.delete()
+                if (destDir.exists()) destDir.deleteRecursively()
+            }
         }
     }
 
@@ -638,7 +691,8 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                             speedBytesPerSec = if (elapsed > 0) clampedRead / elapsed else 0L
                         )
                     )
-                }
+                },
+                modelName = modelName
             )
             Log.i(TAG, "Tar.bz2 download complete: ${tarFile.absolutePath}")
 
@@ -673,10 +727,17 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
             updateState(state)
             state
         }.onFailure { e ->
-            Log.e(TAG, "downloadAndExtractTarBz2 failed for $modelName: ${e.message}", e)
-            updateState(modelName, ModelStatus.ERROR, errorMessage = e.message ?: "Unknown error")
-            tarFile.delete()
-            if (destDir.exists()) destDir.deleteRecursively()
+            if (e is DownloadCancelledException) {
+                Log.w(TAG, "[CANCEL] tar.bz2 下载被用户取消: $modelName, 清理并重置 NOT_EXIST")
+                cleanupPartialFiles(tarFile.parentFile ?: modelsBaseDir)
+                cancelFlags.remove(modelName)
+                updateState(modelName, ModelStatus.NOT_EXIST)
+            } else {
+                Log.e(TAG, "downloadAndExtractTarBz2 failed for $modelName: ${e.message}", e)
+                updateState(modelName, ModelStatus.ERROR, errorMessage = e.message ?: "Unknown error")
+                tarFile.delete()
+                if (destDir.exists()) destDir.deleteRecursively()
+            }
         }
     }
 
@@ -770,6 +831,14 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
                             }
                             // ERROR 但 localPath 完整 → 已走情况A
                         }
+                    } else if (st == ModelStatus.AVAILABLE && localPathExists && !completeNow) {
+                        // 情况D：AVAILABLE 但磁盘文件不完整（如 tokens.txt 被外部清理/损坏丢失）
+                        // 原逻辑只对 !AVAILABLE 做自愈，AVAILABLE 永不校验，导致 UI 假下载但运行时 init 失败。
+                        // 改为：降级为 ERROR，保留文件（可断点续传），UI 触发"重新下载"提示。
+                        Log.w(TAG, "[INIT_STATE_FIX] ${modelDir.name}: AVAILABLE 但磁盘不完整（missing files），降级为 ERROR 保留文件供续传, files=${localPathFile.listFiles()?.map { it.name to it.length() }}")
+                        fixedStatus = ModelStatus.ERROR
+                        fixedProgress = 0f
+                        // fixedLocalPath 保留：UI 仍能定位目录并发起重新下载
                     }
                     result[modelDir.name] = ModelState(
                         modelNameFromJson,

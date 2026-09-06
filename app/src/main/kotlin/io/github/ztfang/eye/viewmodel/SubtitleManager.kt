@@ -1049,7 +1049,13 @@ class SubtitleManager @Inject constructor(
                 Log.i(LOG_TAG, "[ENSURE] ASR 模型 prepare 成功, engine=$asrEngine, lang=$lang")
             }
             prepare.onFailure { err ->
-                Log.e(LOG_TAG, "[ENSURE] ASR 准备失败, engine=$asrEngine, lang=$lang: ${err.message}", err)
+                val dirDetail = runCatching {
+                    val resolvedModelId = if (asrEngine == AsrEngineType.VOSK) null else resolveSherpaModelId(lang)
+                    val dir = if (resolvedModelId != null) modelPreparer.sherpaOnnxModelDir(resolvedModelId) else modelPreparer.asrModelDir(lang)
+                    "dir=${dir.absolutePath}, exists=${dir.exists()}, files=${dir.listFiles()?.map { "${it.name}(${it.length()})" }?.take(10)}"
+                }.getOrDefault("dirResolveErr")
+                Log.e(LOG_TAG, "[MODEL_NOT_DOWNLOADED] lang=$lang, pickedEngine=$asrEngine, resolvedModelId=${resolveSherpaModelId(lang)}, $dirDetail")
+                Log.e(LOG_TAG, "[MODEL_NOT_DOWNLOADED] 真实异常: ${err.javaClass.simpleName}: ${err.message}")
                 _runtimeError.value = modelMissingMessage(lang)
             }
         }

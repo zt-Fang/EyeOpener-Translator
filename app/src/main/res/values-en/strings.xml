@@ -126,6 +126,7 @@
     <!-- Model Download -->
     <string name="local_model_action_download">Download</string>
     <string name="local_model_action_delete">Delete</string>
+    <string name="local_model_action_cancel">Cancel</string>
     <string name="local_model_huggingface_tip">The Chinese-English model uses ModelScope; Bengali and multilingual models require HuggingFace access. Please check your network.</string>
     <string name="local_model_x_asr_name">Chinese-English</string>
     <string name="local_model_nemotron_name">Multilingual (26)</string>

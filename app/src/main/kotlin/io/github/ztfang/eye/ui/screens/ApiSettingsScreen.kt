@@ -36,8 +36,10 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -287,7 +289,8 @@ fun ApiSettingsScreen(
     }
 }
 
-/** Provider 下拉选择框 */
+/** Provider 下拉选择框（ExposedDropdownMenuBox 就地下拉，宽度匹配触发框，不再像弹窗） */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProviderSelector(
     selected: LLMProvider,
@@ -296,46 +299,54 @@ private fun ProviderSelector(
     val shape = RoundedCornerShape(Dimens.SettingsCardCorner)
     var expanded by remember { mutableStateOf(false) }
 
-    Box(
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
         modifier = Modifier.fillMaxWidth()
-            .shadow(Dimens.GlassShadowElevation, shape = shape,
-                ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
-                spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f))
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
-            .border(BorderStroke(1.dp, Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f))
-            )), shape = shape)
     ) {
-        // 触发器行
-        Row(
+        // 触发器行：保留玻璃风样式，menuAnchor 让菜单就地锚定到本行下方
+        Box(
             modifier = Modifier
+                .menuAnchor()
                 .fillMaxWidth()
-                .clickable { expanded = true }
-                .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .shadow(Dimens.GlassShadowElevation, shape = shape,
+                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
+                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f))
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                .border(BorderStroke(1.dp, Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f))
+                )), shape = shape)
         ) {
-            Text(
-                text = stringResource(R.string.api_provider, selected.displayName),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium
-            )
-            Icon(
-                imageVector = if (expanded) Icons.Default.KeyboardArrowUp
-                else Icons.Default.KeyboardArrowDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = true }
+                    .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.api_provider, selected.displayName),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp
+                    else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
-        // 下拉菜单
-        DropdownMenu(
+        // 就地下拉菜单：宽度匹配触发框，不会遮挡全屏
+        ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier
-                .fillMaxWidth(0.92f)
+                .exposedDropdownSize(true)
                 .background(MaterialTheme.colorScheme.surface)
         ) {
             LLMProvider.entries.forEach { provider ->
@@ -366,7 +377,8 @@ private fun ProviderSelector(
                     onClick = {
                         onSelected(provider)
                         expanded = false
-                    }
+                    },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                 )
                 if (provider != LLMProvider.entries.last()) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))

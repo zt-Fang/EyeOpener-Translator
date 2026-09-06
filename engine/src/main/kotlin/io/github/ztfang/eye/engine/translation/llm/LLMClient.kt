@@ -59,7 +59,8 @@ enum class LLMProvider {
     MINIMAX,
     MIMO,
     GEMINI,
-    AGNES;
+    AGNES,
+    CUSTOM;
 
     val defaultBaseUrl: String get() = when (this) {
         OPEN_AI -> "https://api.openai.com/v1"
@@ -72,10 +73,11 @@ enum class LLMProvider {
         MIMO -> "https://api.mimo.xiaomi.com/v1"
         GEMINI -> "https://generativelanguage.googleapis.com/v1beta/openai"
         AGNES -> "https://apihub.agnes-ai.com/v1"
+        CUSTOM -> ""
     }
 
     val chatPath: String get() = when (this) {
-        OPEN_AI, OPENROUTER, DEEP_SEEK, ZHIPU, QWEN, MINIMAX, MIMO, GEMINI, AGNES -> "/chat/completions"
+        OPEN_AI, OPENROUTER, DEEP_SEEK, ZHIPU, QWEN, MINIMAX, MIMO, GEMINI, AGNES, CUSTOM -> "/chat/completions"
         CLAUDE -> "/messages"
     }
 
@@ -90,6 +92,7 @@ enum class LLMProvider {
         MIMO -> "mimo-7b-rl"
         GEMINI -> "gemini-1.5-flash"
         AGNES -> "agnes-2.0-flash"
+        CUSTOM -> ""
     }
 
     val displayName: String get() = when (this) {
@@ -103,6 +106,7 @@ enum class LLMProvider {
         MIMO -> "MiMo"
         GEMINI -> "Gemini"
         AGNES -> "Agnes"
+        CUSTOM -> "自定义"
     }
 }
 
@@ -141,7 +145,7 @@ class LLMClient @Inject constructor(
                 LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
                 LLMProvider.QWEN, LLMProvider.MINIMAX,
                 LLMProvider.MIMO, LLMProvider.GEMINI,
-                LLMProvider.AGNES ->
+                LLMProvider.AGNES, LLMProvider.CUSTOM ->
                     openAiTranslate(fullUrl, apiKey, effectiveModel, systemPrompt, text)
                 LLMProvider.CLAUDE ->
                     claudeTranslate(fullUrl, apiKey, effectiveModel, systemPrompt, text)
@@ -181,7 +185,7 @@ class LLMClient @Inject constructor(
                 LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
                 LLMProvider.QWEN, LLMProvider.MINIMAX,
                 LLMProvider.MIMO, LLMProvider.GEMINI,
-                LLMProvider.AGNES ->
+                LLMProvider.AGNES, LLMProvider.CUSTOM ->
                     openAiChat(fullUrl, apiKey, effectiveModel, messages)
                 LLMProvider.CLAUDE ->
                     claudeChat(fullUrl, apiKey, effectiveModel, messages)
@@ -206,7 +210,7 @@ class LLMClient @Inject constructor(
                 LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
                 LLMProvider.QWEN, LLMProvider.MINIMAX,
                 LLMProvider.MIMO, LLMProvider.GEMINI,
-                LLMProvider.AGNES ->
+                LLMProvider.AGNES, LLMProvider.CUSTOM ->
                     openAiChatStream(fullUrl, apiKey, effectiveModel, messages).collect { emit(it) }
                 LLMProvider.CLAUDE ->
                     claudeChatStream(fullUrl, apiKey, effectiveModel, messages).collect { emit(it) }
