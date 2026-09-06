@@ -332,14 +332,17 @@ private fun voskAccentEnd(code: String): Color {
 /**
  * 判断模型状态是否已下载可用。
  *
- * 用 ordinal 比较替代 name 比较，避免 release 混淆时枚举 name 匹配失效；
- * 并用 localPath 文件存在性兜底，双重保证。
+ * 用 ordinal 比较替代 name 比较，避免 release 混淆时枚举 name 匹配失效。
+ * 必须状态与目录同时满足：旧实现 `statusHit || pathHit` 仅凭 localPath 目录
+ * 存在就判"已下载"，导致只剩 .part 残片的目录也显示 ✓（韩语"假下载"的直接根因：
+ * init 已把状态自愈为 NOT_EXIST，但 pathHit 兜底把它掩盖，UI 仍显示已下载，
+ * 点韩语时 prepareSherpaOnnxAsr 却因文件不全报"模型未下载"）。
  */
 private fun ModelState?.isAvailable(): Boolean {
     if (this == null) return false
     val statusHit = status.ordinal == ModelStatus.AVAILABLE.ordinal
     val pathHit = localPath != null && File(localPath).exists()
-    return statusHit || pathHit
+    return statusHit && pathHit
 }
 
 /**
