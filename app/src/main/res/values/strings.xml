@@ -130,8 +130,8 @@
     <string name="local_model_huggingface_tip">中英文模型走 ModelScope（国内源）；孟加拉语与多语种模型需访问 HuggingFace，请检查网络环境</string>
     <string name="local_model_x_asr_name">中英文</string>
     <string name="local_model_nemotron_name">多语种(26)</string>
-    <string name="local_model_subtitle_x_asr">负责中文与英文（含中英混说）</string>
-    <string name="local_model_subtitle_nemotron">负责除中文、英文外的 26 种语言</string>
+    <string name="local_model_subtitle_x_asr">中英文识别</string>
+    <string name="local_model_subtitle_nemotron">其余 26 种语言</string>
     <string name="local_model_subtitle_bn">孟加拉语专用</string>
     <string name="local_model_delete_title">删除模型</string>
     <string name="local_model_delete_msg">确定删除「%1$s」（%2$s）吗？删除后需重新下载。</string>
@@ -163,6 +163,14 @@
     <string name="api_url_hint">https://api.example.com/v1/chat/completions</string>
     <string name="api_model_label">模型名称</string>
     <string name="api_model_hint">gpt-4 / claude-3-sonnet / deepseek-chat</string>
+    <string name="api_model_preset_hint">推荐模型（点击选择）</string>
+    <string name="api_model_fetch">拉取</string>
+    <string name="api_model_fetching">正在拉取模型列表…</string>
+    <string name="api_model_fetch_need_key">请先填写 API Key 再拉取模型</string>
+    <string name="api_model_fetch_success">已拉取 %1$d 个模型</string>
+    <string name="api_model_fetch_empty">服务商未返回任何模型</string>
+    <string name="api_model_fetch_failed">拉取失败：%1$s（已显示推荐模型）</string>
+    <string name="api_model_fetch_empty_hint">暂无模型列表，填写 API Key 后点击「拉取」从服务商获取</string>
     <string name="api_save">保存</string>
     <string name="api_provider">服务商：%1$s</string>
     <string name="api_enter_key">请输入 API Key</string>

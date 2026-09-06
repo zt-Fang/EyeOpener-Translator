@@ -445,9 +445,12 @@ class ModelRepositoryImpl(private val context: Context) : ModelRepository {
         val existingBytes = if (partFile.exists()) partFile.length() else 0L
 
         val conn = (URL(spec.url).openConnection() as HttpURLConnection).apply {
-            // 685MB 大模型在国内网络下常出现 30s 无数据 → 放宽读超时，并配合外层重试
+            // 读超时仅指"连续这么久一个字节都没到"，不限下载总时长/速度。
+            // 60s 在代理网络下会把短暂卡顿误杀成断线（触发重试、极端时丢进度），
+            // 放宽到 5 分钟：正常下载永远碰不到，只有连接真死透才会中断重连。
+            // 设 0 = 完全不限，但死连接会永久冻结下载且无任何报错，故保留兜底。
             connectTimeout = 20_000
-            readTimeout = 60_000
+            readTimeout = 300_000
             instanceFollowRedirects = true
             requestMethod = "GET"
             if (existingBytes > 0) {

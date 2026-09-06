@@ -102,22 +102,25 @@ enum class SherpaOnnxModel(
             ModelFileSpec(
                 relativePath = "encoder.int8.onnx",
                 url = "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-320ms-int8-2026-06-11/resolve/main/encoder.int8.onnx",
-                sizeBytes = 658L * 1024L * 1024L   // ~658 MB
+                // 实测远端精确大小（hf-mirror HEAD 2026-09-07）。旧值 658MiB 是估算，
+                // 与实际差 32MB → downloadOneFileOnce 的跳过检查永远不命中，已下完的
+                // 657MB 在重试/重进时会整文件重下。
+                sizeBytes = 657_601_518L
             ),
             ModelFileSpec(
                 relativePath = "decoder.int8.onnx",
                 url = "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-320ms-int8-2026-06-11/resolve/main/decoder.int8.onnx",
-                sizeBytes = 15L * 1024L * 1024L    // ~15 MB
+                sizeBytes = 14_978_075L    // 实测远端精确大小（旧估算 ~15MB 不准）
             ),
             ModelFileSpec(
                 relativePath = "joiner.int8.onnx",
                 url = "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-320ms-int8-2026-06-11/resolve/main/joiner.int8.onnx",
-                sizeBytes = 9_961_472L    // ~9.5 MB (HuggingFace 实际大小)
+                sizeBytes = 9_504_438L     // 实测远端精确大小（旧估算 9,961,472 不准）
             ),
             ModelFileSpec(
                 relativePath = "tokens.txt",
                 url = "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-320ms-int8-2026-06-11/resolve/main/tokens.txt",
-                sizeBytes = 131L * 1024L           // ~131 KB
+                sizeBytes = 131_440L       // 实测远端精确大小（旧估算 131KB≈134,144 不准）
             )
         )
     );

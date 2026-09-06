@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,13 +34,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -128,20 +126,34 @@ fun ApiSettingsScreen(
         }
     }
 
+    // 从服务商 API 拉取的模型列表（null = 未拉取，展示内置预设）
+    var fetchedModels by remember { mutableStateOf<List<String>?>(null) }
+    var isFetchingModels by remember { mutableStateOf(false) }
+    var fetchNote by remember { mutableStateOf<String?>(null) }
+    var fetchNoteIsError by remember { mutableStateOf(false) }
+    // 模型卡片内「可选模型」列表的展开状态
+    var modelListExpanded by remember { mutableStateOf(false) }
+
     // 切换 provider 时：URL/Model 用默认值（若用户未自定义），Key 回显该 provider 已保存的值
     LaunchedEffect(selectedProvider) {
         // URL：如果当前是任意 provider 的默认值或为空，则切换到新 provider 的默认值
         if (apiUrl.isBlank() || LLMProvider.entries.any { it.defaultBaseUrl == apiUrl }) {
             apiUrl = selectedProvider.defaultBaseUrl
         }
-        // Model：如果当前是任意 provider 的默认值或为空，则切换到新 provider 的默认值
-        if (modelName.isBlank() || LLMProvider.entries.any { it.defaultModel == modelName }) {
+        // Model：不再为空时强制预填（模型名不预设）；仅当当前模型命中任意 provider 默认值时，
+        // 随服务商切换为该 provider 的默认模型，避免跨服务商残留无效模型。
+        if (LLMProvider.entries.any { it.defaultModel == modelName }) {
             modelName = selectedProvider.defaultModel
         }
         // Key：回显当前 provider 已保存的值（用户还没开始编辑时）
         if (apiKey.isBlank()) {
             apiKey = keyFor(selectedProvider)
         }
+        // 切换服务商后，拉取的模型列表不再适用，重置回该服务商的内置预设
+        fetchedModels = null
+        fetchNote = null
+        fetchNoteIsError = false
+        modelListExpanded = false
     }
 
     var isTesting by remember { mutableStateOf(false) }
@@ -185,11 +197,46 @@ fun ApiSettingsScreen(
                 value = apiUrl,
                 onValueChange = { apiUrl = it }
             )
-            ApiInputCard(
+            // 模型名称卡：自由输入 + 「拉取」实时模型 + 内置预设三合一；
+            // 列表优先展示 API 实时拉取结果，未拉取时展示内置预设（均为官网核实支持流式的模型）。
+            ModelInputCard(
                 label = stringResource(R.string.api_model_label),
                 placeholder = selectedProvider.defaultModel,
                 value = modelName,
-                onValueChange = { modelName = it }
+                onValueChange = { modelName = it },
+                models = fetchedModels ?: selectedProvider.models,
+                expanded = modelListExpanded,
+                onExpandedChange = { modelListExpanded = it },
+                isFetching = isFetchingModels,
+                note = fetchNote,
+                noteIsError = fetchNoteIsError,
+                onFetch = {
+                    if (apiKey.isBlank()) {
+                        fetchNote = context.getString(R.string.api_model_fetch_need_key)
+                        fetchNoteIsError = true
+                    } else {
+                        scope.launch {
+                            isFetchingModels = true
+                            fetchNote = context.getString(R.string.api_model_fetching)
+                            fetchNoteIsError = false
+                            settingsViewModel.fetchLlmModels(selectedProvider, apiUrl.trim(), apiKey.trim())
+                                .onSuccess { list ->
+                                    fetchedModels = list
+                                    fetchNote = if (list.isEmpty()) context.getString(R.string.api_model_fetch_empty)
+                                    else context.getString(R.string.api_model_fetch_success, list.size)
+                                    fetchNoteIsError = false
+                                    // 拉取成功自动展开列表，减少一次点击
+                                    modelListExpanded = true
+                                }
+                                .onFailure { e ->
+                                    // 拉取失败：保留内置预设，仅提示原因
+                                    fetchNote = context.getString(R.string.api_model_fetch_failed, e.message ?: "")
+                                    fetchNoteIsError = true
+                                }
+                            isFetchingModels = false
+                        }
+                    }
+                }
             )
 
             if (status.isNotEmpty()) {
@@ -289,39 +336,53 @@ fun ApiSettingsScreen(
     }
 }
 
-/** Provider 下拉选择框（ExposedDropdownMenuBox 就地下拉，宽度匹配触发框，不再像弹窗） */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Provider 下拉选择框。
+ * 触发框与下拉面板共用同一玻璃卡片样式：展开时触发框底部方角、面板顶部方角互相对接，
+ * 面板底部 20dp 圆角，形成「无缝 + 圆角」的连续卡片（解决原 ExposedDropdownMenu 与服务商框的可见缝隙）。
+ * 展开时点击触发框或某项即收起；面板在常规流中就地展开，不遮挡全屏。
+ */
 @Composable
 private fun ProviderSelector(
     selected: LLMProvider,
     onSelected: (LLMProvider) -> Unit
 ) {
-    val shape = RoundedCornerShape(Dimens.SettingsCardCorner)
+    val corner = Dimens.SettingsCardCorner
     var expanded by remember { mutableStateOf(false) }
 
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        // 触发器行：保留玻璃风样式，menuAnchor 让菜单就地锚定到本行下方
+    val triggerShape = if (expanded) RoundedCornerShape(corner, corner, 0.dp, 0.dp)
+    else RoundedCornerShape(corner)
+    val panelShape = RoundedCornerShape(0.dp, 0.dp, corner, corner)
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // 触发框
         Box(
             modifier = Modifier
-                .menuAnchor()
                 .fillMaxWidth()
-                .shadow(Dimens.GlassShadowElevation, shape = shape,
+                .shadow(
+                    if (expanded) 0.dp else Dimens.GlassShadowElevation,
+                    triggerShape,
                     ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
-                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f))
-                .clip(shape)
+                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f)
+                )
+                .clip(triggerShape)
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
-                .border(BorderStroke(1.dp, Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f))
-                )), shape = shape)
+                .border(
+                    BorderStroke(
+                        1.dp,
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.White.copy(alpha = Dimens.GlassHighlightAlpha),
+                                Color.White.copy(alpha = 0.15f)
+                            )
+                        )
+                    ), triggerShape
+                )
+                .clickable { expanded = !expanded }
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = true }
                     .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -341,18 +402,46 @@ private fun ProviderSelector(
             }
         }
 
-        // 就地下拉菜单：宽度匹配触发框，不会遮挡全屏
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .exposedDropdownSize(true)
-                .background(MaterialTheme.colorScheme.surface)
-        ) {
-            LLMProvider.entries.forEach { provider ->
-                DropdownMenuItem(
-                    text = {
+        // 下拉面板：与触发框无缝拼接，底部 20dp 圆角
+        if (expanded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(panelShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                    .border(
+                        BorderStroke(
+                            1.dp,
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.White.copy(alpha = Dimens.GlassHighlightAlpha),
+                                    Color.White.copy(alpha = 0.15f)
+                                )
+                            )
+                        ), panelShape
+                    )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // 必须限高：本面板嵌在整页 verticalScroll 内，外层会传下无限高度约束，
+                        // 内层 verticalScroll 收到无限高度会直接抛 IllegalStateException（点击展开即闪退）
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = Dimens.SpaceXs)
+                ) {
+                    LLMProvider.entries.forEach { provider ->
                         Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSelected(provider)
+                                    expanded = false
+                                }
+                                .padding(
+                                    horizontal = Dimens.SettingsRowPaddingH,
+                                    vertical = Dimens.SpaceMd
+                                ),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)
                         ) {
@@ -373,15 +462,187 @@ private fun ProviderSelector(
                                 )
                             }
                         }
-                    },
-                    onClick = {
-                        onSelected(provider)
-                        expanded = false
-                    },
-                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                        if (provider != LLMProvider.entries.last()) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 模型名称卡：自由输入 + 「拉取」实时模型 + 内置预设三合一。
+ * 「拉取」按钮位于标题行右侧，点击实时请求服务商 /models 接口并刷新可选列表，
+ * 成功后自动展开列表（嵌在可滚动页面内，必须 heightIn 限高，否则无限高度约束会崩溃）；
+ * 拉取失败回退内置预设并提示原因。点选模型即填入输入框，也可直接手动输入自定义模型名。
+ */
+@Composable
+private fun ModelInputCard(
+    label: String,
+    placeholder: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    models: List<String>,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    isFetching: Boolean,
+    note: String?,
+    noteIsError: Boolean,
+    onFetch: () -> Unit
+) {
+    val shape = RoundedCornerShape(Dimens.SettingsCardCorner)
+    Box(
+        modifier = Modifier.fillMaxWidth()
+            .shadow(Dimens.GlassShadowElevation, shape = shape,
+                ambientColor = Color(0xFF1A73E8).copy(alpha = 0.10f),
+                spotColor = Color(0xFF1A73E8).copy(alpha = 0.12f))
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+            .border(BorderStroke(1.dp, Brush.verticalGradient(
+                listOf(Color.White.copy(alpha = Dimens.GlassHighlightAlpha), Color.White.copy(alpha = 0.15f))
+            )), shape = shape)
+            .padding(horizontal = Dimens.SettingsRowPaddingH, vertical = Dimens.SpaceMd)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)) {
+            // 标题行：label + 「拉取」按钮
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(label, style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                // 拉取按钮：实时请求服务商 /models 接口
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(Dimens.CornerMd))
+                        .clickable(enabled = !isFetching, onClick = onFetch)
+                        .padding(horizontal = Dimens.SpaceXs, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (isFetching) {
+                        CircularProgressIndicator(
+                            color = Color(0xFF1A73E8), strokeWidth = 2.dp,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = Color(0xFF1A73E8),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.api_model_fetch),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFF1A73E8),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            // 模型名自由输入框
+            OutlinedTextField(
+                value = value, onValueChange = onValueChange,
+                placeholder = {
+                    Text(placeholder, style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
+                },
+                shape = RoundedCornerShape(Dimens.CornerMd),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF1A73E8),
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    cursorColor = Color(0xFF1A73E8),
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // 拉取状态/错误提示行
+            if (note != null) {
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (noteIsError) Color(0xFFE53935) else Color(0xFF2EB89A),
+                    fontWeight = FontWeight.Medium
                 )
-                if (provider != LLMProvider.entries.last()) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            }
+
+            // 可选模型列表（就地展开，点选填入输入框）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onExpandedChange(!expanded) }
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (models.isEmpty()) stringResource(R.string.api_model_fetch_empty_hint)
+                    else stringResource(R.string.api_model_preset_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(Dimens.SpaceSm))
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp
+                    else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (expanded && models.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // 必须限高：本卡嵌在整页 verticalScroll 内，外层传下无限高度约束，
+                        // 内层 verticalScroll 收到无限高度会抛 IllegalStateException（展开即闪退）
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    models.forEachIndexed { index, m ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onValueChange(m)
+                                    onExpandedChange(false)
+                                }
+                                .padding(vertical = Dimens.SpaceSm),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)
+                        ) {
+                            Text(
+                                text = m,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (m == value) Color(0xFF1A73E8)
+                                else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (m == value) FontWeight.SemiBold
+                                else FontWeight.Normal,
+                                maxLines = 1
+                            )
+                            if (m == value) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF1A73E8),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        if (index != models.lastIndex) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        }
+                    }
                 }
             }
         }

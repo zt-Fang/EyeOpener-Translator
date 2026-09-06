@@ -11,6 +11,8 @@ import io.github.ztfang.eye.domain.model.ModelFileSpec
 import io.github.ztfang.eye.domain.repository.SettingsRepository
 import io.github.ztfang.eye.domain.usecase.model.ModelManagementUseCase
 import io.github.ztfang.eye.engine.ModelPreparer
+import io.github.ztfang.eye.engine.translation.llm.LLMClient
+import io.github.ztfang.eye.engine.translation.llm.LLMProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +30,7 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val modelManagementUseCase: ModelManagementUseCase,
     private val modelPreparer: ModelPreparer,
+    private val llmClient: LLMClient,
 ) : ViewModel() {
     val displayMode: Flow<DisplayMode> = settingsRepository.displayMode
     val sourceLanguage: Flow<String> = settingsRepository.sourceLanguage
@@ -233,6 +236,18 @@ class SettingsViewModel @Inject constructor(
     fun setLlmUrl(url: String) { viewModelScope.launch { settingsRepository.setLlmUrl(url) } }
     fun setLlmModel(model: String) { viewModelScope.launch { settingsRepository.setLlmModel(model) } }
     fun setLlmProvider(provider: String) { viewModelScope.launch { settingsRepository.setLlmProvider(provider) } }
+
+    /**
+     * 从当前服务商 API 拉取可用模型列表（GET {baseUrl}/models）。
+     * apiKey/apiUrl 使用设置页当前输入值（允许用户未保存即预览）。
+     * 失败返回 Result.failure，由 UI 层回退到预设清单。
+     */
+    suspend fun fetchLlmModels(
+        provider: LLMProvider,
+        baseUrl: String,
+        apiKey: String
+    ): Result<List<String>> = llmClient.fetchModels(provider, baseUrl, apiKey)
+
     fun setShowOnboarding(show: Boolean) { viewModelScope.launch { settingsRepository.setShowOnboarding(show) } }
     fun setInterfaceLanguage(language: String) { viewModelScope.launch { settingsRepository.setInterfaceLanguage(language) } }
 

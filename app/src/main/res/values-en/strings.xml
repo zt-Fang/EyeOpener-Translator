@@ -130,8 +130,8 @@
     <string name="local_model_huggingface_tip">The Chinese-English model uses ModelScope; Bengali and multilingual models require HuggingFace access. Please check your network.</string>
     <string name="local_model_x_asr_name">Chinese-English</string>
     <string name="local_model_nemotron_name">Multilingual (26)</string>
-    <string name="local_model_subtitle_x_asr">Handles Chinese and English (mixed speech included)</string>
-    <string name="local_model_subtitle_nemotron">Handles 26 languages other than Chinese and English</string>
+    <string name="local_model_subtitle_x_asr">Chinese &amp; English</string>
+    <string name="local_model_subtitle_nemotron">26 other languages</string>
     <string name="local_model_subtitle_bn">Dedicated to Bengali</string>
     <string name="local_model_delete_title">Delete model</string>
     <string name="local_model_delete_msg">Delete “%1$s” (%2$s)? You will need to download it again.</string>
@@ -163,6 +163,14 @@
     <string name="api_url_hint">https://api.example.com/v1/chat/completions</string>
     <string name="api_model_label">Model</string>
     <string name="api_model_hint">gpt-4 / claude-3-sonnet / deepseek-chat</string>
+    <string name="api_model_preset_hint">Recommended models (tap to select)</string>
+    <string name="api_model_fetch">Fetch</string>
+    <string name="api_model_fetching">Fetching model list…</string>
+    <string name="api_model_fetch_need_key">Enter your API Key before fetching models</string>
+    <string name="api_model_fetch_success">Fetched %1$d models</string>
+    <string name="api_model_fetch_empty">The provider returned no models</string>
+    <string name="api_model_fetch_failed">Fetch failed: %1$s (showing recommended models)</string>
+    <string name="api_model_fetch_empty_hint">No model list yet — enter your API Key and tap "Fetch" to load models from the provider</string>
     <string name="api_save">Save</string>
     <string name="api_provider">Provider: %1$s</string>
     <string name="api_enter_key">Please enter API Key</string>

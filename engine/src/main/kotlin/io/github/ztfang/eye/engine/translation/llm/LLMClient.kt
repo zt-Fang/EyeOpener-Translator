@@ -60,6 +60,7 @@ enum class LLMProvider {
     MIMO,
     GEMINI,
     AGNES,
+    SILICONFLOW,
     CUSTOM;
 
     val defaultBaseUrl: String get() = when (this) {
@@ -73,27 +74,63 @@ enum class LLMProvider {
         MIMO -> "https://api.mimo.xiaomi.com/v1"
         GEMINI -> "https://generativelanguage.googleapis.com/v1beta/openai"
         AGNES -> "https://apihub.agnes-ai.com/v1"
+        SILICONFLOW -> "https://api.siliconflow.cn/v1"
         CUSTOM -> ""
     }
 
     val chatPath: String get() = when (this) {
-        OPEN_AI, OPENROUTER, DEEP_SEEK, ZHIPU, QWEN, MINIMAX, MIMO, GEMINI, AGNES, CUSTOM -> "/chat/completions"
+        OPEN_AI, OPENROUTER, DEEP_SEEK, ZHIPU, QWEN, MINIMAX, MIMO, GEMINI, AGNES, SILICONFLOW, CUSTOM -> "/chat/completions"
         CLAUDE -> "/messages"
     }
 
-    val defaultModel: String get() = when (this) {
-        OPEN_AI -> "gpt-4o-mini"
-        OPENROUTER -> "openai/gpt-4o-mini"
-        CLAUDE -> "claude-3-haiku-20240307"
-        DEEP_SEEK -> "deepseek-v4-flash"
-        ZHIPU -> "glm-4-flash"
-        QWEN -> "qwen-turbo"
-        MINIMAX -> "abab6.5s-chat"
-        MIMO -> "mimo-7b-rl"
-        GEMINI -> "gemini-1.5-flash"
-        AGNES -> "agnes-2.0-flash"
-        CUSTOM -> ""
+    /**
+     * 仅收录经各服务商官网核实、支持 SSE 流式输出、可用于翻译/对话的 chat 模型。
+     * 嵌入/视觉/已废弃模型已剔除（如 Gemini 1.5 系列、DeepSeek 旧 deepseek-v4-flash 命名等）。
+     * defaultModel 取首项；CUSTOM 无预设，留空由用户自由填写。
+     */
+    val models: List<String> get() = when (this) {
+        OPEN_AI -> listOf(
+            "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4o", "gpt-4o-mini"
+        )
+        OPENROUTER -> listOf(
+            "openai/gpt-5.1", "anthropic/claude-sonnet-4-6", "deepseek/deepseek-chat",
+            "google/gemini-2.5-flash", "qwen/qwen3-235b-a22b", "z-ai/glm-5",
+            "meta-llama/llama-3.3-70b-instruct:free"
+        )
+        CLAUDE -> listOf(
+            "claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5-20251001"
+        )
+        DEEP_SEEK -> listOf(
+            "deepseek-chat", "deepseek-reasoner"
+        )
+        ZHIPU -> listOf(
+            "glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.6", "glm-4.5", "glm-4-flash"
+        )
+        QWEN -> listOf(
+            "qwen-max", "qwen-plus", "qwen-turbo", "qwen3-max", "qwen3-coder"
+        )
+        MINIMAX -> listOf(
+            "abab6.5s-chat", "abab6.5g-chat", "abab5.5-chat"
+        )
+        MIMO -> listOf(
+            "mimo-v2.5-pro", "mimo-v2-pro", "mimo-v2-omni", "mimo-v2-flash"
+        )
+        GEMINI -> listOf(
+            "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro",
+            "gemini-3-flash-preview", "gemini-3.1-flash", "gemini-3.1-pro-preview"
+        )
+        AGNES -> listOf(
+            "agnes-2.5-flash", "agnes-2.5-pro", "agnes-2.5-pro-alpha", "agnes-2.0-flash"
+        )
+        SILICONFLOW -> listOf(
+            "deepseek-ai/DeepSeek-V3", "Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-V4-Flash",
+            "THUDM/GLM-5", "THUDM/GLM-4.7", "moonshotai/Kimi-K2",
+            "Qwen/Qwen3.6-27B", "MiniMaxAI/MiniMax-M3"
+        )
+        CUSTOM -> emptyList()
     }
+
+    val defaultModel: String get() = models.firstOrNull() ?: ""
 
     val displayName: String get() = when (this) {
         OPEN_AI -> "OpenAI"
@@ -106,6 +143,7 @@ enum class LLMProvider {
         MIMO -> "MiMo"
         GEMINI -> "Gemini"
         AGNES -> "Agnes"
+        SILICONFLOW -> "硅基流动"
         CUSTOM -> "自定义"
     }
 }
@@ -145,7 +183,8 @@ class LLMClient @Inject constructor(
                 LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
                 LLMProvider.QWEN, LLMProvider.MINIMAX,
                 LLMProvider.MIMO, LLMProvider.GEMINI,
-                LLMProvider.AGNES, LLMProvider.CUSTOM ->
+                LLMProvider.AGNES, LLMProvider.SILICONFLOW,
+                LLMProvider.CUSTOM ->
                     openAiTranslate(fullUrl, apiKey, effectiveModel, systemPrompt, text)
                 LLMProvider.CLAUDE ->
                     claudeTranslate(fullUrl, apiKey, effectiveModel, systemPrompt, text)
@@ -185,7 +224,8 @@ class LLMClient @Inject constructor(
                 LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
                 LLMProvider.QWEN, LLMProvider.MINIMAX,
                 LLMProvider.MIMO, LLMProvider.GEMINI,
-                LLMProvider.AGNES, LLMProvider.CUSTOM ->
+                LLMProvider.AGNES, LLMProvider.SILICONFLOW,
+                LLMProvider.CUSTOM ->
                     openAiChat(fullUrl, apiKey, effectiveModel, messages)
                 LLMProvider.CLAUDE ->
                     claudeChat(fullUrl, apiKey, effectiveModel, messages)
@@ -210,7 +250,8 @@ class LLMClient @Inject constructor(
                 LLMProvider.DEEP_SEEK, LLMProvider.ZHIPU,
                 LLMProvider.QWEN, LLMProvider.MINIMAX,
                 LLMProvider.MIMO, LLMProvider.GEMINI,
-                LLMProvider.AGNES, LLMProvider.CUSTOM ->
+                LLMProvider.AGNES, LLMProvider.SILICONFLOW,
+                LLMProvider.CUSTOM ->
                     openAiChatStream(fullUrl, apiKey, effectiveModel, messages).collect { emit(it) }
                 LLMProvider.CLAUDE ->
                     claudeChatStream(fullUrl, apiKey, effectiveModel, messages).collect { emit(it) }
@@ -435,6 +476,54 @@ class LLMClient @Inject constructor(
         val json = JSONObject(body)
         return json.getJSONArray("content")
             .getJSONObject(0).getString("text").trim()
+    }
+
+    /**
+     * 从服务商 API 拉取可用模型列表（GET {baseUrl}/models）。
+     * OpenAI 兼容服务商（含硅基流动/DeepSeek/智谱/千问/Gemini OpenAI 兼容层等）返回 data[].id，
+     * Claude Messages API 返回 data[].id，均以 Bearer / x-api-key 鉴权。
+     * 返回去重后的模型 ID 列表；失败时 Result.failure（UI 层回退到 [LLMProvider.models] 预设）。
+     */
+    suspend fun fetchModels(
+        provider: LLMProvider,
+        baseUrl: String,
+        apiKey: String
+    ): Result<List<String>> = try {
+        val base = baseUrl.trim().ifEmpty { provider.defaultBaseUrl }.trimEnd('/')
+        val ids = withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("$base/models")
+                .apply {
+                    if (provider == LLMProvider.CLAUDE) {
+                        addHeader("x-api-key", apiKey)
+                        addHeader("anthropic-version", "2023-06-01")
+                    } else {
+                        addHeader("Authorization", "Bearer $apiKey")
+                    }
+                }
+                .build()
+            val call = client.newCall(request)
+            val response = call.executeCancellable()
+            val body = response.body?.string() ?: ""
+            if (!response.isSuccessful) {
+                Log.e("LLMClient", "fetchModels error ${response.code}: $body")
+                error("HTTP ${response.code}")
+            }
+            val json = JSONObject(body)
+            val arr = json.optJSONArray("data") ?: json.optJSONArray("models") ?: JSONArray()
+            val list = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val id = obj.optString("id", "").ifEmpty { obj.optString("name", "") }
+                if (id.isNotBlank()) list.add(id)
+            }
+            list.distinct()
+        }
+        Result.success(ids)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
     private suspend fun resolveProvider(): LLMProvider {
