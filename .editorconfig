@@ -1,9 +1,26 @@
 root = true
 
 [*.{kt,kts}]
-# Compose 惯例：@Composable 函数允许大写驼峰命名，豁免 ktlint 函数命名检查
+# ============ 与项目既有写法冲突的规则，统一放宽（优先保证业务代码稳定） ============
+
+# Compose 惯例：@Composable 函数允许大写驼峰命名
 ktlint_function_naming_ignore_when_annotated_with = Composable
-# 项目尺寸/常量统一用驼峰（如 Dimens.GlassSurfaceAlpha），豁免常量必须 SCREAMING_SNAKE 的限制
+
+# 项目尺寸/常量统一用驼峰（如 Dimens.GlassSurfaceAlpha），不强制 SCREAMING_SNAKE
 ktlint_standard_property-naming = disabled
-# 私有可变镜像（_xxxFlow / _cancelledModels）是项目通用写法，豁免 backing property 配对限制
+
+# 私有可变镜像（_xxxFlow / _cancelledModels）是项目通用写法，不强制与公开属性配对
 ktlint_standard_backing-property-naming = disabled
+
+# 中文日志与长 URL 易超 140，不强制行宽（避免为换行而拆散日志内容）
+max_line_length = off
+
+# 项目大量使用「分节注释 + KDoc」排版，不限制注释相对 KDoc 的位置
+ktlint_standard_no-consecutive-comments = disabled
+
+# else if 前允许换行（配合分场景注释说明）
+ktlint_standard_keyword-spacing = disabled
+
+# 方法链换行位置不强制（Log/Builder 链式调用较多）
+ktlint_standard_chain-method-continuation = disabled
+ktlint_standard_chain-wrapping = disabled

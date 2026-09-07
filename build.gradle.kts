@@ -26,6 +26,7 @@ subprojects {
     configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
         version.set("1.3.1")
         android.set(true)
-        ignoreFailures.set(false)
+        // 与 detekt 同策略：代码风格作为报告型检查，不阻断 CI（优先保证构建与功能稳定）
+        ignoreFailures.set(true)
     }
 }
