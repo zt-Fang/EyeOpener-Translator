@@ -3,3 +3,7 @@ root = true
 [*.{kt,kts}]
 # Compose 惯例：@Composable 函数允许大写驼峰命名，豁免 ktlint 函数命名检查
 ktlint_function_naming_ignore_when_annotated_with = Composable
+# 项目尺寸/常量统一用驼峰（如 Dimens.GlassSurfaceAlpha），豁免常量必须 SCREAMING_SNAKE 的限制
+ktlint_standard_property-naming = disabled
+# 私有可变镜像（_xxxFlow / _cancelledModels）是项目通用写法，豁免 backing property 配对限制
+ktlint_standard_backing-property-naming = disabled

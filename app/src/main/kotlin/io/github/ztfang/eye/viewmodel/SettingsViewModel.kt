@@ -91,11 +91,11 @@ class SettingsViewModel
                     Log.e(TAG_VM, "[FAIL] downloadVoskModel zipSpec为空, lang=$languageCode")
                     return@launch
                 }
+                val extractDir = modelPreparer.asrModelDir(languageCode).absolutePath
+                val totalMb = zipSpec.sizeBytes / 1024 / 1024
                 Log.d(
                     TAG_VM,
-                    "[INFO] vosk modelName=$modelName, totalSize=${zipSpec.sizeBytes / 1024 / 1024}MB, extractDir=${modelPreparer.asrModelDir(
-                        languageCode,
-                    ).absolutePath}",
+                    "[INFO] vosk modelName=$modelName, totalSize=${totalMb}MB, extractDir=$extractDir",
                 )
                 _downloadProgressMap.value = _downloadProgressMap.value + (
                     modelName to
@@ -106,7 +106,6 @@ class SettingsViewModel
                             speedBytesPerSec = 0L,
                         )
                 )
-                val extractDir = modelPreparer.asrModelDir(languageCode).absolutePath
                 val result =
                     modelManagementUseCase.downloadAndExtractVosk(
                         modelName = modelName,

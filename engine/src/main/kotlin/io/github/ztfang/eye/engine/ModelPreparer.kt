@@ -162,8 +162,11 @@ class ModelPreparer
                             val aliasRetry =
                                 modelDir.listFiles()?.firstOrNull { f ->
                                     val n = f.name
-                                    (n == "${model.tokensFile}.part" || n == "${model.tokensFile}.part.corrupted" || n == model.tokensFile) &&
-                                        f.length() > 0L
+                                    val isCandidate =
+                                        n == "${model.tokensFile}.part" ||
+                                            n == "${model.tokensFile}.part.corrupted" ||
+                                            n == model.tokensFile
+                                    isCandidate && f.length() > 0L
                                 }
                             if (aliasRetry != null) {
                                 aliasRetry.copyTo(tok, overwrite = true)
@@ -171,7 +174,11 @@ class ModelPreparer
                         }
                         Log.i(
                             TAG,
-                            "isSherpaOnnxAsrReady: [TOKENS_RECOVER] modelId=$modelId, ${aliasOrNull.name}(${aliasOrNull.length()}) -> ${model.tokensFile}, renameOk=$renameOk, finalTokExists=${tok.exists()}, finalTokSize=${tok.lengthOrZero()}",
+                            "isSherpaOnnxAsrReady: [TOKENS_RECOVER] modelId=$modelId, " +
+                                "${aliasOrNull.name}(${aliasOrNull.length()}) -> " +
+                                "${model.tokensFile}, renameOk=$renameOk, " +
+                                "finalTokExists=${tok.exists()}, " +
+                                "finalTokSize=${tok.lengthOrZero()}",
                         )
                     }.onFailure { e ->
                         Log.w(

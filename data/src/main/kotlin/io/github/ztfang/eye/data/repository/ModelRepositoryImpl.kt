@@ -31,11 +31,6 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 下载完成后把 {modelName}/ 暂存目录迁移到上述真实目录，localPath 指向真实路径。
  */
 
-/** 用户主动取消下载时抛出，区别于网络/IO 错误（不会误报为 ERROR，状态回滚 NOT_EXIST）。 */
-private class DownloadCancelledException(
-    message: String,
-) : Exception(message)
-
 class ModelRepositoryImpl(
     private val context: Context,
 ) : ModelRepository {
@@ -352,11 +347,12 @@ class ModelRepositoryImpl(
                 for ((index, spec) in files.withIndex()) {
                     val target = File(dir, spec.relativePath)
                     target.parentFile?.mkdirs()
+                    val urlHead = spec.url.take(80)
                     Log.i(
                         TAG,
-                        "[DL_FILE_START] $modelName: 文件(${index + 1}/${files.size}) ${spec.relativePath}, expectedSize=${spec.sizeBytes}B, url=${spec.url.take(
-                            80,
-                        )}..., aggregateBefore=$aggregateDownloaded",
+                        "[DL_FILE_START] $modelName: 文件(${index + 1}/${files.size}) " +
+                            "${spec.relativePath}, expectedSize=${spec.sizeBytes}B, " +
+                            "url=$urlHead..., aggregateBefore=$aggregateDownloaded",
                     )
                     downloadOneFile(
                         spec = spec,
@@ -438,14 +434,18 @@ class ModelRepositoryImpl(
                 updateState(modelName, ModelStatus.NOT_EXIST)
                 Result.failure(e)
             } catch (e: Exception) {
-                Log.e(
-                    TAG,
-                    "[DL_FAIL] $modelName: 多文件下载失败: ${e.javaClass.simpleName}: ${e.message}; 累计bytes=$aggregateDownloaded/$totalSizeAllFiles; 正在尝试的文件=${runCatching {
+                val failingFile =
+                    runCatching {
                         files
                             .getOrNull(
                                 files.indexOfFirst { !File(dir, it.relativePath).exists() },
                             )?.relativePath
-                    }.getOrNull()}",
+                    }.getOrNull()
+                Log.e(
+                    TAG,
+                    "[DL_FAIL] $modelName: 多文件下载失败: ${e.javaClass.simpleName}: " +
+                        "${e.message}; 累计bytes=$aggregateDownloaded/$totalSizeAllFiles; " +
+                        "正在尝试的文件=$failingFile",
                     e,
                 )
                 updateState(modelName, ModelStatus.ERROR, errorMessage = e.message ?: "Unknown error")
@@ -454,15 +454,13 @@ class ModelRepositoryImpl(
         }
 
     /**
-     * 下载单个文件：.part 临时文件 + Range 断点续传。
+     * 带重试的下载入口：对网络类 IOException 自动重试，.part 保留可续传。
+     * 不重试的情况：用户取消、host 不在白名单、存储空间不足（重试也必然失败）。
+     *
+     * 内部走 .part 临时文件 + Range 断点续传。
      *
      * @param allowResume 是否允许基于已有 .part 续传。HTTP 416 重试时置 false——
      *        此时 .part 已比服务端文件还长，必须先删掉再从头下，否则该模型将永久下载失败。
-     */
-
-    /**
-     * 带重试的下载入口：对网络类 IOException 自动重试，.part 保留可续传。
-     * 不重试的情况：用户取消、host 不在白名单、存储空间不足（重试也必然失败）。
      */
     private fun downloadOneFile(
         spec: ModelFileSpec,
@@ -964,16 +962,15 @@ class ModelRepositoryImpl(
                                 fixedStatus = ModelStatus.AVAILABLE
                                 fixedProgress = 1f
                                 fixedLocalPath = localPathStr
-                            }
-                            // 情况B：DOWNLOADING 且 localPath 不存在 → 重置 NOT_EXIST（不删文件）
-                            else if (st == ModelStatus.DOWNLOADING && !localPathExists) {
+                            } else if (st == ModelStatus.DOWNLOADING && !localPathExists) {
+                                // 情况B：DOWNLOADING 且 localPath 不存在 → 重置 NOT_EXIST（不删文件）
                                 Log.w(TAG, "[INIT_STATE_FIX] ${modelDir.name}: 残留 DOWNLOADING 且localPath不存在，重置为 NOT_EXIST（不删文件）")
                                 fixedStatus = ModelStatus.NOT_EXIST
                                 fixedProgress = 0f
                                 runCatching { sf.delete() }
-                            }
-                            // 情况C：ERROR 且 localPath 不完整 → 只改状态 NOT_EXIST，不删文件（曾误判删除 161MB 完整模型）
-                            else if (st == ModelStatus.ERROR) {
+                            } else if (st == ModelStatus.ERROR) {
+                                // 情况C：ERROR 且 localPath 不完整 → 只改状态 NOT_EXIST，
+                                // 不删文件（曾误判删除 161MB 完整模型）
                                 if (localPathExists && !completeNow) {
                                     Log.w(TAG, "[INIT_STATE_FIX] ${modelDir.name}: ERROR+localPath不完整 → 只改状态NOT_EXIST（不删已下载的大文件）")
                                     fixedStatus = ModelStatus.NOT_EXIST
@@ -991,11 +988,12 @@ class ModelRepositoryImpl(
                             // 情况D：AVAILABLE 但磁盘文件不完整（如 tokens.txt 被外部清理/损坏丢失）
                             // 原逻辑只对 !AVAILABLE 做自愈，AVAILABLE 永不校验，导致 UI 假下载但运行时 init 失败。
                             // 改为：降级为 ERROR，保留文件（可断点续传），UI 触发"重新下载"提示。
+                            val listedFiles =
+                                localPathFile.listFiles()?.map { it.name to it.length() }
                             Log.w(
                                 TAG,
-                                "[INIT_STATE_FIX] ${modelDir.name}: AVAILABLE 但磁盘不完整（missing files），降级为 ERROR 保留文件供续传, files=${localPathFile.listFiles()?.map {
-                                    it.name to it.length()
-                                }}",
+                                "[INIT_STATE_FIX] ${modelDir.name}: AVAILABLE 但磁盘不完整" +
+                                    "（missing files），降级为 ERROR 保留文件供续传, files=$listedFiles",
                             )
                             fixedStatus = ModelStatus.ERROR
                             fixedProgress = 0f
@@ -1132,11 +1130,12 @@ class ModelRepositoryImpl(
                 Log.w(TAG, "[TOKENS_RECOVER_FAIL] ${modelDir.name}: ${e.message}", e)
             }
         }
+        val topFiles = files.take(10)
         Log.d(
             TAG,
-            "[CHECK_SHERPA] ${modelDir.absolutePath}: enc=$hasEnc, dec=$hasDec, join=$hasJoin, tokens=$hasTok(tokenFile=${tokenFile?.name ?: "null"}), files(Top10)=${files.take(
-                10,
-            )}",
+            "[CHECK_SHERPA] ${modelDir.absolutePath}: enc=$hasEnc, dec=$hasDec, " +
+                "join=$hasJoin, tokens=$hasTok(tokenFile=${tokenFile?.name ?: "null"}), " +
+                "files(Top10)=$topFiles",
         )
         return hasEnc &&
             hasDec &&
@@ -1183,3 +1182,8 @@ class ModelRepositoryImpl(
             )
     }
 }
+
+/** 用户主动取消下载时抛出，区别于网络/IO 错误（不会误报为 ERROR，状态回滚 NOT_EXIST）。 */
+private class DownloadCancelledException(
+    message: String,
+) : Exception(message)
