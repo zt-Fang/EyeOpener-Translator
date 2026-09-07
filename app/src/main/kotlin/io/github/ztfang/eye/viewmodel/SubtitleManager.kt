@@ -4,6 +4,7 @@
  */
 package io.github.ztfang.eye.viewmodel
 
+import android.annotation.SuppressLint
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioPlaybackCaptureConfiguration
@@ -1651,6 +1652,7 @@ class SubtitleManager
          * 使用 VOICE_RECOGNITION 音频源，自带系统 AGC/AEC/NS 优化。
          * 缓冲大小取系统最小值的2倍，减少read调用频率，降低CPU开销。
          */
+        @SuppressLint("MissingPermission")
         private fun createMicrophoneAudioRecord(): AudioRecord {
             val minBuffer =
                 AudioRecord.getMinBufferSize(
@@ -1674,6 +1676,7 @@ class SubtitleManager
          * 需要 MediaProjection 授权。
          * 缓冲大小取系统最小值的2倍，减少read调用频率。
          */
+        @SuppressLint("MissingPermission")
         private fun createPlaybackCaptureAudioRecord(projection: MediaProjection): AudioRecord =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val config =
