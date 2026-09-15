@@ -37,9 +37,6 @@ class HistoryRepositoryImpl
 
         override fun getAllRecords(): Flow<List<DomainRecord>> = historyDao.getAllRecords().map { it.map { record -> record.toDomain() } }
 
-        override fun getFavoriteRecords(): Flow<List<DomainRecord>> =
-            historyDao.getFavoriteRecords().map { it.map { record -> record.toDomain() } }
-
         override suspend fun insertRecord(record: DomainRecord) {
             historyDao.insertRecord(record.toEntity())
         }

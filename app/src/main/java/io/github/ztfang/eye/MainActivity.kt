@@ -17,6 +17,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -62,6 +63,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -75,6 +77,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -99,6 +102,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.ztfang.eye.domain.model.TranslationEngine
+import io.github.ztfang.eye.engine.translation.TranslationPrepFailureKind
 import io.github.ztfang.eye.ui.components.AccentTone
 import io.github.ztfang.eye.ui.components.AssistantTopBar
 import io.github.ztfang.eye.ui.components.ChatBubble
@@ -127,23 +131,117 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** 相同 runtimeError 文案在此窗口内只弹一次 Toast，避免流式中断等重复错误刷屏 */
+private const val TOAST_DEDUP_WINDOW_MS = 5_000L
+
+/**
+ * 离线模型下载超过该时长后，状态条副文案切换为"网络较慢"。
+ * ML Kit 无下载进度回调，只能用时长判断"慢"——让用户确信是在慢慢下，而不是卡死了。
+ */
+private const val SLOW_DOWNLOAD_HINT_MS = 30_000L
+
+/** 已等待时长超过该值才开始显示（太短会闪一下，没有信息量） */
+private const val ELAPSED_VISIBLE_MS = 5_000L
+
+/**
+ * 把毫秒格式化为"X 分 Y 秒"/"Y 秒"。
+ * 走字符串资源而非硬编码，英文版对照时只需改 values-en/strings.xml。
+ */
+@Composable
+private fun formatElapsed(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return if (minutes > 0) {
+        stringResource(R.string.trans_model_elapsed_min_sec, minutes.toInt(), seconds.toInt())
+    } else {
+        stringResource(R.string.trans_model_elapsed_sec, seconds.toInt())
+    }
+}
+
+/**
+ * 失败分类 → 一句人话的字符串资源。
+ *
+ * 刻意只返回一句：弹窗正文越短越容易被读。域名 / IP / 证书结论 / 原始异常等
+ * 技术细节走「设置 → 翻译模型诊断」，那里才是排障的人会去看的地方。
+ */
+@StringRes
+private fun failureKindTextRes(kind: TranslationPrepFailureKind?): Int =
+    when (kind) {
+        TranslationPrepFailureKind.GMS_UNAVAILABLE -> R.string.trans_model_failed_gms
+        TranslationPrepFailureKind.NETWORK_UNREACHABLE -> R.string.trans_model_failed_network
+        TranslationPrepFailureKind.DOWNLOAD_INCOMPLETE -> R.string.trans_model_failed_incomplete
+        TranslationPrepFailureKind.UNSUPPORTED_LANGUAGE -> R.string.trans_model_failed_unsupported
+        TranslationPrepFailureKind.UNKNOWN, null -> R.string.trans_model_failed_unknown
+    }
+
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
     @Inject lateinit var subtitleManager: SubtitleManager
 
     @Inject lateinit var historyRepository: io.github.ztfang.eye.domain.repository.HistoryRepository
 
+    /**
+     * 待消费的深链目标页。
+     *
+     * 为什么需要它（2026-09-14 修复）：
+     *  - 旧实现只在 onCreate 读一次 `intent.getStringExtra("navigate_to")`，且全项目没有 onNewIntent。
+     *  - 后果 A：应用存活时（singleTask 复用实例）再次携带该 extra 启动，extra 无人消费 →
+     *    悬浮窗「设置」按钮点了没反应，只把应用切到前台。
+     *  - 后果 B：extra 残留在 Activity 的 intent 里，而 MainActivity 未声明 configChanges，
+     *    任何配置变化（深色切换 / 旋转 / 字号 / 语言）都会重建 Activity → onCreate 重读残留 extra
+     *    → LaunchedEffect 再次导航；而 NavController 的 Saver 又会恢复旧导航栈 →
+     *    **导航栈越堆越深**（实测切 6 次夜间模式后需按 6 次返回键才能退出设置页）。
+     *
+     * 现在：冷启动与热启动都写入这里，Compose 消费后立刻置回 null；且读取时即从 intent 删除该
+     * extra。两道保险确保「同一个 extra 只生效一次」。
+     */
+    private val pendingRoute = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 获取外部跳转参数，支持从其他地方直接跳转到指定页面
-        val navigateTo = intent.getStringExtra("navigate_to")
+        // 仅在真正的冷启动（无 savedInstanceState）读取深链：
+        // 配置变化导致的重建不应重复触发导航（导航栈由 NavController 的 Saver 恢复）。
+        if (savedInstanceState == null) {
+            pendingRoute.value = consumeNavigateExtra(intent)
+        }
         setContent {
             EyeTheme {
                 GradientBackground {
-                    EyeOpenerApp(initialRoute = navigateTo, subtitleManager = subtitleManager, historyRepository = historyRepository)
+                    EyeOpenerApp(
+                        pendingRoute = pendingRoute,
+                        onRouteConsumed = { pendingRoute.value = null },
+                        subtitleManager = subtitleManager,
+                        historyRepository = historyRepository,
+                    )
                 }
             }
         }
+    }
+
+    /**
+     * singleTask 下「应用存活时被再次启动」走这里（不再走 onCreate）。
+     * 与冷启动共用 [consumeNavigateExtra]，保证两条路径行为一致。
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeNavigateExtra(intent)?.let { pendingRoute.value = it }
+    }
+
+    /**
+     * 读取并**立即从 intent 中删除** navigate_to，返回其值。
+     * 删除是必须的：否则 Activity 重建时 onCreate 会再次读到它而重复导航。
+     */
+    private fun consumeNavigateExtra(source: Intent?): String? {
+        val route = source?.getStringExtra(EXTRA_NAVIGATE_TO) ?: return null
+        source.removeExtra(EXTRA_NAVIGATE_TO)
+        return route
+    }
+
+    companion object {
+        /** 深链参数名，例如 `am start -n io.github.ztfang.eye/.MainActivity --es navigate_to personalization` */
+        private const val EXTRA_NAVIGATE_TO = "navigate_to"
     }
 }
 
@@ -174,13 +272,17 @@ sealed class Screen(
 }
 
 /**
- * 应用主入口 Composable，负责全局导航架构
- * @param initialRoute 初始路由，支持外部跳转
+ * 应用主入口 Composable，负责全局导航架构。
+ *
+ * @param pendingRoute 待消费的深链目标页（由 MainActivity 的 onCreate/onNewIntent 写入）。
+ *   有值时跳转到对应页面，随后通过 [onRouteConsumed] 置空，保证「同一 extra 只生效一次」。
+ * @param onRouteConsumed 深链已消费回调
  * @param subtitleManager 字幕管理 ViewModel，用于控制悬浮字幕状态
  */
 @Composable
 fun EyeOpenerApp(
-    initialRoute: String? = null,
+    pendingRoute: State<String?>? = null,
+    onRouteConsumed: () -> Unit = {},
     subtitleManager: SubtitleManager,
     historyRepository: io.github.ztfang.eye.domain.repository.HistoryRepository,
     settingsViewModel: io.github.ztfang.eye.viewmodel.SettingsViewModel = hiltViewModel(),
@@ -198,13 +300,24 @@ fun EyeOpenerApp(
         return
     }
 
-    // 根据初始路由参数，在应用启动时跳转到指定页面
-    LaunchedEffect(initialRoute) {
-        when (initialRoute) {
-            "personalization" -> navController.navigate(Screen.Personalization.route)
-            "api_settings" -> navController.navigate(Screen.ApiSettings.route)
-            "local_models" -> navController.navigate(Screen.LocalModels.route)
+    // 深链跳转：冷启动（onCreate 读 intent）与热启动（onNewIntent 读新 intent）统一走这条路径。
+    // 判定键是「待消费路由的值」而不是初始化时捕获的常量 —— 这样热启动带来的新目标也能生效，
+    // 且消费后置空不会再次触发（因此 Activity 重建不会再往导航栈里重复压入同一页）。
+    val deepLinkRoute = pendingRoute?.value
+    LaunchedEffect(deepLinkRoute) {
+        val target = deepLinkRoute ?: return@LaunchedEffect
+        val destination =
+            when (target) {
+                "personalization" -> Screen.Personalization.route
+                "api_settings" -> Screen.ApiSettings.route
+                "local_models" -> Screen.LocalModels.route
+                else -> null
+            }
+        if (destination != null) {
+            // launchSingleTop：用户重复触发同一深链时，不会在栈顶叠加重复页面
+            navController.navigate(destination) { launchSingleTop = true }
         }
+        onRouteConsumed()
     }
 
     // Scaffold 提供应用基本结构，包含底部导航栏
@@ -236,6 +349,8 @@ fun EyeOpenerApp(
             composable(Screen.Assistant.route) { AssistantScreen() }
             composable(Screen.Settings.route) {
                 val context = LocalContext.current
+                // 离线模型失败的技术细节（域名/IP/证书/原始异常），供"翻译模型诊断"查看
+                val transDiagnostics by subtitleManager.translationModelDiagnostics.collectAsState()
                 SettingsScreen(
                     onLocalClick = { navController.navigate(Screen.LocalModels.route) },
                     onApiClick = { navController.navigate(Screen.ApiSettings.route) },
@@ -267,6 +382,8 @@ fun EyeOpenerApp(
                         val chooser = Intent.createChooser(shareIntent, context.getString(R.string.share_title))
                         context.startActivity(chooser)
                     },
+                    translationDiagnostics = transDiagnostics,
+                    onClearTranslationDiagnostics = { subtitleManager.clearTranslationModelDiagnostics() },
                 )
             }
             // 设置子页面，通过 popBackStack 返回上一级
@@ -730,6 +847,8 @@ fun SubtitleScreen(
     // 与 ViewModel 同步悬浮字幕状态，防止 Service 被系统杀死后界面状态不一致
     val active by subtitleManager.isOverlayActive.collectAsState()
     val runtimeError by subtitleManager.runtimeError.collectAsState()
+    // 离线翻译模型准备状态：驱动非模态下载状态条与失败弹窗
+    val transModelState by subtitleManager.translationModelState.collectAsState()
     // 音频输入源（0=麦克风, 1=应用内声音）
     val audioSource by subtitleManager.audioSource.collectAsState()
     LaunchedEffect(active) {
@@ -739,13 +858,27 @@ fun SubtitleScreen(
             context.stopService(Intent(context, FloatingSubtitleService::class.java))
         }
     }
-    // 监听运行时错误，弹出提示并清除错误状态
+    // 监听运行时错误，弹出提示并清除错误状态。
+    // 去重：流式中断（"译文可能不完整"）等错误会在连续多句上重复写入同一个值，
+    // 原实现每次 clear 后再次写入都会重新弹一次 Toast，连续多句时反复打扰用户。
+    // 这里对"相同文案 + 短时间窗口内"的重复错误只弹一次，但仍照常清除状态。
+    var lastToastError by remember { mutableStateOf<String?>(null) }
+    var lastToastAtMs by remember { mutableStateOf(0L) }
     LaunchedEffect(runtimeError) {
-        runtimeError?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-            subtitleManager.clearRuntimeError()
+        val err = runtimeError ?: return@LaunchedEffect
+        val now = System.currentTimeMillis()
+        val isDuplicate = err == lastToastError && now - lastToastAtMs < TOAST_DEDUP_WINDOW_MS
+        if (!isDuplicate) {
+            Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+            lastToastError = err
+            lastToastAtMs = now
         }
+        subtitleManager.clearRuntimeError()
     }
+
+    // 说明：这里曾有「下载中 → 就绪」弹一次 Toast 的逻辑，已移除。
+    // 理由：下载完成本来就是预期结果，字幕随后正常出现即是信号；成功提示属于噪音，
+    // 尤其用户切到别的 App 时这条 Toast 只会造成干扰。
 
     /**
      * 批量请求悬浮字幕所需的所有运行时权限（主要是录音权限）
@@ -1011,6 +1144,69 @@ fun SubtitleScreen(
                             subtitleManager.updateTargetLanguage(src)
                         },
                     )
+                    // 离线翻译模型下载状态条 —— 非模态，不阻塞用户操作。
+                    // ML Kit 不提供下载进度回调，故用不确定进度圈而非百分比进度条。
+                    if (transModelState.status == SubtitleManager.TranslationModelStatus.DOWNLOADING) {
+                        Spacer(modifier = Modifier.height(Dimens.SpaceSm))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors =
+                                CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+                                ),
+                            border =
+                                BorderStroke(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f),
+                                ),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.trans_model_downloading_title),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        // 超过阈值换成"网络较慢"文案：区分"慢"与"卡死"
+                                        text =
+                                            if (transModelState.elapsedMs >= SLOW_DOWNLOAD_HINT_MS) {
+                                                stringResource(R.string.trans_model_downloading_slow)
+                                            } else {
+                                                stringResource(R.string.trans_model_downloading_hint)
+                                            },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                                    )
+                                    if (transModelState.elapsedMs >= ELAPSED_VISIBLE_MS) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text =
+                                                stringResource(
+                                                    R.string.trans_model_elapsed,
+                                                    formatElapsed(transModelState.elapsedMs),
+                                                ),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // 语言选择区下方温馨提示框
                     Spacer(modifier = Modifier.height(Dimens.SpaceSm))
                     Card(
@@ -1176,6 +1372,39 @@ fun SubtitleScreen(
             dismissButton = {
                 TextButton(onClick = { showCloudConfigAlert = false }) {
                     Text(text = stringResource(R.string.cloud_cancel))
+                }
+            },
+        )
+    }
+
+    // 离线翻译模型下载失败弹窗。
+    // 正文只给**一句人话**（按失败分类选文案）；技术细节（下载域名 / 解析到的 IP /
+    // 证书校验结论 / 原始异常）不在这里，而是收进「设置 → 翻译模型诊断」。
+    // 这样弹窗从"标题 + 三四行长文 + 提示句 + 两个按钮"缩到"标题 + 一行 + 两个按钮"。
+    if (transModelState.status == SubtitleManager.TranslationModelStatus.FAILED) {
+        // 语言对不受支持时"重试"永远不会成功，只给一个"知道了"，
+        // 不摆一个点了没用的按钮。
+        val unsupported = transModelState.failureKind == TranslationPrepFailureKind.UNSUPPORTED_LANGUAGE
+        AlertDialog(
+            onDismissRequest = { subtitleManager.dismissTranslationModelError() },
+            title = { Text(text = stringResource(R.string.trans_model_failed_title)) },
+            text = { Text(text = stringResource(failureKindTextRes(transModelState.failureKind))) },
+            dismissButton = {
+                if (!unsupported) {
+                    TextButton(onClick = { subtitleManager.dismissTranslationModelError() }) {
+                        Text(text = stringResource(R.string.trans_model_later))
+                    }
+                }
+            },
+            confirmButton = {
+                if (unsupported) {
+                    TextButton(onClick = { subtitleManager.dismissTranslationModelError() }) {
+                        Text(text = stringResource(R.string.trans_model_got_it))
+                    }
+                } else {
+                    TextButton(onClick = { subtitleManager.retryTranslationPrep() }) {
+                        Text(text = stringResource(R.string.trans_model_retry))
+                    }
                 }
             },
         )
@@ -1453,6 +1682,8 @@ fun SettingsScreen(
     onHistoryClick: () -> Unit = {}, // 点击历史记录
     onFeedbackClick: () -> Unit = {}, // 点击意见反馈
     onShareClick: () -> Unit = {}, // 点击分享给朋友
+    translationDiagnostics: String? = null, // 最近一次离线模型失败的技术细节
+    onClearTranslationDiagnostics: () -> Unit = {},
     settingsViewModel: io.github.ztfang.eye.viewmodel.SettingsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -1470,6 +1701,8 @@ fun SettingsScreen(
     var downloadId by remember { mutableStateOf<Long?>(null) }
     // 界面语言选择弹窗
     var showLanguagePicker by remember { mutableStateOf(false) }
+    // 翻译模型诊断弹窗
+    var showTransDiagnostics by remember { mutableStateOf(false) }
     val currentLanguage by settingsViewModel.interfaceLanguage.collectAsState(initial = "zh")
 
     /**
@@ -1700,6 +1933,12 @@ fun SettingsScreen(
                         accent = AccentTone.Coral,
                         onClick = onHistoryClick,
                     )
+                    SettingsRow(
+                        icon = Icons.Filled.Search,
+                        label = stringResource(R.string.settings_row_trans_diagnostics),
+                        accent = AccentTone.Mint,
+                        onClick = { showTransDiagnostics = true },
+                    )
                 }
             }
 
@@ -1775,6 +2014,43 @@ fun SettingsScreen(
 
             item { Spacer(modifier = Modifier.height(Dimens.SpaceMd)) }
         }
+    }
+
+    // 翻译模型诊断弹窗：呈现最近一次失败的技术细节（下载域名 / 解析到的 IP /
+    // 证书校验结论 / 原始异常）。刻意放在设置里而不是失败弹窗里——
+    // 普通用户不需要看这些，但排障的人必须能找到，所以两处分开。
+    if (showTransDiagnostics) {
+        val detail = translationDiagnostics
+        AlertDialog(
+            onDismissRequest = { showTransDiagnostics = false },
+            title = { Text(stringResource(R.string.trans_diag_title)) },
+            text = {
+                if (detail.isNullOrBlank()) {
+                    Text(text = stringResource(R.string.trans_diag_empty))
+                } else {
+                    // 技术细节可能很长，允许滚动，避免撑爆弹窗
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        Text(
+                            text = detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            },
+            dismissButton = {
+                if (!detail.isNullOrBlank()) {
+                    TextButton(onClick = onClearTranslationDiagnostics) {
+                        Text(text = stringResource(R.string.trans_diag_clear))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTransDiagnostics = false }) {
+                    Text(text = stringResource(R.string.trans_diag_close))
+                }
+            },
+        )
     }
 
     // 界面语言选择弹窗

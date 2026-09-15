@@ -34,9 +34,9 @@
     <methods>;
 }
 
-# 自研 JNI - NativeAudioProcessor（JNI 函数名含完整包路径）
--keep class io.github.ztfang.eye.engine.asr.NativeAudioProcessor { *; }
--keep class io.github.ztfang.eye.engine.asr.NativeAudioProcessor$* { *; }
+# 注：原自研 JNI（NativeAudioProcessor / libeye_native.so）已移除。
+# 该类全项目无实例化点、属死代码，engine/src/main/cpp 与 CMake 目标一并删除，
+# 因此这里不再需要对应的 keep 规则。
 
 # Sherpa-ONNX/VAD 引擎（System.loadLibrary 调用方）
 -keep class io.github.ztfang.eye.engine.asr.SherpaOnnxAsrEngine { *; }
@@ -120,9 +120,16 @@
 }
 
 # ==============================
-# ML Kit（仅保留翻译相关，缩小范围）
+# ML Kit
 # ==============================
--keep class com.google.mlkit.translate.** { *; }
+# 注意：完整的 ML Kit keep 规则在 engine/consumer-rules.pro（engine 才是 ML Kit 的依赖方）。
+# 这里只做兜底与警告抑制。
+# 历史踩坑：曾在此写 `-keep class com.google.mlkit.translate.**` —— 该包名不存在（真实为
+# com.google.mlkit.nl.translate.** / com.google.mlkit.common.**），规则命中 0 个类，
+# 导致 release 包中 ML Kit 公开 API 被 R8 全部删除，本地翻译运行时 NoClassDefFoundError。
+-keep class com.google.mlkit.nl.translate.** { *; }
+-keep class com.google.mlkit.nl.languageid.** { *; }
+-keep class com.google.mlkit.common.** { *; }
 -dontwarn com.google.mlkit.**
 
 # ==============================

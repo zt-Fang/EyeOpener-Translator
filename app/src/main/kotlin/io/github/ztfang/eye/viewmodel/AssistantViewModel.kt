@@ -75,25 +75,32 @@ class AssistantViewModel
             _isLoading.value = true
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    var accumulatedText = ""
+                    // StringBuilder 累积：String += 每 token 都是 O(n) 拷贝，长回复累计 O(n²)
+                    val builder = StringBuilder()
                     var aiMsgId = -1
+                    var lastUiUpdateMs = 0L
                     llmClient.chatStream(history).collect { token ->
-                        accumulatedText += token
+                        builder.append(token)
+                        val now = System.currentTimeMillis()
                         if (aiMsgId == -1) {
+                            // 首个 token：插入 AI 消息占位
                             val aiMsg =
                                 AssistantMessage(
-                                    text = accumulatedText,
+                                    text = builder.toString(),
                                     isFromUser = false,
                                     timestamp = nowTime(),
                                 )
                             _messages.value = _messages.value + aiMsg
                             aiMsgId = _messages.value.lastIndex
-                        } else {
-                            val updated = _messages.value.toMutableList()
-                            updated[aiMsgId] = updated[aiMsgId].copy(text = accumulatedText)
-                            _messages.value = updated
+                            lastUiUpdateMs = now
+                        } else if (now - lastUiUpdateMs >= STREAM_UI_MIN_INTERVAL_MS) {
+                            // 100ms 合并刷新：StateFlow 每发一次就触发一次 Compose 重组
+                            lastUiUpdateMs = now
+                            flushStreamingText(aiMsgId, builder)
                         }
                     }
+                    // 收尾强制刷新，避免最后一个窗口内的 token 丢失
+                    flushStreamingText(aiMsgId, builder)
                 } catch (e: Exception) {
                     Log.e(TAG, "LLM chat failed: ${e.message}", e)
                     val errMsg =
@@ -110,6 +117,19 @@ class AssistantViewModel
             }
         }
 
+        /** 把流式累积文本写回第 [aiMsgId] 条消息（越界/已清空时静默跳过）。 */
+        private fun flushStreamingText(
+            aiMsgId: Int,
+            builder: StringBuilder,
+        ) {
+            if (aiMsgId < 0) return
+            val current = _messages.value
+            if (aiMsgId !in current.indices) return
+            val updated = current.toMutableList()
+            updated[aiMsgId] = updated[aiMsgId].copy(text = builder.toString())
+            _messages.value = updated
+        }
+
         /** 清空对话 */
         fun clearMessages() {
             _messages.value = emptyList()
@@ -122,5 +142,8 @@ class AssistantViewModel
 
         companion object {
             private const val TAG = "AssistantViewModel"
+
+            /** 流式回复 UI 合并刷新间隔（与 SubtitleManager 保持一致） */
+            private const val STREAM_UI_MIN_INTERVAL_MS = 100L
         }
     }

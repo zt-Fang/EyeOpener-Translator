@@ -24,6 +24,7 @@ import io.github.ztfang.eye.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -39,6 +40,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import javax.inject.Singleton
 
 /** 协程取消时立即中断底层 OkHttp 连接，避免网络差时 IO 线程被阻塞调用占满 */
 private suspend fun Call.executeCancellable() =
@@ -203,14 +205,27 @@ enum class LLMProvider {
         }
 }
 
+/**
+ * LLM HTTP 客户端（进程内单例）
+ *
+ * 单例意义：内部持有 OkHttpClient（连接池 + 线程池）。不加 @Singleton 时每个注入点
+ * （SubtitleManager / AssistantViewModel / SettingsViewModel / ModelPreparer / LLMTranslationEngine）
+ * 各持一份，5 份连接池互不复用 → 每次翻译都重新走 TCP + TLS 握手，弱网下延迟与失败率显著上升。
+ * 同目录其他引擎（MlKit/Cloud/Vosk/Sherpa/Vad/ModelPreparer）均已是 @Singleton。
+ *
+ * 复用 AppModule 提供的共享 OkHttpClient：通过 newBuilder() 派生，**共享同一个连接池与
+ * 调度线程池**，仅覆盖超时（LLM 需要比云端翻译更短的读超时，见下），避免两份连接池各自建连。
+ */
+@Singleton
 class LLMClient
     @Inject
     constructor(
         private val settingsRepository: SettingsRepository,
+        sharedClient: OkHttpClient,
     ) {
         private val client =
-            OkHttpClient
-                .Builder()
+            sharedClient
+                .newBuilder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 // 读超时 30s：上层 translate/chat 用 withTimeout(7s) 兜底，120s 会让慢调用在协程取消后仍
                 // 阻塞 IO 线程直到 120s，网络差时 IO 线程池被占满。30s 作为最坏情况上限即可。
@@ -327,6 +342,9 @@ class LLMClient
 
                 Log.d("LLMClient", "chatStream: provider=$provider, url=$fullUrl")
 
+                // 流式阶段是否已经吐出过内容：决定失败时能否降级重试。
+                // 已经吐过内容再降级重发，会造成「同一句翻译两份结果」叠加到 UI 上，故必须禁止。
+                var emittedAny = false
                 try {
                     when (provider) {
                         LLMProvider.OPEN_AI, LLMProvider.OPENROUTER,
@@ -336,25 +354,67 @@ class LLMClient
                         LLMProvider.AGNES, LLMProvider.SILICONFLOW,
                         LLMProvider.CUSTOM,
                         ->
-                            openAiChatStream(fullUrl, apiKey, effectiveModel, messages).collect { emit(it) }
+                            openAiChatStream(fullUrl, apiKey, effectiveModel, messages).collect { token ->
+                                emittedAny = true
+                                emit(token)
+                            }
                         LLMProvider.CLAUDE ->
-                            claudeChatStream(fullUrl, apiKey, effectiveModel, messages).collect { emit(it) }
+                            claudeChatStream(fullUrl, apiKey, effectiveModel, messages).collect { token ->
+                                emittedAny = true
+                                emit(token)
+                            }
                     }
                 } catch (e: Exception) {
-                    // 流式失败 → 降级到非流式，一次性 emit 完整回复
-                    Log.w("LLMClient", "stream failed, fallback to non-stream: ${e.message}")
-                    val reply =
-                        withContext(Dispatchers.IO) {
-                            when (provider) {
-                                LLMProvider.CLAUDE -> claudeChat(fullUrl, apiKey, effectiveModel, messages)
-                                else -> openAiChat(fullUrl, apiKey, effectiveModel, messages)
-                            }
-                        }
-                    emit(reply)
-                }
-            }
+                    // ==============================
+                    // 错误可见化（2026-09-13 修正）
+                    // ==============================
+                    // 旧实现把真实错误只写进 Log.w 然后静默降级 —— 而 vivo 等国产 ROM 会屏蔽
+                    // 第三方应用 logcat，用户和开发者都拿不到线索，UI 只剩「翻译失败」四个字。
+                    // 现在：把原始错误信息（含 HTTP code / 响应体片段）保留在异常里向上传播，
+                    // 上层 [SubtitleManager.buildAiErrorMessage] 会据此给出可行动的文案。
+                    val detail = (e.message ?: e.javaClass.simpleName).trim()
+                    Log.w("LLMClient", "stream failed, fallback to non-stream: $detail")
 
-        private fun openAiChatStream(
+                    // 已吐过内容 → 不允许降级：重发会把重复内容叠加到同一行。
+                    if (emittedAny) throw e
+
+                    // 配置/鉴权/路径类错误降级也没有意义（非流式会以同样原因失败），直接上抛，
+                    // 让用户看到真实原因，而不是被"降级后再失败"掩盖成通用文案。
+                    if (isConfigLevelError(detail)) throw e
+
+                    try {
+                        val reply =
+                            withContext(Dispatchers.IO) {
+                                when (provider) {
+                                    LLMProvider.CLAUDE -> claudeChat(fullUrl, apiKey, effectiveModel, messages)
+                                    else -> openAiChat(fullUrl, apiKey, effectiveModel, messages)
+                                }
+                            }
+                        emit(reply)
+                    } catch (fallbackError: Exception) {
+                        // 降级也失败：把两次错误都带上，避免只看到后者而丢失根因
+                        val fallbackDetail = (fallbackError.message ?: fallbackError.javaClass.simpleName).trim()
+                        Log.e("LLMClient", "fallback non-stream also failed: $fallbackDetail")
+                        throw RuntimeException("流式失败($detail)；非流式重试亦失败($fallbackDetail)", fallbackError)
+                    }
+                }
+            }.flowOn(Dispatchers.IO) // SSE 逐行读取是阻塞 IO：必须切到 IO 线程，禁止在调用方（可能是主线程）上读流
+
+        /**
+         * 判断是否为「换种请求方式也没用」的配置级错误。
+         *
+         * 这类错误（鉴权失败、路径/模型不存在、限流）与非流式共用相同的 URL/Key/Model，
+         * 降级重试只是白等一轮，还会把真实原因藏在后面的失败里。
+         *
+         * 注意 HTTP 状态码的匹配方式：旧实现用 `detail.contains("401")` 这种裸子串匹配，
+         * 响应体里任何含这几个数字的文本（token 计数、模型名、时间戳）都会被误判，
+         * 从而错误地跳过降级。这里要求数字出现在 HTTP 状态语境中。
+         */
+        private fun isConfigLevelError(detail: String): Boolean =
+            CONFIG_LEVEL_MARKERS.any { detail.contains(it, ignoreCase = true) } ||
+                HTTP_STATUS_ERROR_REGEX.containsMatchIn(detail)
+
+    private fun openAiChatStream(
             url: String,
             apiKey: String,
             model: String,
@@ -684,7 +744,8 @@ class LLMClient
                     LLMProvider.CLAUDE -> settingsRepository.claudeKey.first()
                     else -> settingsRepository.openAiKey.first()
                 }
-            return raw.trim().replace(Regex("[\\r\\n\\s]+"), "")
+            // 复用预编译正则：翻译每句都会走到这里，旧实现每次 new Regex
+            return raw.trim().replace(WHITESPACE_REGEX, "")
         }
 
         private suspend fun openAiTranslate(
@@ -794,5 +855,35 @@ class LLMClient
                 .getJSONObject(0)
                 .getString("text")
                 .trim()
+        }
+
+        companion object {
+            /** 去掉 API Key 中的换行/空白（用户从网页复制时常带上）。预编译避免每次调用重新编译。 */
+            private val WHITESPACE_REGEX = Regex("[\\r\\n\\s]+")
+
+            /**
+             * HTTP 状态语境下的错误码。要求数字紧跟在 `API error` / `HTTP` / `status` / `code`
+             * 之后，避免把响应体里无关的 "401" 之类数字误判成配置级错误。
+             */
+            private val HTTP_STATUS_ERROR_REGEX =
+                Regex("""(?i)\b(?:api\s+error|http|status(?:\s+code)?|code)\s*[:=]?\s*(401|403|404|429)\b""")
+
+            /**
+             * 「换请求方式也没用」的文本特征（不含数字型状态码，那部分交给
+             * [HTTP_STATUS_ERROR_REGEX] 做语境匹配）：
+             *  - 鉴权类：invalid api key、unauthorized、authentication
+             *  - 路径/模型类：model not found、no such model
+             *  - 限流类：rate limit
+             */
+            private val CONFIG_LEVEL_MARKERS =
+                listOf(
+                    "invalid api key",
+                    "invalid_api_key",
+                    "unauthorized",
+                    "authentication",
+                    "model not found",
+                    "no such model",
+                    "rate limit",
+                )
         }
     }

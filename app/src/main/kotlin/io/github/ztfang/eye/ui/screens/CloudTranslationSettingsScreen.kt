@@ -657,16 +657,6 @@ private data class Quintuple(
     val e: Boolean,
 )
 
-private operator fun Quintuple.component1() = a
-
-private operator fun Quintuple.component2() = b
-
-private operator fun Quintuple.component3() = c
-
-private operator fun Quintuple.component4() = d
-
-private operator fun Quintuple.component5() = e
-
 /**
  * 云端 API 连通性验证。
  * 各 provider 发起一次最小请求，验证凭证是否有效。

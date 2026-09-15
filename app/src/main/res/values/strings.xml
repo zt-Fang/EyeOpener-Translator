@@ -31,6 +31,37 @@
     <string name="language_tip_fast_mode">语音识别在说话简短有停顿场景下效果更好</string>
     <string name="language_tip_audio_permission">因为Android权限限制，应用内声音每次开启都需要重新授予屏幕录制权限</string>
 
+    <!-- 字幕主屏 - 离线翻译模型准备状态 -->
+    <string name="trans_model_downloading_title">正在下载离线翻译模型</string>
+    <string name="trans_model_downloading_hint">首次使用需下载约 30-100MB，完成后自动生效</string>
+    <string name="trans_model_downloading_slow">网络较慢，下载仍在继续，请保持网络畅通</string>
+    <string name="trans_model_elapsed">已等待 %1$s</string>
+    <string name="trans_model_elapsed_min_sec">%1$d 分 %2$d 秒</string>
+    <string name="trans_model_elapsed_sec">%1$d 秒</string>
+    <!-- 悬浮窗用紧凑时长：浮层空间小，且用户此时通常在看别的 App -->
+    <string name="trans_model_duration_compact_min_sec">%1$dm%2$ds</string>
+    <string name="trans_model_duration_compact_sec">%1$ds</string>
+    <string name="trans_model_floating_downloading">下载中 · %1$s</string>
+    <string name="trans_model_floating_failed">离线翻译模型未就绪</string>
+
+    <!-- 失败弹窗：只给一句人话，技术细节收进「设置 → 翻译模型诊断」 -->
+    <string name="trans_model_failed_title">离线翻译模型下载失败</string>
+    <string name="trans_model_failed_gms">本机缺少 Google Play 服务，无法下载离线模型。可改用云端翻译或 AI 翻译。</string>
+    <string name="trans_model_failed_network">网络无法访问 Google 服务器，请检查代理是否覆盖 Google 域名后重试。</string>
+    <string name="trans_model_failed_incomplete">下载未完成，可能是网络较慢或服务限流，稍后重试通常可以恢复。</string>
+    <string name="trans_model_failed_unsupported">当前语言对不支持本地离线翻译，请改用云端翻译或 AI 翻译。</string>
+    <string name="trans_model_failed_unknown">离线翻译模型未能就绪，可重试或改用云端翻译。</string>
+    <string name="trans_model_retry">重试</string>
+    <string name="trans_model_later">稍后</string>
+    <string name="trans_model_got_it">知道了</string>
+
+    <!-- 设置 → 翻译模型诊断（技术细节入口，避免弹窗塞满用户看不懂的内容） -->
+    <string name="settings_row_trans_diagnostics">翻译模型诊断</string>
+    <string name="trans_diag_title">翻译模型诊断</string>
+    <string name="trans_diag_empty">暂无异常记录。\n\n本地翻译需要设备具备 Google Play 服务，且网络能访问 Google 的模型下载服务器。</string>
+    <string name="trans_diag_clear">清空记录</string>
+    <string name="trans_diag_close">关闭</string>
+
     <!-- 助手屏 -->
     <string name="assistant_title">AI 助手</string>
     <string name="assistant_clear">清空</string>
@@ -176,10 +207,13 @@
     <string name="api_enter_key">请输入 API Key</string>
     <string name="api_enter_url">请输入 Base URL</string>
     <string name="api_enter_model">请输入模型名称</string>
-    <string name="api_testing">正在验证 API 连接…</string>
+    <string name="api_test_need_input">请先填写 API Key、Base URL 和模型名称</string>
+    <string name="api_testing">正在测试连接…</string>
+    <string name="api_test_connection">测试连接（可选）</string>
+    <string name="api_test_ok">连接正常 ✓（配置已保存，可直接使用）</string>
     <string name="api_saved">已保存 ✓</string>
-    <string name="api_verify_failed">验证失败：%1$s</string>
-    <string name="api_config_tip">配置保存在本地，卸载或清除数据会丢失。需重新配置时，直接覆盖保存，或点击下方清空后重新填写。</string>
+    <string name="api_verify_failed">连接测试未通过：%1$s（配置已保存，不影响使用；翻译失败时会再提示）</string>
+    <string name="api_config_tip">配置保存在本地，卸载或清除数据会丢失。点「保存」即写入，无需联网；「测试连接」仅用于确认服务商可达，失败不影响已保存的配置。</string>
     <string name="api_cleared">已清空，请重新输入。</string>
     <string name="api_clear_config">清除当前配置</string>
     <string name="api_key_already_configured">当前服务商 API Key 已配置，编辑将覆盖</string>

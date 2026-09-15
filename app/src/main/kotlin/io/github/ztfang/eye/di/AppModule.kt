@@ -66,6 +66,7 @@ object AppModule {
     ): AppDatabase =
         Room
             .databaseBuilder(context, AppDatabase::class.java, "eye.db")
+            .addMigrations(AppDatabase.MIGRATION_1_2)
             .build()
 
     /** 提供 HistoryDao */
@@ -102,6 +103,12 @@ object AppModule {
             builder.addInterceptor(
                 HttpLoggingInterceptor().apply {
                     level = HttpLoggingInterceptor.Level.HEADERS
+                    // HEADERS 级会打印全部请求头，云端翻译/LLM 的凭据都在头里 → 必须脱敏
+                    redactHeader("Authorization")
+                    redactHeader("X-Naver-Client-Id")
+                    redactHeader("X-Naver-Client-Secret")
+                    redactHeader("Ocp-Apim-Subscription-Key")
+                    redactHeader("api-key")
                 },
             )
         }

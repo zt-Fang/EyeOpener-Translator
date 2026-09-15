@@ -10,6 +10,7 @@ import io.github.ztfang.eye.domain.model.ModelState
 import io.github.ztfang.eye.domain.model.ModelStatus
 import io.github.ztfang.eye.domain.repository.ModelRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -462,7 +463,7 @@ class ModelRepositoryImpl(
      * @param allowResume 是否允许基于已有 .part 续传。HTTP 416 重试时置 false——
      *        此时 .part 已比服务端文件还长，必须先删掉再从头下，否则该模型将永久下载失败。
      */
-    private fun downloadOneFile(
+    private suspend fun downloadOneFile(
         spec: ModelFileSpec,
         target: File,
         onBytes: (bytesRead: Long, totalBytes: Long) -> Unit,
@@ -491,7 +492,9 @@ class ModelRepositoryImpl(
                         "[DL_RETRY] ${spec.relativePath}: 第${attempt + 1}/${MAX_DOWNLOAD_RETRIES} 次失败 " +
                             "(${e.javaClass.simpleName}: ${e.message})，${waitMs}ms 后重试，.part 保留续传",
                     )
-                    Thread.sleep(waitMs)
+                    // 用 delay 而非 Thread.sleep：本函数在 Dispatchers.IO 的协程里，
+                    // 阻塞 sleep 会占住一个 IO 线程（最长 3 次 × 3s），且无法被取消。
+                    delay(waitMs)
                 }
             }
         }

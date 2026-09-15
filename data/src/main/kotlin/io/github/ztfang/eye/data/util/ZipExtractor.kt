@@ -36,7 +36,8 @@ object ZipExtractor {
                             }
                         }
 
-                        val targetFile = File(destDir, entryName)
+                        // 路径归一化校验，防止条目名含 ../ 写到 destDir 之外（Zip Slip）
+                        val targetFile = resolveEntryFile(destDir, entryName)
 
                         if (entry.isDirectory) {
                             targetFile.mkdirs()

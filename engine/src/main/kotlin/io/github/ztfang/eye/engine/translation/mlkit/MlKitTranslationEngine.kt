@@ -14,7 +14,12 @@ import com.google.mlkit.nl.translate.TranslatorOptions
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.ztfang.eye.domain.engine.translation.TranslationEngine
 import io.github.ztfang.eye.domain.model.TranslationResult
+import io.github.ztfang.eye.engine.TranslationPrepPhase
+import io.github.ztfang.eye.engine.network.GoogleReachabilityChecker
+import io.github.ztfang.eye.engine.translation.TranslationPrepException
+import io.github.ztfang.eye.engine.translation.TranslationPrepFailureKind
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -38,6 +43,7 @@ class MlKitTranslationEngine
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
+        private val reachabilityChecker: GoogleReachabilityChecker,
     ) : TranslationEngine {
         /** 本地翻译引擎 */
         override val supportedEngine: AppTranslationEngine = AppTranslationEngine.LOCAL
@@ -94,17 +100,35 @@ class MlKitTranslationEngine
                 Log.v(TAG, "命中已下载缓存: $mlkitLang")
                 return true
             }
-            val ok =
-                runCatching {
-                    withTimeout(LOCAL_CHECK_TIMEOUT_MS) {
-                        RemoteModelManager
-                            .getInstance()
-                            .isModelDownloaded(TranslateRemoteModel.Builder(mlkitLang).build())
-                            .await()
-                    }
-                }.getOrDefault(false)
+            val ok = isModelDownloadedFresh(mlkitLang)
             if (ok) downloadedLanguages.add(mlkitLang)
             return ok
+        }
+
+        /**
+         * 绕过进程级缓存，直接向 GMS 查询某语言模型是否已下载。
+         * 供"下载完成确认"与"超时后轮询"使用——这两处必须拿到真实状态，
+         * 不能用可能过期的内存缓存。
+         */
+        private suspend fun isModelDownloadedFresh(mlkitLang: String): Boolean =
+            runCatching {
+                withTimeout(LOCAL_CHECK_TIMEOUT_MS) {
+                    RemoteModelManager
+                        .getInstance()
+                        .isModelDownloaded(TranslateRemoteModel.Builder(mlkitLang).build())
+                        .await()
+                }
+            }.getOrDefault(false)
+
+        /** 查询语言对两个方向的语言模型是否都已下载（绕过缓存） */
+        private suspend fun isPairReadyFresh(
+            srcCode: String,
+            tgtCode: String,
+        ): Boolean = isModelDownloadedFresh(srcCode) && isModelDownloadedFresh(tgtCode)
+
+        /** 把语言写入进程级已下载缓存，后续同进程内跳过 GMS 查询 */
+        private fun markDownloaded(vararg langs: String) {
+            langs.forEach { downloadedLanguages.add(it) }
         }
 
         /**
@@ -220,28 +244,21 @@ class MlKitTranslationEngine
                     val localReady = srcOk && tgtOk
 
                     if (!localReady) {
-                        // 同一语言对的并发下载串行化，避免10条翻译请求同时冲GMS导致全超时
+                        // 同一语言对的并发下载串行化，避免多条翻译请求同时冲 GMS 导致全超时
                         val pairKey = "$sourceCode-$targetCode"
                         val mutex =
                             synchronized(downloadMutexMap) {
                                 downloadMutexMap.getOrPut(pairKey) { Mutex() }
                             }
-                        mutex.withLock {
-                            // 重新检查：可能排队期间已有其他协程下完并写入缓存
-                            if (!(downloadedLanguages.contains(sourceCode) && downloadedLanguages.contains(targetCode))) {
-                                Log.d(
-                                    TAG,
-                                    "本地未就绪($sourceCode=$srcOk, $targetCode=$tgtOk)，调用downloadModelIfNeeded(${DOWNLOAD_TIMEOUT_MS / 1000}s超时，首次需VPN/GMS下载)",
-                                )
-                                withTimeout(DOWNLOAD_TIMEOUT_MS) {
-                                    ensureModelDownloaded(translator)
-                                }
-                                Log.i(TAG, "ML Kit 模型下载/校验完成，写入进程缓存: $sourceCode, $targetCode")
-                                downloadedLanguages.add(sourceCode)
-                                downloadedLanguages.add(targetCode)
-                            } else {
-                                Log.i(TAG, "排队后缓存已命中($sourceCode,$targetCode)，跳过下载")
+                        val downloadResult =
+                            mutex.withLock {
+                                downloadAndWait(sourceCode, targetCode, translator)
                             }
+                        if (downloadResult.isFailure) {
+                            return@withContext Result.failure(
+                                downloadResult.exceptionOrNull()
+                                    ?: RuntimeException("ML Kit 模型下载失败"),
+                            )
                         }
                     } else {
                         Log.i(TAG, "ML Kit 模型本地已就绪($sourceCode,$targetCode)，跳过下载校验")
@@ -264,6 +281,38 @@ class MlKitTranslationEngine
                         ),
                     )
                 } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                    // 超时很可能只是「下载比超时慢」：GMS 的模型下载不会随协程取消而停止，
+                    // 实测慢速网络下 60s 超时报失败、模型却在 2 分钟后下载完成。
+                    // 因此先复查模型是否已就绪，就绪则当场重试一次翻译，避免把首次下载误报为失败。
+                    val retrySrc = mlkitCode(sourceLanguage)
+                    val retryTgt = mlkitCode(targetLanguage)
+                    if (retrySrc != null && retryTgt != null) {
+                        val nowReady =
+                            runCatching {
+                                isModelDownloadedCached(retrySrc) && isModelDownloadedCached(retryTgt)
+                            }.getOrDefault(false)
+                        if (nowReady) {
+                            Log.i(TAG, "超时后复查模型已就绪，重试一次翻译: $retrySrc → $retryTgt")
+                            val recovered =
+                                runCatching {
+                                    withTimeout(TRANSLATE_TIMEOUT_MS) {
+                                        translateAsync(getOrCreateTranslator(retrySrc, retryTgt), text)
+                                    }
+                                }.getOrNull()
+                            if (recovered != null) {
+                                Log.i(TAG, "超时重试成功: '$text' -> '$recovered'")
+                                return@withContext Result.success(
+                                    TranslationResult(
+                                        sourceText = text,
+                                        translatedText = recovered,
+                                        sourceLanguage = sourceLanguage,
+                                        targetLanguage = targetLanguage,
+                                        engine = AppTranslationEngine.LOCAL,
+                                    ),
+                                )
+                            }
+                        }
+                    }
                     val reason =
                         buildString {
                             append("ML Kit 翻译模型操作超时：")
@@ -275,6 +324,160 @@ class MlKitTranslationEngine
                 } catch (e: Exception) {
                     Log.e(TAG, "ML Kit 翻译失败: ${e.message}", e)
                     Result.failure(e)
+                }
+            }
+
+        /**
+         * 不加锁的"下载并等待就绪"核心逻辑。调用方必须已持有该语言对的 Mutex。
+         *
+         * 流程：复查本地 → downloadModelIfNeeded（180s 超时）→ 失败则轮询 120s 确认。
+         * 轮询的必要性：GMS 的下载不会随协程取消而停止，超时只说明"没在窗口内回调成功"，
+         * 并不等于失败；直接判失败正是历史误报的根源。
+         */
+        private suspend fun downloadAndWait(
+            srcCode: String,
+            tgtCode: String,
+            translator: Translator,
+            onPhase: (TranslationPrepPhase) -> Unit = {},
+        ): Result<Unit> {
+            // 排队期间可能已被其他协程下完
+            if (isPairReadyFresh(srcCode, tgtCode)) {
+                markDownloaded(srcCode, tgtCode)
+                onPhase(TranslationPrepPhase.READY)
+                Log.i(TAG, "[downloadAndWait] 排队后复查命中，模型已就绪: $srcCode, $tgtCode")
+                return Result.success(Unit)
+            }
+
+            // 下载前做一次可达性预检：把"网络到底能不能到 Google"这个最关键的问题说清楚。
+            // 刻意**不阻断**下载——App 自身的网络栈与 GMS 进程受各自分流规则影响，
+            // App 探测失败不代表 GMS 一定下不了，故预检结果只用于生成更准确的失败原因。
+            //
+            // 必须探**两个**域名（入口 dl.google.com + 真正的数据源 redirector.gvt1.com）：
+            // 实测两者的分流结果可以完全相反——入口命中 DomainKeyword(google) 走了日本节点，
+            // 而数据源命中 GeoIP(cn) 被放走直连。只探入口会得出"网络没问题"的错误结论，
+            // 把用户引向"重试/等网速"这种无效操作。
+            val reachabilities = runCatching { reachabilityChecker.checkAll() }.getOrDefault(emptyList())
+
+            onPhase(TranslationPrepPhase.DOWNLOADING)
+            Log.i(
+                TAG,
+                "[downloadAndWait] 开始下载: $srcCode, $tgtCode, 超时=${DOWNLOAD_TIMEOUT_MS / 1000}s, " +
+                    "可达性=${
+                        reachabilities.joinToString { (h, r) -> "$h=${r.javaClass.simpleName}" }
+                            .ifEmpty { "unknown" }
+                    }",
+            )
+            val downloadError =
+                runCatching {
+                    withTimeout(DOWNLOAD_TIMEOUT_MS) { ensureModelDownloaded(translator) }
+                }.exceptionOrNull()
+
+            if (downloadError == null) {
+                markDownloaded(srcCode, tgtCode)
+                onPhase(TranslationPrepPhase.READY)
+                Log.i(TAG, "[downloadAndWait] 下载完成: $srcCode, $tgtCode")
+                return Result.success(Unit)
+            }
+
+            Log.w(
+                TAG,
+                "[downloadAndWait] 未在 ${DOWNLOAD_TIMEOUT_MS / 1000}s 内返回" +
+                    "(${downloadError.javaClass.simpleName}: ${downloadError.message})，" +
+                    "进入轮询等待 ${RECOVERY_WAIT_MS / 1000}s",
+            )
+            val deadline = System.currentTimeMillis() + RECOVERY_WAIT_MS
+            while (System.currentTimeMillis() < deadline) {
+                delay(RECOVERY_POLL_INTERVAL_MS)
+                if (isPairReadyFresh(srcCode, tgtCode)) {
+                    markDownloaded(srcCode, tgtCode)
+                    onPhase(TranslationPrepPhase.READY)
+                    Log.i(TAG, "[downloadAndWait] 轮询命中，模型已在后台下载完成: $srcCode, $tgtCode")
+                    return Result.success(Unit)
+                }
+            }
+
+            val totalSec = (DOWNLOAD_TIMEOUT_MS + RECOVERY_WAIT_MS) / 1000
+            // 网络确实不通时（有响应但不是 Google，或根本连不上）单独分类，
+            // 让 UI 能给出"检查代理分流规则"这种可操作的建议，而不是笼统的"下载失败"。
+            // 两个探测域名**任一**不可达即算网络问题——下载需要入口与数据源都通。
+            val networkBad =
+                reachabilities.any { (_, r) ->
+                    r !is GoogleReachabilityChecker.Reachability.Reachable
+                }
+            val kind =
+                if (networkBad) {
+                    TranslationPrepFailureKind.NETWORK_UNREACHABLE
+                } else {
+                    TranslationPrepFailureKind.DOWNLOAD_INCOMPLETE
+                }
+            // detail 只进日志与"诊断"入口：里面是域名、本地解析的 IP、证书结论、原始异常，
+            // 对排障有用，但不适合直接摆在弹窗正文里。
+            val detail =
+                buildString {
+                    append("离线翻译模型下载失败：已等待 ${totalSec}s 仍未就绪。")
+                    // 每个探测域名都写一条：入口与数据源的分流结果可能相反，
+                    // 只报一条会掩盖"数据源被直连"这个真正的瓶颈。
+                    reachabilities.forEach { (_, r) -> append(reachabilityChecker.describe(r)) }
+                    // ⚠️ 这里是**纯文本**渲染（诊断弹窗直接显示字符串），不要写 Markdown 语法——
+                    // 真机上踩过：写成 `**本地 DNS**` 会原样显示出星号。
+                    //
+                    // 刻意保持简短：诊断是给"想知道为什么失败"的人看的补充材料，
+                    // 不是教学文档。分流规则的成因分析留在代码注释与 CHANGELOG 里，
+                    // 不往用户面前堆。
+                    append("（注：本地解析 IP 不代表实际出口。）")
+                    if (kind == TranslationPrepFailureKind.DOWNLOAD_INCOMPLETE) {
+                        append("稍后重试通常可恢复；若反复失败，重点看 redirector.gvt1.com 那一条。")
+                    }
+                    append("（原始错误：")
+                    append(downloadError.message ?: downloadError.javaClass.simpleName)
+                    append("）")
+                }
+            Log.e(TAG, detail, downloadError)
+            return Result.failure(TranslationPrepException(kind, detail, downloadError))
+        }
+
+        /**
+         * 预热语言对模型（不执行翻译）：查本地 → 未就绪则下载 → 超时后轮询 → 就绪/失败。
+         * 通过 [onPhase] 上报阶段，供 UI 显示非模态"下载中"状态条。
+         */
+        suspend fun preparePair(
+            sourceLanguage: String,
+            targetLanguage: String,
+            onPhase: (TranslationPrepPhase) -> Unit = {},
+        ): Result<Unit> =
+            withContext(Dispatchers.IO) {
+                val srcCode = mlkitCode(sourceLanguage)
+                val tgtCode = mlkitCode(targetLanguage)
+                if (srcCode == null || tgtCode == null) {
+                    return@withContext Result.failure(
+                        TranslationPrepException(
+                            kind = TranslationPrepFailureKind.UNSUPPORTED_LANGUAGE,
+                            detail = "ML Kit 不支持语言对: $sourceLanguage → $targetLanguage",
+                        ),
+                    )
+                }
+                // 源=目标：直接返回原文，无需任何模型
+                if (srcCode == tgtCode) {
+                    onPhase(TranslationPrepPhase.READY)
+                    return@withContext Result.success(Unit)
+                }
+
+                onPhase(TranslationPrepPhase.CHECKING)
+                if (isPairReadyFresh(srcCode, tgtCode)) {
+                    markDownloaded(srcCode, tgtCode)
+                    onPhase(TranslationPrepPhase.READY)
+                    Log.i(TAG, "[preparePair] 模型本地已就绪，无需下载: $srcCode, $tgtCode")
+                    return@withContext Result.success(Unit)
+                }
+
+                val translator = getOrCreateTranslator(srcCode, tgtCode)
+                val pairKey = "$srcCode-$tgtCode"
+                val mutex =
+                    synchronized(downloadMutexMap) {
+                        downloadMutexMap.getOrPut(pairKey) { Mutex() }
+                    }
+                mutex.withLock {
+                    downloadAndWait(srcCode, tgtCode, translator, onPhase)
                 }
             }
 
@@ -331,13 +534,22 @@ class MlKitTranslationEngine
             private const val LOCAL_CHECK_TIMEOUT_MS = 15_000L
 
             /**
-             * 模型下载/校验超时：60s。
-             * - 如果模型已在本地，isModelDownloadedCached 会直接命中，此代码路径根本不走，0s 等待；
-             * - 没命中才走 downloadModelIfNeeded，经 GMS 握手+VPN下 en(~30MB)+zh(~30MB) 合计~60MB，
-             *   1~2MB/s 大约 30~60s，给足60s保证下完；
-             * - 下完一次写入进程缓存，后续同 APP 生命周期内完全跳过此步。
+             * 单次 downloadModelIfNeeded 的等待超时：180s。
+             * - 模型已在本地时根本不走此路径（isModelDownloadedFresh 先命中，0s 返回）；
+             * - 未命中才下载，en+zh 合计约 60MB，慢速网络/VPN 下 60s 经常不够，
+             *   原 60s 会把"还在下载"误判为失败并弹窗，故放宽到 180s。
              */
-            private const val DOWNLOAD_TIMEOUT_MS = 60_000L
+            private const val DOWNLOAD_TIMEOUT_MS = 180_000L
+
+            /**
+             * 下载超时后的轮询等待窗口：120s。
+             * GMS 的模型下载**不会随协程取消而停止**——实测 60s 超时报失败后，模型仍在后台下载完成。
+             * 因此超时只代表"没在窗口内回调成功"，不等于失败，需再轮询确认一轮。
+             */
+            private const val RECOVERY_WAIT_MS = 120_000L
+
+            /** 轮询间隔：3s。仅查询 GMS 本地库（SQLite），不产生网络请求。 */
+            private const val RECOVERY_POLL_INTERVAL_MS = 3_000L
 
             /** 单次翻译推理超时（模型在本地时通常1s内完成） */
             private const val TRANSLATE_TIMEOUT_MS = 5_000L

@@ -48,7 +48,8 @@ object TarBzipExtractor {
                                     continue
                                 }
 
-                                val outFile = File(destDir, entryName)
+                                // 路径归一化校验，防止条目名含 ../ 写到 destDir 之外（Tar Slip）
+                                val outFile = resolveEntryFile(destDir, entryName)
 
                                 if (entry.isDirectory) {
                                     outFile.mkdirs()

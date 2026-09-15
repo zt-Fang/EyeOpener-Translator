@@ -20,9 +20,8 @@
     <methods>;
 }
 
-# 自研 JNI - NativeAudioProcessor（JNI 函数名含完整包路径）
--keep class io.github.ztfang.eye.engine.asr.NativeAudioProcessor { *; }
--keep class io.github.ztfang.eye.engine.asr.NativeAudioProcessor$* { *; }
+# 注：原自研 JNI（NativeAudioProcessor / libeye_native.so）已移除，
+# 该类全项目无实例化点、属死代码，engine/src/main/cpp 与 CMake 目标一并删除。
 
 # Sherpa-ONNX/VAD 引擎（System.loadLibrary 调用方）
 -keep class io.github.ztfang.eye.engine.asr.SherpaOnnxAsrEngine { *; }
@@ -36,3 +35,20 @@
 # Vosk JNA 库警告抑制
 -dontwarn org.vosk.**
 -dontwarn com.sun.jna.**
+
+# ==============================
+# ML Kit Translation（本模块依赖，规则随 consumer-rules 下发给使用方）
+# ==============================
+# 真实包名（务必与 MlKitTranslationEngine.kt 的 import 保持一致）：
+#   com.google.mlkit.nl.translate.*     → TranslateLanguage / Translator / TranslatorOptions
+#                                         / Translation / TranslateRemoteModel
+#   com.google.mlkit.common.model.*     → RemoteModelManager / DownloadConditions
+#   com.google.mlkit.nl.languageid.*    → 语言识别（TranslateLanguage 内部可能引用）
+# 踩坑记录：若写成 com.google.mlkit.translate.**（少一层 nl）则该包不存在，
+# keep 命中 0 个类 → R8 会删掉上述全部公开 API，release 包运行本地翻译必然
+# NoClassDefFoundError，且 debug 包（isMinifyEnabled=false）无法复现。
+-keep class com.google.mlkit.nl.translate.** { *; }
+-keep class com.google.mlkit.nl.languageid.** { *; }
+-keep class com.google.mlkit.common.** { *; }
+-keep class com.google.mlkit.vision.text.** { *; }
+-dontwarn com.google.mlkit.**

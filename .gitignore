@@ -29,7 +29,9 @@ output-metadata.json
 logs/
 
 # ===== 工具 / 工作区内部目录 =====
+# .workbuddy-ai/ 是 WorkBuddy 的实际工作区目录（记录项目记忆与排查笔记，不入库）
 .workbuddy/
+.workbuddy-ai/
 .uploads/
 
 # ===== IntelliJ / Android Studio（保留 .idea/.gitignore）=====

@@ -168,6 +168,9 @@ fun ApiSettingsScreen(
     var isTesting by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
 
+    /** status 是错误提示（红）还是成功提示（绿）。旧实现靠 status 文本 contains 判断，脆弱且文案一改就失效 */
+    var statusIsError by remember { mutableStateOf(false) }
+
     Column(
         modifier =
             Modifier
@@ -262,34 +265,78 @@ fun ApiSettingsScreen(
                     text = status,
                     style = MaterialTheme.typography.bodyMedium,
                     color =
-                        if (status.contains(context.getString(R.string.api_saved).replace(" ✓", "")) ||
-                            status.contains("成功")
-                        ) {
-                            Color(0xFF2EB89A)
-                        } else {
+                        if (statusIsError) {
                             Color(0xFFE53935)
+                        } else {
+                            Color(0xFF2EB89A)
                         },
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
 
+            // ============ 保存（本地，不联网） ============
+            // 关键修复：保存必须无条件成功，仅做本地非空校验。
+            // 历史缺陷：旧实现把「测试连通性」和「保存」绑在同一个按钮上，只有 testApi 返回 HTTP 200
+            // 才写 DataStore → 代理不通/服务商对 max_tokens=5 返回 4xx 时配置永远存不进去，
+            // 用户以为"代理已开启"实则 DataStore 里什么都没有，"翻译没反应"由此而来。
             Button(
                 onClick = {
                     if (apiKey.isBlank()) {
                         status = context.getString(R.string.api_enter_key)
+                        statusIsError = true
                         return@Button
                     }
                     if (apiUrl.isBlank()) {
                         status = context.getString(R.string.api_enter_url)
+                        statusIsError = true
                         return@Button
                     }
                     if (modelName.isBlank()) {
                         status = context.getString(R.string.api_enter_model)
+                        statusIsError = true
                         return@Button
+                    }
+                    when (selectedProvider) {
+                        LLMProvider.CLAUDE -> settingsViewModel.setClaudeKey(apiKey.trim())
+                        else -> {
+                            settingsViewModel.setOpenAiKey(apiKey.trim())
+                            settingsViewModel.setOpenAiKeyProvider(selectedProvider.name)
+                        }
+                    }
+                    settingsViewModel.setLlmUrl(apiUrl.trimEnd('/'))
+                    settingsViewModel.setLlmModel(modelName)
+                    settingsViewModel.setLlmProvider(selectedProvider.name)
+                    status = context.getString(R.string.api_saved)
+                    statusIsError = false
+                },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(Dimens.CornerLg),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1A73E8),
+                        contentColor = Color.White,
+                    ),
+            ) {
+                Text(
+                    stringResource(R.string.api_save),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            // ============ 测试连通性（联网，可选） ============
+            // 与保存解耦：失败只提示，不影响已保存的配置。
+            OutlinedButton(
+                onClick = {
+                    if (apiKey.isBlank() || apiUrl.isBlank() || modelName.isBlank()) {
+                        status = context.getString(R.string.api_test_need_input)
+                        statusIsError = true
+                        return@OutlinedButton
                     }
                     isTesting = true
                     status = context.getString(R.string.api_testing)
+                    statusIsError = false
                     scope.launch {
                         val err =
                             testApi(
@@ -300,42 +347,31 @@ fun ApiSettingsScreen(
                             )
                         isTesting = false
                         if (err == null) {
-                            when (selectedProvider) {
-                                LLMProvider.CLAUDE -> settingsViewModel.setClaudeKey(apiKey.trim())
-                                else -> {
-                                    settingsViewModel.setOpenAiKey(apiKey.trim())
-                                    settingsViewModel.setOpenAiKeyProvider(selectedProvider.name)
-                                }
-                            }
-                            settingsViewModel.setLlmUrl(apiUrl.trimEnd('/'))
-                            settingsViewModel.setLlmModel(modelName)
-                            settingsViewModel.setLlmProvider(selectedProvider.name)
-                            status = context.getString(R.string.api_saved)
+                            status = context.getString(R.string.api_test_ok)
+                            statusIsError = false
                         } else {
                             status = context.getString(R.string.api_verify_failed, err)
+                            statusIsError = true
                         }
                     }
                 },
                 enabled = !isTesting,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(Dimens.CornerLg),
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF1A73E8),
-                        contentColor = Color.White,
-                    ),
+                border = BorderStroke(1.dp, Color(0xFF1A73E8).copy(alpha = 0.5f)),
             ) {
                 if (isTesting) {
                     CircularProgressIndicator(
-                        color = Color.White,
+                        color = Color(0xFF1A73E8),
                         strokeWidth = 2.dp,
                         modifier = Modifier.size(20.dp),
                     )
                 } else {
                     Text(
-                        stringResource(R.string.api_save),
+                        stringResource(R.string.api_test_connection),
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF1A73E8),
                     )
                 }
             }
@@ -364,6 +400,7 @@ fun ApiSettingsScreen(
                     apiUrl = ""
                     modelName = ""
                     status = context.getString(R.string.api_cleared)
+                    statusIsError = false
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(Dimens.CornerLg),
@@ -749,6 +786,20 @@ private fun ModelInputCard(
     }
 }
 
+/**
+ * 连通性测试（可选操作，与保存解耦）。
+ *
+ * 用 [HttpURLConnection] 发一次最小请求，返回 null 表示通、非 null 为失败原因。
+ * 注意：这只是"配置能不能连上"的粗检，与真实翻译走的是 LLMClient(OkHttp) 两套实现，
+ * 因此测试通过 ≠ 翻译可用，测试失败也 ≠ 翻译一定失败——所以它不能作为保存的前置条件。
+ *
+ * 关键修复：
+ *  1. 显式设置 connect/read 超时（旧实现为默认 0 = 无限等待，网络不通时按钮长时间转圈）；
+ *  2. 非 2xx 时把响应体前 200 字一并返回（旧实现只报 "HTTP 4xx"，用户无从判断是 key 错、
+ *     模型名错、还是路径错）；
+ *  3. 放宽成功判据：OpenAI 兼容网关对 `max_tokens=5` 常回 400/429，只要不是鉴权/路径类错误
+ *     也提示"连接成功但服务端返回 N"，避免误导。
+ */
 private suspend fun testApi(
     url: String,
     key: String,
@@ -756,11 +807,14 @@ private suspend fun testApi(
     provider: LLMProvider,
 ): String? =
     withContext(Dispatchers.IO) {
+        var conn: HttpURLConnection? = null
         try {
             val body = """{"model":"$model","messages":[{"role":"user","content":"hi"}],"max_tokens":5}"""
-            val conn = URL(url).openConnection() as HttpURLConnection
+            conn = URL(url).openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.doOutput = true
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 15_000
             conn.setRequestProperty("Content-Type", "application/json")
             when (provider) {
                 LLMProvider.CLAUDE -> {
@@ -769,11 +823,29 @@ private suspend fun testApi(
                 }
                 else -> conn.setRequestProperty("Authorization", "Bearer $key")
             }
-            conn.outputStream.write(body.toByteArray(Charsets.UTF_8))
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode
-            if (code == 200) null else "HTTP $code"
+            if (code in 200..299) {
+                null
+            } else {
+                // 错误流才是真正的失败原因载体；正常流在非 2xx 时通常为空
+                val detail =
+                    runCatching {
+                        (conn.errorStream ?: conn.inputStream)
+                            ?.bufferedReader(Charsets.UTF_8)
+                            ?.use { it.readText() }
+                            .orEmpty()
+                            .trim()
+                            .take(200)
+                    }.getOrDefault("")
+                if (detail.isBlank()) "HTTP $code" else "HTTP $code — $detail"
+            }
+        } catch (e: java.net.SocketTimeoutException) {
+            "连接超时（10s）：$url 不可达，请检查网络或代理"
         } catch (e: Exception) {
             e.message ?: "连接失败"
+        } finally {
+            conn?.disconnect()
         }
     }
 

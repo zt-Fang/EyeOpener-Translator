@@ -24,6 +24,27 @@ class SettingsDataStore(
     /** 敏感字段加密器 */
     private val crypto = CryptoManager()
 
+    /**
+     * 解密结果缓存：key = 密文串。
+     *
+     * `dataStore.data` 是单一共享流，**任何** key 变化都会让所有 `.map {}` 重跑。悬浮窗拖拽
+     * 结束写 overlayX/Y/Width/Height、个性化滑杆写 fontSize/backgroundTransparency 时，
+     * 都会连带触发 3 次 Android Keystore AES-GCM 解密（Binder/IPC 级开销）。
+     * 按密文串缓存后，只有密文真正变化时才重新解密。
+     */
+    private val decryptCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** 带缓存的解密；空串直接返回，不占用缓存 */
+    private fun decryptCached(ciphertext: String): String {
+        if (ciphertext.isEmpty()) return ""
+        decryptCache[ciphertext]?.let { return it }
+        val plain = crypto.decrypt(ciphertext)
+        // 密文每次写入都不同（GCM 随机 IV），缓存条目随密钥更新增长，超过上限直接清空
+        if (decryptCache.size >= MAX_DECRYPT_CACHE_ENTRIES) decryptCache.clear()
+        decryptCache[ciphertext] = plain
+        return plain
+    }
+
     // ============ 显示模式 ============
     val displayMode: Flow<String> = context.dataStore.data.map { it[DISPLAY_MODE] ?: "BILINGUAL" }
 
@@ -44,11 +65,11 @@ class SettingsDataStore(
     val cloudTranslationProvider: Flow<String> = context.dataStore.data.map { it[CLOUD_TRANSLATION_PROVIDER] ?: "PAPAGO" }
 
     // ============ 云端翻译 API Key（加密存储） ============
-    val cloudTranslationApiKey: Flow<String> = context.dataStore.data.map { crypto.decrypt(it[CLOUD_TRANSLATION_API_KEY] ?: "") }
+    val cloudTranslationApiKey: Flow<String> = context.dataStore.data.map { decryptCached(it[CLOUD_TRANSLATION_API_KEY] ?: "") }
 
     // ============ API Key（读取时自动解密） ============
-    val openAiKey: Flow<String> = context.dataStore.data.map { crypto.decrypt(it[OPENAI_KEY] ?: "") }
-    val claudeKey: Flow<String> = context.dataStore.data.map { crypto.decrypt(it[CLAUDE_KEY] ?: "") }
+    val openAiKey: Flow<String> = context.dataStore.data.map { decryptCached(it[OPENAI_KEY] ?: "") }
+    val claudeKey: Flow<String> = context.dataStore.data.map { decryptCached(it[CLAUDE_KEY] ?: "") }
 
     // 记录哪个服务商配置了 openAiKey，用于显示时判断是否回显
     val openAiKeyProvider: Flow<String> = context.dataStore.data.map { it[OPENAI_KEY_PROVIDER] ?: "" }
@@ -187,6 +208,10 @@ class SettingsDataStore(
 
     companion object {
         private const val TAG = "SettingsDataStore"
+
+        /** 解密缓存条目上限：正常只会出现 3 个密文（云端 Key / OpenAI Key / Claude Key） */
+        private const val MAX_DECRYPT_CACHE_ENTRIES = 32
+
         private val DISPLAY_MODE = stringPreferencesKey("display_mode")
         private val OVERLAY_X = intPreferencesKey("overlay_x")
         private val OVERLAY_Y = intPreferencesKey("overlay_y")

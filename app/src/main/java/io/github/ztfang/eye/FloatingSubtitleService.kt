@@ -36,6 +36,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.math.max
@@ -114,6 +115,49 @@ class FloatingSubtitleService : Service() {
     /** 翻译状态指示器容器（"实时翻译中"文本） */
     private var translatingIndicator: android.view.View? = null
 
+    /**
+     * 状态提示条：渲染 runtimeError、离线模型失败态与下载中提示，
+     * 让用户切到别的 App 用悬浮字幕时也能看到原因。
+     * 具体文案与优先级见 [renderStatusHint]。
+     */
+    private var errorTextView: TextView? = null
+
+    // ============ 字幕视图复用 + 刷新节流 ============
+    // 背景：ASR partial 每秒可产生多次状态变更，旧实现每次都在主线程 removeAllViews() 全量
+    // 重建视图（含新建 GradientDrawable），叠加 ML Kit 回调（强制回主线程）后会把主线程压死。
+    // 实测曾触发 `am_anr: Input dispatching timed out ... Waited 5002ms` → 进程被系统杀掉。
+    // 因此这里做两件事：① 结构不变时只更新文本不重建视图；② 合并高频刷新到最小间隔。
+
+    /** 一行字幕对应的视图句柄，用于复用（transTv 仅双语对照模式存在） */
+    private class LineRowViews(
+        val row: LinearLayout,
+        val sourceTv: TextView,
+        val transTv: TextView?,
+    )
+
+    /** 已渲染的行视图缓存；与 [renderedMode] 一起描述当前视图结构 */
+    private val renderedRows = mutableListOf<LineRowViews>()
+
+    /** 上次渲染使用的显示模式；与行数共同决定是否需要重建视图结构 */
+    private var renderedMode: DisplayMode? = null
+
+    /** 上次滚动到底部时的末行签名，避免重复 fullScroll */
+    private var lastScrolledTail: String = ""
+
+    /** 待渲染的字幕快照（由 [scheduleSubtitleRefresh] 在主线程消费） */
+    private var pendingLines: List<SubtitleLine> = emptyList()
+    private var pendingMode: DisplayMode = DisplayMode.BILINGUAL
+
+    /** 上次实际执行刷新的时刻（uptimeMillis），用于节流 */
+    private var lastRefreshUptimeMs: Long = 0L
+
+    /** 合并后的刷新任务 */
+    private val refreshSubtitleRunnable =
+        Runnable {
+            lastRefreshUptimeMs = android.os.SystemClock.uptimeMillis()
+            refreshSubtitleDisplay(pendingLines, pendingMode)
+        }
+
     // ============ 个性化设置缓存（来自 SettingsRepository，由 Service 订阅） ============
 
     /** 当前背景透明度 0..1，影响悬浮窗背景 alpha */
@@ -148,6 +192,7 @@ class FloatingSubtitleService : Service() {
         subtitleList = floatingView?.findViewById(R.id.subtitle_list)
         subtitleScroll = floatingView?.findViewById(R.id.subtitle_scroll)
         translatingIndicator = floatingView?.findViewById(R.id.translating_indicator)
+        errorTextView = floatingView?.findViewById(R.id.subtitle_error)
         topActionsView = floatingView?.findViewById(R.id.top_actions)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
@@ -230,15 +275,28 @@ class FloatingSubtitleService : Service() {
             }
         }
         // 订阅字幕状态流，实时更新字幕显示（支持多句历史）
+        // 经 scheduleSubtitleRefresh 合并高频更新，避免每次 partial 都在主线程重建视图
         serviceScope.launch {
             subtitleManager.subtitleState.collectLatest { state ->
-                mainHandler.post {
-                    refreshSubtitleDisplay(
-                        state.lines,
-                        state.displayMode,
-                    )
-                }
+                scheduleSubtitleRefresh(state.lines, state.displayMode)
             }
+        }
+        // 状态提示条：把 runtimeError 与"离线模型下载中"合并渲染到悬浮窗内。
+        //
+        // 为什么合并：runtimeError 原本单独控制这条提示，用户切在别的 App 上看字幕时
+        // 只能看到失败、看不到"正在下载"（表现为"只有原文没译文，也不知道在等什么"）。
+        // 两个流各自 collectLatest 会互相覆盖，故合并后按优先级统一渲染：
+        // 错误 > 下载中 > 隐藏。
+        //
+        // 这里只读不清：错误由 MainActivity 前台或下次成功翻译后清除。
+        serviceScope.launch {
+            combine(
+                subtitleManager.runtimeError,
+                subtitleManager.translationModelState,
+            ) { err, modelState -> err to modelState }
+                .collectLatest { (err, modelState) ->
+                    mainHandler.post { renderStatusHint(err, modelState) }
+                }
         }
         // runtimeError 不再关闭 Service（改为在 MainActivity 显示 Toast）
         // 滑动悬浮窗时主线程被占用，临时错误（翻译失败/ASR not ready）会误触发 stopSelf
@@ -747,8 +805,9 @@ class FloatingSubtitleService : Service() {
         } catch (_: Exception) {
         }
 
-        // 4. 刷新字幕显示，应用新颜色
+        // 4. 重建字幕视图以应用新字号/配色（视图复用缓存需作废）
         val state = subtitleManager.subtitleState.value
+        invalidateSubtitleViews()
         refreshSubtitleDisplay(state.lines, state.displayMode)
     }
 
@@ -761,6 +820,61 @@ class FloatingSubtitleService : Service() {
             textSize = 16f
             setTextColor(0x80FFFFFF.toInt()) // 半透明白色
             text = "未检测到声音"
+        }
+    }
+
+    /**
+     * 渲染悬浮窗内的状态提示条。
+     *
+     * 优先级：离线模型失败 > 其它错误 > 离线模型下载中 > 隐藏。
+     *
+     * 下载中也要显示的原因：用户开了浮窗后通常就切到别的 App 了，此时主屏的状态条不可见。
+     * 若悬浮窗只呈现"有原文没译文"，用户无从判断是在慢慢下载还是彻底坏了。
+     *
+     * 注意这里只给短文案：浮窗宽度有限，且失败的技术细节（域名/IP/证书）已收进
+     * 「设置 → 翻译模型诊断」，不适合往浮层里塞。
+     */
+    private fun renderStatusHint(
+        err: String?,
+        modelState: SubtitleManager.TranslationModelState,
+    ) {
+        val tv = errorTextView ?: return
+        when {
+            modelState.status == SubtitleManager.TranslationModelStatus.FAILED -> {
+                tv.text = getString(R.string.trans_model_floating_failed)
+                tv.visibility = View.VISIBLE
+            }
+
+            !err.isNullOrBlank() -> {
+                tv.text = err
+                tv.visibility = View.VISIBLE
+            }
+
+            modelState.status == SubtitleManager.TranslationModelStatus.DOWNLOADING -> {
+                tv.text =
+                    getString(
+                        R.string.trans_model_floating_downloading,
+                        formatCompactDuration(modelState.elapsedMs),
+                    )
+                tv.visibility = View.VISIBLE
+            }
+
+            else -> tv.visibility = View.GONE
+        }
+    }
+
+    /**
+     * 把毫秒格式化为紧凑形式（"1m12s" / "12s"）。
+     * 悬浮窗空间小，用紧凑写法；主屏状态条仍用"已等待 1 分 12 秒"的可读写法。
+     */
+    private fun formatCompactDuration(ms: Long): String {
+        val totalSeconds = ms / 1000
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return if (minutes > 0) {
+            getString(R.string.trans_model_duration_compact_min_sec, minutes.toInt(), seconds.toInt())
+        } else {
+            getString(R.string.trans_model_duration_compact_sec, seconds.toInt())
         }
     }
 
@@ -798,7 +912,38 @@ class FloatingSubtitleService : Service() {
     }
 
     /**
+     * 合并高频字幕刷新后再更新 UI。
+     *
+     * ASR partial 每秒可产生多次状态变更，旧实现每次都在主线程 removeAllViews() 重建视图，
+     * 叠加 ML Kit 回调（强制回主线程）后会把主线程压死（实测触发 Input dispatching 超时 ANR）。
+     * 这里以 [SUBTITLE_REFRESH_MIN_INTERVAL_MS] 为最小间隔合并刷新；末尾更新用 postDelayed
+     * 补一次，保证不丢最后一帧。
+     */
+    private fun scheduleSubtitleRefresh(
+        lines: List<SubtitleLine>,
+        mode: DisplayMode,
+    ) {
+        pendingLines = lines
+        pendingMode = mode
+        mainHandler.removeCallbacks(refreshSubtitleRunnable)
+        val elapsed = android.os.SystemClock.uptimeMillis() - lastRefreshUptimeMs
+        val wait = (SUBTITLE_REFRESH_MIN_INTERVAL_MS - elapsed).coerceAtLeast(0L)
+        mainHandler.postDelayed(refreshSubtitleRunnable, wait)
+    }
+
+    /** 丢弃缓存的字幕视图（字体/配色变化后调用，强制下次刷新重建） */
+    private fun invalidateSubtitleViews() {
+        renderedRows.clear()
+        renderedMode = null
+        lastScrolledTail = ""
+        subtitleList?.removeAllViews()
+    }
+
+    /**
      * 刷新字幕显示：视图复用 + 保留最近 3 句历史 + partial 半透明/final 不透明。
+     *
+     * 性能关键：结构（行数 + 显示模式）不变时只更新 TextView 文本，不 removeAllViews、
+     * 不重建侧边条 GradientDrawable；仅当行数或显示模式变化时才重建视图。
      */
     private fun refreshSubtitleDisplay(
         lines: List<SubtitleLine>,
@@ -809,7 +954,10 @@ class FloatingSubtitleService : Service() {
         hasSubtitleContent = hasContent
 
         if (!hasContent) {
-            list.removeAllViews()
+            if (list.childCount > 0) list.removeAllViews()
+            renderedRows.clear()
+            renderedMode = null
+            lastScrolledTail = ""
             updateVadHint(subtitleManager.vadState.value)
             return
         }
@@ -818,115 +966,165 @@ class FloatingSubtitleService : Service() {
             list.removeView(vadHintTextView)
         }
 
-        list.removeAllViews()
+        // 结构变化才重建视图（行数或显示模式改变）
+        if (renderedMode != displayMode || renderedRows.size != lines.size) {
+            list.removeAllViews()
+            renderedRows.clear()
+            lastScrolledTail = ""
+            val density = resources.displayMetrics.density
+            for ((index, line) in lines.withIndex()) {
+                val holder = buildLineRow(line, displayMode, density)
+                list.addView(holder.row)
+                if (index < lines.size - 1) {
+                    list.addView(
+                        View(this).apply {
+                            layoutParams =
+                                LinearLayout.LayoutParams(
+                                    LinearLayout.LayoutParams.MATCH_PARENT,
+                                    (6 * density).toInt(),
+                                )
+                        },
+                    )
+                }
+                renderedRows.add(holder)
+            }
+            renderedMode = displayMode
+        }
 
+        // 仅更新文本：partial 半透明、final 不透明
         for ((index, line) in lines.withIndex()) {
+            val holder = renderedRows.getOrNull(index) ?: continue
             val isPartial = line.subtitleType == SubtitleType.PARTIAL
-            val alpha = if (isPartial) 0x80 else 0xFF
-            // 字体颜色：纯白，partial 半透明、final 全透明
-            val textColor = (alpha shl 24) or 0x00FFFFFF
-
-            // 文本容器（垂直）
-            val textContainer =
-                LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    layoutParams =
-                        LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                        )
-                }
-
+            // 字体颜色：纯白，partial 半透明、final 不透明
+            val textColor = ((if (isPartial) 0x80 else 0xFF) shl 24) or 0x00FFFFFF
             when (displayMode) {
-                DisplayMode.SOURCE_ONLY -> {
-                    val tv = createSubtitleView(isPartial)
-                    tv.text = line.sourceText
-                    tv.setTextColor(textColor)
-                    textContainer.addView(tv)
-                }
-                DisplayMode.TRANSLATION_ONLY -> {
-                    val tv = createSubtitleView(false)
-                    tv.text = line.translatedText.ifBlank { line.sourceText }
-                    tv.setTextColor(textColor)
-                    textContainer.addView(tv)
-                }
+                DisplayMode.SOURCE_ONLY ->
+                    setTextIfChanged(holder.sourceTv, line.sourceText, textColor)
+                DisplayMode.TRANSLATION_ONLY ->
+                    setTextIfChanged(
+                        holder.sourceTv,
+                        line.translatedText.ifBlank { line.sourceText },
+                        textColor,
+                    )
                 DisplayMode.BILINGUAL -> {
-                    // 原文在上，译文在下；都用纯白
-                    val sourceTv = createSubtitleView(isPartial)
-                    sourceTv.text = line.sourceText
-                    sourceTv.setTextColor(textColor)
-                    textContainer.addView(sourceTv)
-
-                    if (line.translatedText.isNotBlank()) {
-                        val transTv = createSubtitleView(false)
-                        transTv.text = line.translatedText
-                        transTv.setTextColor(0xFFFFFFFF.toInt())
-                        textContainer.addView(transTv)
+                    setTextIfChanged(holder.sourceTv, line.sourceText, textColor)
+                    val transTv = holder.transTv
+                    if (transTv != null) {
+                        val translated = line.translatedText
+                        if (translated.isBlank()) {
+                            if (transTv.visibility != View.GONE) transTv.visibility = View.GONE
+                        } else {
+                            if (transTv.visibility != View.VISIBLE) transTv.visibility = View.VISIBLE
+                            if (transTv.text.toString() != translated) {
+                                transTv.text = translated
+                            }
+                            if (transTv.currentTextColor != 0xFFFFFFFF.toInt()) {
+                                transTv.setTextColor(0xFFFFFFFF.toInt())
+                            }
+                        }
                     }
                 }
             }
+        }
 
-            // 蓝绿渐变侧边栏 + 文本内容，水平排列
-            val rowContainer =
-                LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    layoutParams =
-                        LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                        )
-                }
+        // 自动滚动到底部：仅当末行内容变化时才滚动，避免重复 fullScroll
+        val tail = lines.last().sourceText + "\u0000" + lines.last().translatedText
+        if (tail != lastScrolledTail) {
+            lastScrolledTail = tail
+            subtitleScroll?.post {
+                subtitleScroll?.fullScroll(View.FOCUS_DOWN)
+            }
+        }
+    }
 
-            // 蓝绿渐变侧边栏：宽度=4dp，高度随文本内容增长
-            val density = resources.displayMetrics.density
-            val barWidthPx = (4 * density).toInt()
-            val sidebar =
-                View(this).apply {
-                    layoutParams =
-                        LinearLayout.LayoutParams(
-                            barWidthPx,
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                        )
-                    // 青蓝→绿垂直渐变，2dp圆角（参考 sidebar_gradient.xml 原始样式）
-                    background =
-                        GradientDrawable(
-                            GradientDrawable.Orientation.TOP_BOTTOM,
-                            intArrayOf(Color.parseColor("#4DD0E1"), Color.parseColor("#81C784")),
-                        ).apply { cornerRadius = 2 * density }
-                }
-            rowContainer.addView(sidebar)
+    /**
+     * 构建一行字幕视图：渐变侧边条 + 文本容器（原文 / 译文）。
+     * 只在视图结构需要重建时调用（见 [refreshSubtitleDisplay]）。
+     */
+    private fun buildLineRow(
+        line: SubtitleLine,
+        displayMode: DisplayMode,
+        density: Float,
+    ): LineRowViews {
+        val isPartial = line.subtitleType == SubtitleType.PARTIAL
+        val textColor = ((if (isPartial) 0x80 else 0xFF) shl 24) or 0x00FFFFFF
 
-            // 文本区域加左边距
-            val textParams =
-                LinearLayout
-                    .LayoutParams(
-                        0,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                    ).apply {
-                        weight = 1f
-                        marginStart = (8 * density).toInt()
+        val textContainer =
+            LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+
+        val sourceTv = createSubtitleView(isPartial).apply { setTextColor(textColor) }
+        var transTv: TextView? = null
+        when (displayMode) {
+            DisplayMode.SOURCE_ONLY,
+            DisplayMode.TRANSLATION_ONLY,
+            -> textContainer.addView(sourceTv)
+            DisplayMode.BILINGUAL -> {
+                // 原文在上，译文在下；都用纯白
+                textContainer.addView(sourceTv)
+                transTv =
+                    createSubtitleView(false).apply {
+                        setTextColor(0xFFFFFFFF.toInt())
+                        // 始终挂载、用 GONE 控制显隐，避免译文到达时重建整行
+                        visibility = View.GONE
                     }
-            textContainer.layoutParams = textParams
-            rowContainer.addView(textContainer)
+                textContainer.addView(transTv)
+            }
+        }
 
-            list.addView(rowContainer)
-
-            if (index < lines.size - 1) {
-                val spacer = View(this)
-                spacer.layoutParams =
+        // 蓝绿渐变侧边栏 + 文本内容，水平排列
+        val rowContainer =
+            LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams =
                     LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
-                        (6 * resources.displayMetrics.density).toInt(),
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
                     )
-                list.addView(spacer)
             }
-        }
 
-        // 自动滚动到底部，显示最新内容
-        subtitleScroll?.post {
-            subtitleScroll?.fullScroll(android.view.View.FOCUS_DOWN)
-        }
+        // 蓝绿渐变侧边栏：宽度=4dp，高度随文本内容增长
+        rowContainer.addView(
+            View(this).apply {
+                layoutParams =
+                    LinearLayout.LayoutParams(
+                        (4 * density).toInt(),
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                    )
+                // 青蓝→绿垂直渐变，2dp圆角（参考 sidebar_gradient.xml 原始样式）
+                background =
+                    GradientDrawable(
+                        GradientDrawable.Orientation.TOP_BOTTOM,
+                        intArrayOf(Color.parseColor("#4DD0E1"), Color.parseColor("#81C784")),
+                    ).apply { cornerRadius = 2 * density }
+            },
+        )
+
+        // 文本区域加左边距
+        textContainer.layoutParams =
+            LinearLayout
+                .LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    weight = 1f
+                    marginStart = (8 * density).toInt()
+                }
+        rowContainer.addView(textContainer)
+
+        return LineRowViews(rowContainer, sourceTv, transTv)
+    }
+
+    /** 文本或颜色变化时才写回，减少无谓的 measure/layout */
+    private fun setTextIfChanged(
+        tv: TextView,
+        value: String,
+        color: Int,
+    ) {
+        if (tv.text.toString() != value) tv.text = value
+        if (tv.currentTextColor != color) tv.setTextColor(color)
     }
 
     private companion object {
@@ -939,5 +1137,12 @@ class FloatingSubtitleService : Service() {
 
         // 顶部功能区自动隐藏延迟（毫秒）
         const val HIDE_TOP_ACTIONS_DELAY_MS = 3000L
+
+        /**
+         * 字幕 UI 刷新最小间隔（毫秒）。
+         * ASR partial 每秒可产生多次状态变更；合并到约 8Hz 显示，肉眼无差别，
+         * 但能把主线程的 measure/layout 压力降低一个量级（防 ANR）。
+         */
+        const val SUBTITLE_REFRESH_MIN_INTERVAL_MS = 120L
     }
 }

@@ -1,10 +1,7 @@
 package io.github.ztfang.eye.ui.theme
 
 import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -14,34 +11,13 @@ import androidx.compose.ui.platform.LocalContext
 // 品牌色：低版本 / 关闭动态色时使用
 private val EyeBlue80 = Color(0xFFA8C7FA)
 private val EyeBlue40 = Color(0xFF1A73E8)
-private val EyeTeal80 = Color(0xFF7FDCC4)
 private val EyeTeal40 = Color(0xFF00897B)
-private val EyeAmber80 = Color(0xFFFFD180)
 private val EyeAmber40 = Color(0xFFFF8F00)
 private val NeutralDark = Color(0xFF1C1B1F)
 private val NeutralLight = Color(0xFFFFFBFE)
-private val NeutralVariantDark = Color(0xFF49454F)
 private val NeutralVariantLight = Color(0xFFE7E0EC)
 
 // ---------- M3 ColorScheme ----------
-private val DarkColors =
-    darkColorScheme(
-        primary = EyeBlue80,
-        onPrimary = NeutralDark,
-        primaryContainer = EyeBlue40,
-        onPrimaryContainer = NeutralLight,
-        secondary = EyeTeal80,
-        onSecondary = NeutralDark,
-        tertiary = EyeAmber80,
-        onTertiary = NeutralDark,
-        background = NeutralDark,
-        onBackground = NeutralLight,
-        surface = NeutralDark,
-        onSurface = NeutralLight,
-        surfaceVariant = NeutralVariantDark,
-        onSurfaceVariant = NeutralLight,
-    )
-
 private val LightColors =
     lightColorScheme(
         primary = EyeBlue40,
@@ -61,40 +37,37 @@ private val LightColors =
     )
 
 /**
- * App 全局主题入口（Material 3）。
+ * App 全局主题入口（Material 3）—— **仅浅色主题**。
  *
  * 设计目标：
- *  1. 与 res/values/themes.xml 的 Theme.Material3.DayNight.NoActionBar 保持一致的日夜模式语义
+ *  1. 与 res/values/themes.xml 的 Theme.Material3.Light.NoActionBar 保持一致的语义（都不跟随系统深色）
  *  2. 优先使用 Android 12+ 的 Dynamic Color（Material You），低版本回退到内置品牌色
  *  3. 所有色彩走 MaterialTheme.colorScheme，禁止在 Composable 中写死十六进制色值
- *  4. 遵循 AGENTS.md 规范：UI 仅负责展示，主题切换不涉及业务逻辑
  *
- * 深色模式优先级：
- *   [darkTheme] 参数（非 null）> 系统设置（isSystemInDarkTheme）
- *   调用方可将 DataStore 的 isDarkMode 转为非 null 传入以覆盖系统。
+ * 为什么不再支持深色（2026-09-14 定）：
+ *  - 产品视觉基调是「极简科技风浅色」，但全项目大量组件（GradientBackground / ChatBubble /
+ *    GlassCard / AssistantTopBar 等，58 处 Color.White）硬编码浅色底与白色，与深色
+ *    colorScheme 组合会产生「浅色文字压浅色底」的不可读界面。真机复现：系统深色下冷启动，
+ *    `EyeOpener` 标题、`实时翻译·看见世界` 副标题、`翻译引擎` 章节名、`温馨提示` 几乎不可见。
+ *  - 应用内从未提供任何深色开关：设置页 5 个分组（字体颜色/背景透明度/字体大小/结果显示/
+ *    音频输入源）均与主题无关，也无对应的 DataStore 键。深色此前**仅由系统深色模式被动触发**。
+ *  - 与其维护一套必然显示异常的深色皮肤，不如确定性地钉死浅色。
  *
- * @param darkTheme 强制深色模式；为 null 时跟随系统（isSystemInDarkTheme）
+ * 若要重新支持深色，前置条件是：先把上述硬编码色全部改走 colorScheme，再恢复此处的深色分支
+ * 与 values-night 资源，并在真机上验证深色下的逐页可读性。
+ *
  * @param dynamicColor 是否启用 Material You 动态取色（默认 true，仅 Android 12+ 生效）
  */
 @Composable
 fun EyeTheme(
-    darkTheme: Boolean? = null,
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val resolvedDark = darkTheme ?: isSystemInDarkTheme()
     val colorScheme =
-        when {
-            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                val context = LocalContext.current
-                if (resolvedDark) {
-                    dynamicDarkColorScheme(context)
-                } else {
-                    dynamicLightColorScheme(context)
-                }
-            }
-            resolvedDark -> DarkColors
-            else -> LightColors
+        if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            dynamicLightColorScheme(LocalContext.current)
+        } else {
+            LightColors
         }
 
     MaterialTheme(

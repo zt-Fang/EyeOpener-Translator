@@ -31,6 +31,36 @@
     <string name="language_tip_fast_mode">Recognition works better with short phrases.</string>
     <string name="language_tip_audio_permission">In-app audio needs screen recording permission each time.</string>
 
+    <!-- Subtitle Screen - offline translation model preparation -->
+    <string name="trans_model_downloading_title">Downloading offline translation model</string>
+    <string name="trans_model_downloading_hint">First run downloads about 30-100MB; it activates automatically once done.</string>
+    <string name="trans_model_downloading_slow">Network is slow; the download continues in the background.</string>
+    <string name="trans_model_elapsed">Elapsed %1$s</string>
+    <string name="trans_model_elapsed_min_sec">%1$d min %2$d s</string>
+    <string name="trans_model_elapsed_sec">%1$d s</string>
+    <string name="trans_model_duration_compact_min_sec">%1$dm%2$ds</string>
+    <string name="trans_model_duration_compact_sec">%1$ds</string>
+    <string name="trans_model_floating_downloading">Downloading · %1$s</string>
+    <string name="trans_model_floating_failed">Offline model not ready</string>
+
+    <!-- Failure dialog: one plain sentence only; details go to Settings → Diagnostics -->
+    <string name="trans_model_failed_title">Offline model download failed</string>
+    <string name="trans_model_failed_gms">Google Play services is missing, so the offline model cannot be downloaded. Switch to Cloud or AI translation.</string>
+    <string name="trans_model_failed_network">Google servers are unreachable. Check that your proxy covers Google domains, then retry.</string>
+    <string name="trans_model_failed_incomplete">The download did not finish — the network may be slow or rate-limited. Retrying later usually works.</string>
+    <string name="trans_model_failed_unsupported">This language pair is not supported by offline translation. Switch to Cloud or AI translation.</string>
+    <string name="trans_model_failed_unknown">The offline model is not ready. Retry, or switch to Cloud translation.</string>
+    <string name="trans_model_retry">Retry</string>
+    <string name="trans_model_later">Later</string>
+    <string name="trans_model_got_it">Got it</string>
+
+    <!-- Settings → translation model diagnostics -->
+    <string name="settings_row_trans_diagnostics">Model diagnostics</string>
+    <string name="trans_diag_title">Translation model diagnostics</string>
+    <string name="trans_diag_empty">No issues recorded.\n\nLocal translation requires Google Play services and network access to Google\'s model servers.</string>
+    <string name="trans_diag_clear">Clear</string>
+    <string name="trans_diag_close">Close</string>
+
     <!-- Assistant Screen -->
     <string name="assistant_title">AI Assistant</string>
     <string name="assistant_clear">Clear</string>

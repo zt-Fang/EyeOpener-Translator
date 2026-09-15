@@ -88,17 +88,17 @@ Unsupported language pairs are silently skipped (no error popups).
 - JDK 17+
 - Android SDK 36
 - minSdk 24 (Android 7.0)
-- NDK (for native library build)
 
 ## Native Libraries
 
 | Library | Purpose | Source |
 |---------|---------|--------|
-| `eye_native` | AGC audio processing JNI | `app/src/main/cpp/` |
-| sherpa-onnx-jni | Sherpa-ONNX JNI | prebuilt `jniLibs/` |
-| onnxruntime | ONNX runtime | prebuilt `jniLibs/` |
+| sherpa-onnx-jni | Sherpa-ONNX JNI | prebuilt `engine/src/main/jniLibs/arm64-v8a/` |
+| onnxruntime | ONNX runtime | prebuilt `engine/src/main/jniLibs/arm64-v8a/` |
 | vosk-android | Vosk ASR | Maven |
 | Silero VAD | Voice activity detection | `assets/silero_vad.onnx` |
+
+> **arm64-v8a only**: sherpa-onnx / onnxruntime ship prebuilt libraries for arm64 only.
 
 ## Contact
 

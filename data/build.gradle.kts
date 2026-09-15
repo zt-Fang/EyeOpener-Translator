@@ -37,6 +37,7 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
+    testImplementation(libs.junit)
     // tar.bz2 解压支持（Sherpa-ONNX 模型）
     implementation("org.apache.commons:commons-compress:1.27.1")
 }

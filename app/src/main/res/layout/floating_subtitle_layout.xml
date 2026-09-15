@@ -148,5 +148,19 @@
                 android:orientation="vertical">
             </LinearLayout>
         </ScrollView>
+
+        <!--
+            错误提示条：翻译失败 / 模型未就绪等 runtimeError。
+            之前在 MainActivity 只用前台 Toast 呈现，用户切在别的 App 上看悬浮字幕时
+            完全看不到失败原因（表现为"只有原文没有译文"且无任何提示），故在此常驻显示。
+        -->
+        <TextView
+            android:id="@+id/subtitle_error"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="#FFB4A0"
+            android:textSize="11sp"
+            android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>

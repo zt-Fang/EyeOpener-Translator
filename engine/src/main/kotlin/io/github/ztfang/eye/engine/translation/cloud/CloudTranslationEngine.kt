@@ -103,6 +103,25 @@ class CloudTranslationEngine
             }
         }
 
+        /**
+         * 校验云端翻译是否可用：**仅检查 API Key 是否已配置，不下载任何模型**。
+         *
+         * 云端翻译的推理在服务端完成，本地无需任何模型文件。此方法存在的意义是让
+         * [io.github.ztfang.eye.engine.ModelPreparer] 不再对 CLOUD 引擎错误地预热 ML Kit
+         * （历史 bug：选云端翻译却要求下载本地离线模型，失败即弹"翻译模型未就绪"）。
+         */
+        suspend fun validateConfig(): Result<Unit> {
+            val provider = cachedProvider
+            val apiKey = settingsRepository.cloudTranslationApiKey.first().trim()
+            return if (apiKey.isBlank()) {
+                Result.failure(
+                    IllegalStateException("云端翻译未配置 API Key（当前通道：$provider）"),
+                )
+            } else {
+                Result.success(Unit)
+            }
+        }
+
         /** 云端引擎无需释放资源（OkHttp 客户端由外部管理） */
         override suspend fun release() { /* no-op */ }
 

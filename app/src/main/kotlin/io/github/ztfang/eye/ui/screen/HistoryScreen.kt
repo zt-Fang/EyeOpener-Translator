@@ -44,6 +44,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,9 +60,9 @@ import io.github.ztfang.eye.R
 import io.github.ztfang.eye.domain.model.HistoryRecord
 import io.github.ztfang.eye.domain.repository.HistoryRepository
 import io.github.ztfang.eye.ui.theme.Dimens
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -73,12 +74,16 @@ fun HistoryScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    // 与组件生命周期绑定，页面销毁自动取消（原实现用 CoroutineScope(Dispatchers.IO) 会泄漏）
+    val scope = rememberCoroutineScope()
     val records by historyRepository.getAllRecords().collectAsState(initial = emptyList())
     var filterFavorite by remember { mutableStateOf(false) }
     // 导出确认弹窗状态：null=不显示，非null=待导出的记录（单条）
     var pendingExportSingle by remember { mutableStateOf<HistoryRecord?>(null) }
     // 导出确认弹窗状态：是否待导出全部
     var pendingExportAll by remember { mutableStateOf(false) }
+    // 导出全部的文件名：点击"导出"时生成一次并保存，避免每次重组重新取时间戳导致弹窗文件名跳动
+    var exportAllFileName by remember { mutableStateOf("") }
     // 清除全部确认弹窗：删除不可撤销，必须二次确认
     var pendingClearAll by remember { mutableStateOf(false) }
 
@@ -110,7 +115,10 @@ fun HistoryScreen(
                 ),
             filterFavorite = filterFavorite,
             onFilterChange = { filterFavorite = it },
-            onExportAll = { pendingExportAll = true },
+            onExportAll = {
+                exportAllFileName = "all_translations_${System.currentTimeMillis()}.txt"
+                pendingExportAll = true
+            },
             recordCount = filteredRecords.size,
         )
 
@@ -149,7 +157,7 @@ fun HistoryScreen(
                     HistoryItem(
                         record = record,
                         onFavorite = {
-                            CoroutineScope(Dispatchers.IO).launch {
+                            scope.launch(Dispatchers.IO) {
                                 historyRepository.updateRecord(record.copy(isFavorite = !record.isFavorite))
                             }
                         },
@@ -160,7 +168,7 @@ fun HistoryScreen(
                             pendingExportSingle = record
                         },
                         onDelete = {
-                            CoroutineScope(Dispatchers.IO).launch {
+                            scope.launch(Dispatchers.IO) {
                                 historyRepository.deleteRecord(record)
                             }
                         },
@@ -173,14 +181,15 @@ fun HistoryScreen(
     // 导出确认弹窗 — 单条记录
     pendingExportSingle?.let { record ->
         val fileName = "translation_${record.timestamp}.txt"
-        val targetDir = exportDir(context)
+        // 仅用于展示，不做 mkdirs（文件系统操作不放在组合阶段）
+        val targetDir = context.getExternalFilesDir(null)?.absolutePath + "/Exports"
         AlertDialog(
             onDismissRequest = { pendingExportSingle = null },
             title = { Text("Export Record") },
-            text = { Text("Export to:\n${targetDir.absolutePath}/$fileName") },
+            text = { Text("Export to:\n$targetDir/$fileName") },
             confirmButton = {
                 TextButton(onClick = {
-                    exportRecord(context, record)
+                    scope.launch { exportRecord(context, record, fileName) }
                     pendingExportSingle = null
                 }) { Text("Export") }
             },
@@ -192,15 +201,14 @@ fun HistoryScreen(
 
     // 导出确认弹窗 — 全部记录
     if (pendingExportAll) {
-        val fileName = "all_translations_${System.currentTimeMillis()}.txt"
-        val exportDir = context.getExternalFilesDir(null)
+        val exportDirPath = context.getExternalFilesDir(null)?.absolutePath
         AlertDialog(
             onDismissRequest = { pendingExportAll = false },
             title = { Text("Export All Records") },
-            text = { Text("Export ${filteredRecords.size} records to:\n${exportDir?.absolutePath}/$fileName") },
+            text = { Text("Export ${filteredRecords.size} records to:\n$exportDirPath/$exportAllFileName") },
             confirmButton = {
                 TextButton(onClick = {
-                    exportAllRecords(context, filteredRecords)
+                    scope.launch { exportAllRecords(context, filteredRecords, exportAllFileName) }
                     pendingExportAll = false
                 }) { Text("Export") }
             },
@@ -220,7 +228,7 @@ fun HistoryScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    CoroutineScope(Dispatchers.IO).launch {
+                    scope.launch(Dispatchers.IO) {
                         historyRepository.deleteAllRecords()
                     }
                     pendingClearAll = false
@@ -513,45 +521,62 @@ private fun shareFileUri(
     file: File,
 ): Uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 
-private fun exportRecord(
+/**
+ * 导出单条记录：拼接文本与写盘整体切到 IO，避免主线程做文件 IO（ANR 风险）。
+ * 完成后回主线程 Toast 并拉起分享。
+ */
+private suspend fun exportRecord(
     context: Context,
     record: HistoryRecord,
+    fileName: String,
 ) {
     val text = """Source: ${record.sourceText}
 Translation: ${record.translatedText}
 Time: ${formatTime(record.timestamp)}
 """
-    val fileName = "translation_${record.timestamp}.txt"
-    val file = File(exportDir(context), fileName)
-    FileOutputStream(file).use { it.write(text.toByteArray()) }
-    Toast.makeText(context, "Exported: $fileName", Toast.LENGTH_LONG).show()
-
-    val intent =
-        Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(shareFileUri(context, file), "text/plain")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    val file =
+        withContext(Dispatchers.IO) {
+            File(exportDir(context), fileName).also { target ->
+                FileOutputStream(target).use { out -> out.write(text.toByteArray()) }
+            }
         }
-    context.startActivity(Intent.createChooser(intent, "Open file"))
+    Toast.makeText(context, "Exported: $fileName", Toast.LENGTH_LONG).show()
+    openExportedFile(context, file)
 }
 
-private fun exportAllRecords(
+/**
+ * 导出全部记录：数据量随记录数线性增长，必须在 IO 线程拼接 + 写盘。
+ * 文件名由调用方（弹窗打开时）生成并传入，保证展示与实际写盘一致。
+ */
+private suspend fun exportAllRecords(
     context: Context,
     records: List<HistoryRecord>,
+    fileName: String,
 ) {
-    val sb = StringBuilder()
-    records.forEachIndexed { index, record ->
-        sb.append("=== Record ${index + 1} ===\n")
-        sb.append("Source: ${record.sourceText}\n")
-        sb.append("Translation: ${record.translatedText}\n")
-        sb.append("Time: ${formatTime(record.timestamp)}\n")
-        sb.append("Favorite: ${if (record.isFavorite) "Yes" else "No"}\n")
-        sb.append("\n")
-    }
-    val fileName = "all_translations_${System.currentTimeMillis()}.txt"
-    val file = File(exportDir(context), fileName)
-    FileOutputStream(file).use { it.write(sb.toString().toByteArray()) }
+    val file =
+        withContext(Dispatchers.IO) {
+            val sb = StringBuilder()
+            records.forEachIndexed { index, record ->
+                sb.append("=== Record ${index + 1} ===\n")
+                sb.append("Source: ${record.sourceText}\n")
+                sb.append("Translation: ${record.translatedText}\n")
+                sb.append("Time: ${formatTime(record.timestamp)}\n")
+                sb.append("Favorite: ${if (record.isFavorite) "Yes" else "No"}\n")
+                sb.append("\n")
+            }
+            File(exportDir(context), fileName).also { target ->
+                FileOutputStream(target).use { out -> out.write(sb.toString().toByteArray()) }
+            }
+        }
     Toast.makeText(context, "Exported ${records.size} records: $fileName", Toast.LENGTH_LONG).show()
+    openExportedFile(context, file)
+}
 
+/** 用外部应用打开导出文件（主线程调用）。 */
+private fun openExportedFile(
+    context: Context,
+    file: File,
+) {
     val intent =
         Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(shareFileUri(context, file), "text/plain")

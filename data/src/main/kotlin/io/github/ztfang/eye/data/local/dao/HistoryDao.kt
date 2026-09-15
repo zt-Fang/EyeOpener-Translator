@@ -13,9 +13,6 @@ interface HistoryDao {
     @Query("SELECT * FROM tb_history ORDER BY timestamp DESC")
     fun getAllRecords(): Flow<List<HistoryRecord>>
 
-    @Query("SELECT * FROM tb_history WHERE isFavorite = 1 ORDER BY timestamp DESC")
-    fun getFavoriteRecords(): Flow<List<HistoryRecord>>
-
     @Insert
     suspend fun insertRecord(record: HistoryRecord)
 
@@ -27,7 +24,4 @@ interface HistoryDao {
 
     @Query("DELETE FROM tb_history")
     suspend fun deleteAllRecords()
-
-    @Query("SELECT * FROM tb_history WHERE id = :id")
-    suspend fun getRecordById(id: Long): HistoryRecord?
 }

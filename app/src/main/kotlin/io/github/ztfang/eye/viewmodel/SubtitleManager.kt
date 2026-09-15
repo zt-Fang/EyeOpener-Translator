@@ -14,6 +14,7 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.util.Log
+import io.github.ztfang.eye.BuildConfig
 import io.github.ztfang.eye.domain.engine.asr.AsrEngine
 import io.github.ztfang.eye.domain.engine.vad.VADEngine
 import io.github.ztfang.eye.domain.model.AsrEngineType
@@ -26,24 +27,28 @@ import io.github.ztfang.eye.domain.model.SubtitleLine
 import io.github.ztfang.eye.domain.model.SubtitleState
 import io.github.ztfang.eye.domain.model.SubtitleType
 import io.github.ztfang.eye.domain.model.TranslationEngine
-import io.github.ztfang.eye.domain.model.TranslationResult
 import io.github.ztfang.eye.domain.model.VoskLanguage
 import io.github.ztfang.eye.domain.repository.SettingsRepository
 import io.github.ztfang.eye.domain.usecase.translation.TranslateUseCase
 import io.github.ztfang.eye.engine.ModelPreparer
+import io.github.ztfang.eye.engine.TranslationPrepPhase
 import io.github.ztfang.eye.engine.asr.SherpaOnnxAsrEngine
 import io.github.ztfang.eye.engine.asr.VoskAsrEngine
 import io.github.ztfang.eye.engine.asr.VoskLanguageMap
+import io.github.ztfang.eye.engine.translation.TranslationPrepException
+import io.github.ztfang.eye.engine.translation.TranslationPrepFailureKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -74,9 +79,6 @@ class SubtitleManager
         private val _subtitleState = MutableStateFlow(SubtitleState())
         val subtitleState: StateFlow<SubtitleState> = _subtitleState.asStateFlow()
 
-        private val _translationResult = MutableStateFlow<TranslationResult?>(null)
-        val translationResult: StateFlow<TranslationResult?> = _translationResult.asStateFlow()
-
         private val _isTranslating = MutableStateFlow(false)
         val isTranslating: StateFlow<Boolean> = _isTranslating.asStateFlow()
 
@@ -105,6 +107,7 @@ class SubtitleManager
         private var isInputMode = false
 
         /** 输入模式下实际使用的引擎类型（按源语言解析，与翻译引擎解耦） */
+        @Volatile
         private var inputModeEngine: AsrEngineType? = null
 
         /** 输入模式下累积的已提交 final 文本 */
@@ -187,40 +190,6 @@ class SubtitleManager
             }
             return result.trim()
         }
-
-        /** 语音输入文本轻量润色：去语气词/修正标点/修同音字；LLM 未配置或失败时返回原文。 */
-        suspend fun polishVoiceInput(originalText: String): String =
-            withContext(Dispatchers.IO) {
-                if (originalText.isBlank()) return@withContext ""
-                if (!isLlmConfigReady.value) return@withContext originalText
-
-                try {
-                    val systemPrompt = """你是文本润色助手。
-任务：对语音识别文本做轻量润色。
-
-规则：
-1. 去掉语气词和口头禅（嗯、啊、那个、就是说、然后呢、对吧、哦、呃）
-2. 修正标点和断句，使表达更通顺
-3. 修正常见 ASR 同音字错误，保持原意
-4. 只输出润色后的文本，不要解释，不要加引号
-5. 如果原文已经很通顺，直接输出原文
-6. 保持原文的口语化风格，不要过度润色"""
-
-                    val polished =
-                        llmClient
-                            .chat(
-                                listOf(
-                                    "system" to systemPrompt,
-                                    "user" to originalText,
-                                ),
-                            ).trim()
-
-                    if (polished.isNotBlank()) polished else originalText
-                } catch (e: Exception) {
-                    Log.w(LOG_TAG, "语音输入润色失败，返回原始文本: ${e.message}")
-                    originalText
-                }
-            }
 
         /** 悬浮窗位置与尺寸：从 DataStore 持续同步，支持双向更新 */
         val overlayX: StateFlow<Int> =
@@ -381,9 +350,23 @@ class SubtitleManager
          *
          *  不再支持「同语言多引擎选已下载」，因为每种语言用户只能下到唯一的那一种模型。
          */
+
+        /**
+         * 上次解析出的「源语言 → 引擎」，用于抑制热路径日志刷屏。
+         * resolveAsrEngine 会被音频帧循环每帧调用，若每帧都 Log.i 会通过 logd IPC 产生
+         * 数千次/秒的跨进程写日志（实测一次会话刷出 1900+ 行），严重拖慢整机。
+         */
+        @Volatile
+        private var lastResolvedEngine: Pair<String, AsrEngineType>? = null
+
         private fun resolveAsrEngine(sourceLanguage: String): AsrEngineType {
             val eng = AsrRoutingTable.engineFor(sourceLanguage)
-            Log.i(LOG_TAG, "[RESOLVE] lang=$sourceLanguage → force engine=$eng")
+            // 只在解析结果发生变化时打日志（保留诊断能力，去掉热路径刷屏）
+            val last = lastResolvedEngine
+            if (last == null || last.first != sourceLanguage || last.second != eng) {
+                lastResolvedEngine = sourceLanguage to eng
+                Log.i(LOG_TAG, "[RESOLVE] lang=$sourceLanguage → force engine=$eng")
+            }
             return eng
         }
 
@@ -438,6 +421,58 @@ class SubtitleManager
         private val _runtimeError = MutableStateFlow<String?>(null)
         val runtimeError: StateFlow<String?> = _runtimeError.asStateFlow()
 
+        /** 离线翻译模型准备状态：供主屏显示非模态"下载中"状态条 */
+        private val _translationModelState = MutableStateFlow(TranslationModelState())
+        val translationModelState: StateFlow<TranslationModelState> = _translationModelState.asStateFlow()
+
+        /**
+         * 最近一次离线翻译模型失败的**技术细节**，供"设置 → 翻译模型诊断"查看。
+         *
+         * 失败弹窗只显示一句人话（按 [TranslationPrepFailureKind] 取文案），
+         * 域名 / 解析到的 IP / 证书结论 / 原始异常收在这里，避免弹窗塞满用户看不懂的内容，
+         * 同时保证排障时信息不丢。null 表示本次运行尚未发生过失败。
+         */
+        private val _translationModelDiagnostics = MutableStateFlow<String?>(null)
+        val translationModelDiagnostics: StateFlow<String?> = _translationModelDiagnostics.asStateFlow()
+
+        /** 离线翻译模型准备阶段 */
+        enum class TranslationModelStatus {
+            /** 空闲：无需处理（语言未确定、或非本地引擎） */
+            IDLE,
+
+            /** 正在查询本地是否已有模型 */
+            CHECKING,
+
+            /** 正在下载离线模型（首次约 30-100MB，需 GMS 且网络可达 Google） */
+            DOWNLOADING,
+
+            /** 模型就绪，可离线翻译 */
+            READY,
+
+            /** 失败，[TranslationModelState.message] 携带原因 */
+            FAILED,
+        }
+
+        /**
+         * 离线翻译模型准备状态。
+         * @param status 当前阶段
+         * @param sourceLanguage 该状态对应的源语言
+         * @param targetLanguage 该状态对应的目标语言
+         * @param failureKind 失败分类，UI 据此选一句人话（仅 FAILED 有值）
+         * @param message 失败技术细节（仅 FAILED 有值）。**不要直接展示在弹窗正文**，
+         *        里面是域名 / IP / 证书结论 / 原始异常，只在"设置 → 翻译模型诊断"里呈现。
+         * @param elapsedMs 处于 DOWNLOADING 的累计时长，驱动"已等待 X"与慢速提示。
+         *        ML Kit 不提供下载进度回调，只能用时长让用户知道"还在动"而不是卡死。
+         */
+        data class TranslationModelState(
+            val status: TranslationModelStatus = TranslationModelStatus.IDLE,
+            val sourceLanguage: String = "",
+            val targetLanguage: String = "",
+            val failureKind: TranslationPrepFailureKind? = null,
+            val message: String = "",
+            val elapsedMs: Long = 0L,
+        )
+
         private val _vadState = MutableStateFlow(VadState.LISTENING)
         val vadState: StateFlow<VadState> = _vadState.asStateFlow()
 
@@ -467,18 +502,18 @@ class SubtitleManager
                     // 引擎切换诊断：确认 collect 收到新值
                     Log.i(LOG_TAG, "translationEngine.collect: engine=$engine, prev=${_subtitleState.value.engine}")
                     _subtitleState.value = _subtitleState.value.copy(engine = engine)
-                    val s = _subtitleState.value
-                    // 异步准备翻译模型，不阻塞 collect（避免 ML Kit 下载时收不到后续引擎切换）
+                    // 异步准备翻译模型，不阻塞 collect（避免 ML Kit 下载时收不到后续引擎切换）。
+                    // 语言取 DataStore 的当前值而非 _subtitleState 快照：init 阶段各 collect 的
+                    // 执行顺序不确定，state 可能还是默认 en/zh，会白白下载与用户设置无关的语言对。
                     scope.launch {
-                        modelPreparer
-                            .prepareTranslation(
-                                engine = engine,
-                                sourceLanguage = s.sourceLanguage,
-                                targetLanguage = s.targetLanguage,
-                            ).onFailure { e ->
-                                Log.w(LOG_TAG, "prepareTranslation 失败: ${e.message}")
-                                _runtimeError.value = "翻译模型未就绪：${e.message}"
-                            }
+                        val src = settingsRepository.sourceLanguage.first()
+                        val tgt = settingsRepository.targetLanguage.first()
+                        runTranslationPrep(
+                            engine = engine,
+                            sourceLanguage = src,
+                            targetLanguage = tgt,
+                            tag = "engine-collect",
+                        )
                     }
                     // ASR 引擎与翻译引擎解耦，引擎切换不再触发 ASR 重启
                     val newEngineType = currentAsrEngineType
@@ -500,6 +535,132 @@ class SubtitleManager
             }
             setupAsrFlowListeners()
             observeModelDownloads()
+        }
+
+        /** 下载计时器 Job：驱动"已等待 X 分 Y 秒"与"网络较慢"提示 */
+        private var prepElapsedJob: Job? = null
+
+        /**
+         * 启动下载计时。ML Kit 没有进度回调，只能用"已等待时长"让用户确信下载还在进行、
+         * 而不是卡死了。已在计时中则不重启（避免并发预热把计时归零）。
+         */
+        private fun startPrepElapsedTicker() {
+            if (prepElapsedJob?.isActive == true) return
+            prepElapsedJob =
+                scope.launch {
+                    val start = System.currentTimeMillis()
+                    while (isActive) {
+                        delay(PREP_ELAPSED_TICK_MS)
+                        val current = _translationModelState.value
+                        if (current.status != TranslationModelStatus.DOWNLOADING) break
+                        _translationModelState.value =
+                            current.copy(elapsedMs = System.currentTimeMillis() - start)
+                    }
+                }
+        }
+
+        /** 停止下载计时（下载结束/失败时调用） */
+        private fun stopPrepElapsedTicker() {
+            prepElapsedJob?.cancel()
+            prepElapsedJob = null
+        }
+
+        /**
+         * 统一的翻译模型准备入口。
+         *
+         * 把 [ModelPreparer.prepareTranslation] 的阶段回调映射为 UI 可观察的
+         * [translationModelState]，并负责失败时的错误写入与成功后的错误清除。
+         *
+         * 注意：只有 LOCAL 引擎需要下载离线模型；CLOUD 仅校验 API Key，AI 仅校验 LLM 配置，
+         * 因此它们的准备过程是秒回的，不会出现"下载中"状态。
+         */
+        private suspend fun runTranslationPrep(
+            engine: TranslationEngine,
+            sourceLanguage: String,
+            targetLanguage: String,
+            tag: String,
+        ) {
+            _translationModelState.value =
+                TranslationModelState(
+                    status = TranslationModelStatus.CHECKING,
+                    sourceLanguage = sourceLanguage,
+                    targetLanguage = targetLanguage,
+                )
+
+            val result =
+                modelPreparer.prepareTranslation(
+                    engine = engine,
+                    sourceLanguage = sourceLanguage,
+                    targetLanguage = targetLanguage,
+                    onPhase = { phase ->
+                        val status =
+                            when (phase) {
+                                TranslationPrepPhase.IDLE -> TranslationModelStatus.IDLE
+                                TranslationPrepPhase.CHECKING -> TranslationModelStatus.CHECKING
+                                TranslationPrepPhase.DOWNLOADING -> TranslationModelStatus.DOWNLOADING
+                                TranslationPrepPhase.READY -> TranslationModelStatus.READY
+                            }
+                        _translationModelState.value =
+                            _translationModelState.value.copy(
+                                status = status,
+                                sourceLanguage = sourceLanguage,
+                                targetLanguage = targetLanguage,
+                            )
+                        if (status == TranslationModelStatus.DOWNLOADING) {
+                            startPrepElapsedTicker()
+                        }
+                    },
+                )
+
+            result
+                .onSuccess {
+                    stopPrepElapsedTicker()
+                    Log.i(
+                        LOG_TAG,
+                        "[PREP:$tag] 翻译模型准备完成, engine=$engine, $sourceLanguage→$targetLanguage",
+                    )
+                    _translationModelState.value =
+                        _translationModelState.value.copy(
+                            status = TranslationModelStatus.READY,
+                            failureKind = null,
+                            message = "",
+                        )
+                }
+                .onFailure { e ->
+                    stopPrepElapsedTicker()
+                    Log.e(LOG_TAG, "[PREP:$tag] 翻译模型准备失败: ${e.message}")
+                    if (engine == TranslationEngine.LOCAL) {
+                        // 离线模型准备失败 → 只走分级弹窗（含"重试"与"稍后"）。
+                        // 这里**不再**写 _runtimeError：那条通道在 MainActivity 是 Toast，
+                        // 会把"已等待 300s 仍未就绪。无法访问 Google 下载服务器：dl.google.com
+                        // 被解析到 x.x.x.x…（原始错误：Timed out…）"整段弹出来，
+                        // 既与弹窗重复，又是用户看不懂的技术细节。
+                        val prep = e as? TranslationPrepException
+                        val detail = prep?.detail ?: (e.message ?: "未知错误")
+                        _translationModelDiagnostics.value = detail
+                        _translationModelState.value =
+                            _translationModelState.value.copy(
+                                status = TranslationModelStatus.FAILED,
+                                failureKind = prep?.kind ?: TranslationPrepFailureKind.UNKNOWN,
+                                message = detail,
+                            )
+                    } else {
+                        // 云端/AI 的"准备失败"本质是配置缺失，点击引擎卡片时已有专门提示；
+                        // 这里不再弹"离线翻译模型下载失败"弹窗，避免文案张冠李戴与重复打扰。
+                        _translationModelState.value =
+                            _translationModelState.value.copy(
+                                status = TranslationModelStatus.IDLE,
+                                message = "",
+                            )
+                    }
+                }
+        }
+
+        /**
+         * 清除"翻译模型诊断"记录（设置页手动清空）。
+         */
+        fun clearTranslationModelDiagnostics() {
+            _translationModelDiagnostics.value = null
         }
 
         /**
@@ -566,7 +727,7 @@ class SubtitleManager
 
         /** 处理 partial 识别结果（语音输入模式 / 字幕模式分流） */
         private fun handlePartialResult(text: String) {
-            Log.d(LOG_TAG, "handlePartialResult: text=\"$text\", isInputMode=$isInputMode")
+            if (BuildConfig.DEBUG) Log.d(LOG_TAG, "handlePartialResult: text=\"$text\", isInputMode=$isInputMode")
             if (isInputMode) {
                 partialDisplayBuilder.setLength(0)
                 if (inputFinalBuffer.isNotEmpty()) {
@@ -575,90 +736,108 @@ class SubtitleManager
                 partialDisplayBuilder.append(text)
                 _voiceInputText.value = partialDisplayBuilder.toString()
             } else {
-                // 两行交替模式下，partial 直接显示当前流内容
-                // 旧 final 已在另一行显示，Sherpa resetStream 后 partial 是新句内容
+                // partial 仅作预览：显示为「已确认 final + 本段 partial」，
+                // 不写入 currentSourceBuffer，避免上一句 final 被拼到新句前面。
                 updateSourceText(text, isFinal = false)
             }
         }
 
         /** 处理 final 识别结果（语音输入模式 / 字幕模式分流） */
         private fun handleFinalResult(text: String) {
-            Log.d(LOG_TAG, "handleFinalResult: text=\"$text\", isInputMode=$isInputMode")
+            if (BuildConfig.DEBUG) Log.d(LOG_TAG, "handleFinalResult: text=\"$text\", isInputMode=$isInputMode")
             lastFinalTimeMs = System.currentTimeMillis()
             if (isInputMode) {
                 inputFinalBuffer.append(text)
                 _voiceInputText.value = inputFinalBuffer.toString()
-            } else {
-                // 先归档当前行（如果有内容的话）
-                if (currentSourceBuffer.isNotEmpty()) {
-                    archiveCurrentLine()
-                }
-                // 新句子：直接作为 final 行
-                updateSourceText(text, isFinal = true)
-
-                // 移除严格长度限制，所有非空 final 都触发翻译
-                if (text.isNotBlank()) {
-                    translate(text)
-                }
-                currentAsrEngine.resetStream()
+                return
             }
+
+            // 纯标点/空白的 final 当作没发生：既不归档、不上屏，也不翻译、不写历史。
+            // 放在最前面，是因为 VAD 软静音提交（Vosk 无 endpoint 时靠它补 final）同样走本函数，
+            // 一处判断即可覆盖「引擎 final」与「VAD 软静音」两条入口。
+            if (!text.hasMeaningfulContent()) {
+                if (BuildConfig.DEBUG) Log.d(LOG_TAG, "handleFinalResult: 纯标点 final，忽略")
+                currentAsrEngine.resetStream()
+                return
+            }
+
+            // 一句 = 一行：先把上一句归档进历史，再把本句作为新的当前行。
+            // 归档条件只看 currentSourceBuffer（已确认的 final 累积）——
+            // 不能用 text 自身判断，否则会把本句归档一次、再当新行显示一次（重复行）。
+            if (currentSourceBuffer.isNotEmpty()) {
+                archiveCurrentLine()
+            }
+            updateSourceText(text, isFinal = true)
+
+            // 移除严格长度限制，所有非空 final 都触发翻译
+            if (text.isNotBlank()) {
+                translate(text)
+            }
+            currentAsrEngine.resetStream()
         }
 
         /**
-         * 按句末标点切分文本。
-         * 保留句末标点在切分结果中，最后一段若无句末标点则视为未完成句保留在缓冲区。
-         * 支持中英文标点：。！？.!?；;
+         * 源语言切换时重载 ASR 模型并重启音频采集。
+         *
+         * 严格唯一引擎：语言 → 引擎 → prepare，失败直接报错，不跨引擎 fallback。
+         * 整个流程（释放旧 AudioRecord → 加载新模型 → 重启采集）在新协程内串行执行，
+         * 句柄登记到 [audioProcessingJob]，保证停止流程能取消到真正在跑的那个循环。
          */
-        private suspend fun reloadAsrModel(languageCode: String) {
-            // 同 restartAudioProcessing：必须在加锁【之前】置 false，否则与持锁的录音协程互相等待 → 死锁
-            isRecording = false
-            audioMutex.withLock {
-                Log.i(LOG_TAG, "reloadAsrModel: 切换语种到 $languageCode")
-                audioProcessingJob?.cancel()
-                runCatching { audioRecord?.stop() }
-                runCatching { audioRecord?.release() }
-                audioRecord = null
-                delay(100)
+        private fun reloadAsrModel(languageCode: String) {
+            // 先取旧句柄存局部变量，避免新协程读到自己刚被赋的值而自杀
+            val previousJob = audioProcessingJob
+            audioProcessingJob =
+                scope.launch(Dispatchers.IO) {
+                    // 同 restartAudioProcessing：必须在加锁【之前】置 false，否则与持锁的录音协程互相等待 → 死锁
+                    isRecording = false
+                    audioMutex.withLock {
+                        Log.i(LOG_TAG, "reloadAsrModel: 切换语种到 $languageCode")
+                        previousJob?.cancel()
+                        val oldRecord = audioRecord
+                        audioRecord = null
+                        runCatching { oldRecord?.stop() }
+                        runCatching { oldRecord?.release() }
+                        delay(100)
 
-                // 严格唯一引擎：语言→引擎→prepare，失败直接报错，不跨引擎 fallback
-                val engine = currentAsrEngineType
-                val loadResult =
-                    when (engine) {
-                        AsrEngineType.VOSK -> modelPreparer.prepareAsr(languageCode)
-                        AsrEngineType.SHERPA_ONNX,
-                        AsrEngineType.SHERPA_ONNX_BN,
-                        AsrEngineType.SHERPA_ONNX_NEMOTRON,
-                        -> {
-                            val modelId = resolveSherpaModelId(languageCode)
-                            if (modelId == null) {
-                                Result.failure(
-                                    IllegalStateException(
-                                        "源语言 $languageCode 无对应 Sherpa-ONNX 模型，请切换语言",
-                                    ),
-                                )
-                            } else {
-                                if (engine == AsrEngineType.SHERPA_ONNX_NEMOTRON) {
-                                    sherpaOnnxAsrEngine.setLanguage(resolveNemotronLanguage(languageCode))
+                        val engine = currentAsrEngineType
+                        val loadResult =
+                            when (engine) {
+                                AsrEngineType.VOSK -> modelPreparer.prepareAsr(languageCode)
+                                AsrEngineType.SHERPA_ONNX,
+                                AsrEngineType.SHERPA_ONNX_BN,
+                                AsrEngineType.SHERPA_ONNX_NEMOTRON,
+                                -> {
+                                    val modelId = resolveSherpaModelId(languageCode)
+                                    if (modelId == null) {
+                                        Result.failure(
+                                            IllegalStateException(
+                                                "源语言 $languageCode 无对应 Sherpa-ONNX 模型，请切换语言",
+                                            ),
+                                        )
+                                    } else {
+                                        if (engine == AsrEngineType.SHERPA_ONNX_NEMOTRON) {
+                                            sherpaOnnxAsrEngine.setLanguage(resolveNemotronLanguage(languageCode))
+                                        }
+                                        modelPreparer.prepareSherpaOnnxAsr(modelId)
+                                    }
                                 }
-                                modelPreparer.prepareSherpaOnnxAsr(modelId)
                             }
-                        }
-                    }
-                loadResult
-                    .onSuccess {
-                        Log.i(LOG_TAG, "reloadAsrModel: 模型加载成功，引擎=$engine, 重启音频采集")
-                        startAudioProcessingLocked()
-                    }.onFailure { e ->
-                        Log.e(LOG_TAG, "reloadAsrModel: 模型加载失败, engine=$engine, lang=$languageCode", e)
-                        _runtimeError.value =
-                            buildString {
-                                append("语音识别模型加载失败，请前往模型下载界面下载对应模型")
-                                append("（错误：")
-                                append(e.message ?: "未知")
-                                append("）")
+                        loadResult
+                            .onSuccess {
+                                Log.i(LOG_TAG, "reloadAsrModel: 模型加载成功，引擎=$engine, 重启音频采集")
+                                startAudioProcessingLocked()
+                            }.onFailure { e ->
+                                Log.e(LOG_TAG, "reloadAsrModel: 模型加载失败, engine=$engine, lang=$languageCode", e)
+                                _runtimeError.value =
+                                    buildString {
+                                        append("语音识别模型加载失败，请前往模型下载界面下载对应模型")
+                                        append("（错误：")
+                                        append(e.message ?: "未知")
+                                        append("）")
+                                    }
                             }
                     }
-            }
+                }
         }
 
         /**
@@ -666,6 +845,18 @@ class SubtitleManager
          * 一个句子内多个 final 累积，遇到句末标点或 endpoint 切句时完成一句。
          */
         private val currentSourceBuffer = StringBuilder()
+
+        /**
+         * 当前句最近一次 partial 的文本（引擎 resetStream 后即为新句内容）。
+         *
+         * 与 [currentSourceBuffer] 分开存放的原因：partial 是「尚未确认的预览」，
+         * 不能混进已确认缓冲。旧实现让 partial 直接参与 `buffer + text` 的拼接与写回，
+         * 导致两个问题：① 新 partial 前面挂着上一句 final；② final 后缓冲未清空，
+         * Sherpa 路径下上一句永远进不了历史（被新 partial 整行覆盖）。
+         *
+         * 线程约束：字幕缓冲只在主线程（ASR Flow 收集器）读写。
+         */
+        private var currentPartialText: String = ""
 
         /** 当前句子累积的译文缓冲。 */
         private val currentTranslationBuffer = StringBuilder()
@@ -688,13 +879,15 @@ class SubtitleManager
             val current = _subtitleState.value
 
             if (isFinal) {
-                // final：设置为当前行内容
+                // final：本句原文已确定，作为当前行内容；未确认的 partial 预览作废
                 currentSourceBuffer.setLength(0)
                 currentSourceBuffer.append(text)
+                currentPartialText = ""
                 // 重置 partial 翻译基准
                 lastPartialTranslateLength = 0
             } else {
-                // partial：检查是否触发滑动窗口预览翻译
+                // partial：只更新预览文本，不写入已确认缓冲
+                currentPartialText = text
                 val fullText = currentSourceBuffer.toString() + text
                 val triggerLen =
                     if (current.sourceLanguage.startsWith("en", ignoreCase = true)) {
@@ -708,38 +901,54 @@ class SubtitleManager
                 }
             }
 
-            // 组装当前行
+            // 组装当前行：已确认 final + 未确认 partial
             val currentLine =
                 SubtitleLine(
-                    sourceText = if (isFinal) currentSourceBuffer.toString() else currentSourceBuffer.toString() + text,
+                    sourceText = currentSourceBuffer.toString() + currentPartialText,
                     translatedText = currentTranslationBuffer.toString(),
                     subtitleType = if (isFinal) SubtitleType.FINAL else SubtitleType.PARTIAL,
                 )
 
-            // 历史行 + 当前行
-            val allLines = historyLines.toMutableList()
-            allLines.add(currentLine)
+            _subtitleState.value = current.copy(lines = buildDisplayLines(currentLine))
+        }
 
-            // 只保留最近 MAX_HISTORY_LINES 行
-            val displayLines =
-                if (allLines.size > MAX_HISTORY_LINES) {
-                    allLines.takeLast(MAX_HISTORY_LINES)
-                } else {
-                    allLines
-                }
+        /**
+         * 组装要渲染的行列表：历史行 + 当前行，最多 [MAX_HISTORY_LINES] 行。
+         *
+         * 性能：这是 partial 热路径（Vosk 下每帧一次）。旧实现每次都
+         * `historyLines.toMutableList()` + `add` + `takeLast`，产生 3 次列表分配；
+         * 这里合并为一次 [buildList]，并按上限截断。
+         */
+        private fun buildDisplayLines(currentLine: SubtitleLine): List<SubtitleLine> {
+            val overflow = historyLines.size + 1 - MAX_HISTORY_LINES
+            val fromIndex = if (overflow > 0) overflow else 0
+            return buildList(historyLines.size + 1 - fromIndex) {
+                for (i in fromIndex until historyLines.size) add(historyLines[i])
+                add(currentLine)
+            }
+        }
 
-            _subtitleState.value = current.copy(lines = displayLines)
+        /** 当前显示行的完整文本（已确认 final + 未确认 partial）。仅可在主线程访问。 */
+        private fun currentLineText(): String = currentSourceBuffer.toString() + currentPartialText
+
+        /** 清空当前句缓冲与历史行。仅可在主线程访问。 */
+        private fun clearSubtitleBuffers() {
+            currentSourceBuffer.setLength(0)
+            currentPartialText = ""
+            currentTranslationBuffer.setLength(0)
+            historyLines.clear()
+            lastPartialTranslateLength = 0
         }
 
         /**
          * 完成当前句并归档到历史（endpoint 切句 / VAD 长停顿触发）。
-         * 清空当前缓冲，新句从空开始。
+         * 归档内容取「当前显示行」的完整文本，清空当前缓冲，新句从空开始。
          */
         private fun archiveCurrentLine() {
-            if (currentSourceBuffer.isBlank()) return
+            if (currentLineText().isBlank()) return
             val line =
                 SubtitleLine(
-                    sourceText = currentSourceBuffer.toString(),
+                    sourceText = currentLineText(),
                     translatedText = currentTranslationBuffer.toString(),
                     subtitleType = SubtitleType.FINAL,
                 )
@@ -748,9 +957,10 @@ class SubtitleManager
                 historyLines.removeAt(0)
             }
             currentSourceBuffer.setLength(0)
+            currentPartialText = ""
             currentTranslationBuffer.setLength(0)
             lastPartialTranslateLength = 0
-            Log.d(LOG_TAG, "archiveCurrentLine: 归档句子，历史行数=${historyLines.size}")
+            if (BuildConfig.DEBUG) Log.d(LOG_TAG, "archiveCurrentLine: 归档句子，历史行数=${historyLines.size}")
         }
 
         /**
@@ -770,21 +980,22 @@ class SubtitleManager
                             state.targetLanguage,
                             state.engine,
                         ).onSuccess { result ->
-                            // 仅当版本匹配时更新当前行译文
-                            if (partialTranslationVersion.get() == version && currentSourceBuffer.isNotEmpty()) {
+                            // 仅当版本匹配、且末行仍是 partial（尚未被 final 取代）时更新预览译文。
+                            // 否则 partial 的预览译文会覆盖 final 已经翻好的译文。
+                            val current = _subtitleState.value
+                            val lines = current.lines
+                            if (partialTranslationVersion.get() == version &&
+                                currentLineText().isNotEmpty() &&
+                                lines.isNotEmpty() &&
+                                lines.last().subtitleType == SubtitleType.PARTIAL
+                            ) {
                                 currentTranslationBuffer.setLength(0)
                                 currentTranslationBuffer.append(result.translatedText)
                                 // 更新 UI
-                                val current = _subtitleState.value
-                                val lines = current.lines.toMutableList()
-                                if (lines.isNotEmpty()) {
-                                    val lastIdx = lines.size - 1
-                                    lines[lastIdx] =
-                                        lines[lastIdx].copy(
-                                            translatedText = result.translatedText,
-                                        )
-                                    _subtitleState.value = current.copy(lines = lines)
-                                }
+                                val updated = lines.toMutableList()
+                                updated[updated.size - 1] =
+                                    updated[updated.size - 1].copy(translatedText = result.translatedText)
+                                _subtitleState.value = current.copy(lines = updated)
                             }
                         }
                 } catch (_: Exception) {
@@ -793,9 +1004,12 @@ class SubtitleManager
             }
         }
 
-        /** 最近翻译过的句子（上下文窗口，方案 C） */
-        private val recentSentences = mutableListOf<String>()
-        private val MAX_CONTEXT_SENTENCES = 3
+        /**
+         * 上一句的「原文 → 已上屏译文」，仅作为术语译法一致的参考注入 prompt。
+         * 设计取舍：不引入用户维护的术语表，术语识别/自更正交给模型自身；但只保留最近 1 句，
+         * 且 prompt 中明确标注「仅供参考、不要翻译/照抄」，以降低错误译法被固化并传染后续句子的风险。
+         */
+        private var lastLinePair: Pair<String, String>? = null
 
         /**
          * 翻译版本号：每次新 translate 递增，翻译返回时校验版本，旧版本结果优雅丢弃。
@@ -833,6 +1047,9 @@ class SubtitleManager
                         ).onSuccess { result ->
                             if (translationVersion.get() == version) {
                                 appendTranslationResult(text, result.translatedText, state)
+                            } else {
+                                // 结果属于旧版本，被丢弃时必须收尾，否则"实时翻译中"指示器永远不消失
+                                _isTranslating.value = false
                             }
                         }.onFailure { e ->
                             if (e is UnsupportedOperationException) {
@@ -853,85 +1070,124 @@ class SubtitleManager
          * 智能模式：润色+翻译合并 + 上下文感知（方案 C+E）。
          * 一次 LLM 调用完成润色和翻译，减少往返延迟。
          * 译文通过流式输出逐字显示（方案 D）。
+         *
+         * 超时策略（2026-09-13 修正）：
+         * 旧实现用 `withTimeout(POLISH + TRANSLATE)`(7s) 包住整条流 —— 那是**总时长**上限，
+         * 慢模型（首 token 3s + 逐字 8s）会在第 7s 被中途掐断，而 catch 分支又把已流出的半截
+         * 译文当成功结果写入历史与 lastLinePair，导致「半截译文被当正确结果」并被后续句子学走。
+         *
+         * 现改为「首 token 超时（TTFT）+ 收尾容错」两段语义，不再对**总时长**设上限：
+         *  - [STREAM_FIRST_TOKEN_TIMEOUT_MS]：从发起到第一个 token 的最长等待（15s）。
+         *    它只约束「开始」，不约束「长度」—— 一旦开始吐字，长句慢模型不会被误杀。
+         *  - 首个 token 到达后若流被外部中断（网络抖动/代理掐断），已有内容才可被采信，
+         *    且同时写入"可能不完整"的运行时提示，不再冒充完整译文。
+         *  - 首 token 都没来就失败 → 保留原文、不写历史、给出可行动的失败原因。
+         * 真实 TCP/TLS 读超时仍由 LLMClient 的 OkHttp 30s 兜底，避免连接卡死时无限等待。
          */
         private suspend fun translateWithPolishAndContext(
             originalText: String,
             state: SubtitleState,
             version: Long,
         ) {
+            val streamed = StringBuilder()
+            var lastUiUpdateMs = 0L
+            // 半截译文是否可被采信：只有「模型正常收尾」或「首 token 已到达后流被外部中断」
+            // 才采信；首 token 都没来就失败时坚决不用空串/残片污染历史。
+            var firstTokenArrived = false
             try {
-                withTimeout(POLISH_TIMEOUT_MS + TRANSLATE_TIMEOUT_MS) {
-                    // 构建上下文（方案 C）：最近 2-3 句
-                    val context =
-                        if (recentSentences.isNotEmpty()) {
-                            "上下文：${recentSentences.takeLast(2).joinToString(" ")}\n"
-                        } else {
-                            ""
+                // 提示词唯一来源（engine 层）：带上一句原文+译文，仅供术语译法一致参考
+                val systemPrompt =
+                    io.github.ztfang.eye.engine.translation.llm.LLMTranslationEngine
+                        .buildSystemPrompt(state.sourceLanguage, state.targetLanguage, lastLinePair)
+
+                // 两段式超时：外层等首 token，内层对每次 token 到达重新计时（空闲超时）
+                withTimeout(STREAM_FIRST_TOKEN_TIMEOUT_MS) {
+                    llmClient
+                        .chatStream(
+                            listOf(
+                                "system" to systemPrompt,
+                                "user" to originalText,
+                            ),
+                        )
+                        .collect { token ->
+                            // 旧版本（已被新句取代）的结果直接丢弃，不污染当前行
+                            if (translationVersion.get() != version) return@collect
+                            firstTokenArrived = true
+                            streamed.append(token)
+                            val now = android.os.SystemClock.uptimeMillis()
+                            if (now - lastUiUpdateMs >= STREAM_UI_MIN_INTERVAL_MS) {
+                                lastUiUpdateMs = now
+                                showStreamingTranslation(originalText, streamed.toString())
+                            }
                         }
-
-                    // 统一英文提示词：润色+翻译合并，适用所有 ASR 源
-                    // X-ASR 已带标点时润色规则近似 no-op；Vosk 无标点时润色生效
-                    val systemPrompt =
-                        """
-                        You are a real-time speech translation assistant.
-                        Task: lightly polish the ASR transcript and translate it from ${state.sourceLanguage} to ${state.targetLanguage}.
-
-                        Polish rules (apply only when needed):
-                        1. Remove filler words and disfluencies (e.g. um, uh, like, you know, 所以, 然后, 那个)
-                        2. Fix punctuation and sentence boundaries
-                        3. Fix common ASR homophone errors
-
-                        Translation rules:
-                        1. Translate to ${state.targetLanguage}, preserve original meaning, stay coherent with context
-                        2. Return ONLY the translated text, no explanations, no quotes
-                        3. Do NOT wrap in markdown code blocks or quotes
-                        4. If input is empty or whitespace, output empty string
-
-                        $context
-                        """.trimIndent()
-
-                    val polishedAndTranslated =
-                        llmClient
-                            .chat(
-                                listOf(
-                                    "system" to systemPrompt,
-                                    "user" to originalText,
-                                ),
-                            ).trim()
-
-                    if (polishedAndTranslated.isNotBlank() && translationVersion.get() == version) {
-                        appendTranslationResult(originalText, polishedAndTranslated, state)
-                        // 记录到上下文窗口
-                        recentSentences.add(originalText)
-                        if (recentSentences.size > MAX_CONTEXT_SENTENCES) {
-                            recentSentences.removeAt(0)
-                        }
-                    }
+                }
+                val text = streamed.toString().trim()
+                if (text.isNotBlank() && translationVersion.get() == version) {
+                    appendTranslationResult(originalText, text, state)
+                } else {
+                    // 空结果或旧版本被丢弃：收尾，避免"实时翻译中"指示器卡住
+                    _isTranslating.value = false
                 }
             } catch (e: Exception) {
-                Log.w(LOG_TAG, "AI 翻译失败/超时，降级为普通翻译: ${e.message}")
-                // 降级：直接翻译，不润色
-                translateUseCase
-                    .execute(
-                        originalText,
-                        state.sourceLanguage,
-                        state.targetLanguage,
-                        state.engine,
-                    ).onSuccess { result ->
-                        if (translationVersion.get() == version) {
-                            appendTranslationResult(originalText, result.translatedText, state)
-                        }
-                    }.onFailure { e ->
-                        if (e is UnsupportedOperationException) {
-                            // 引擎不支持该语言对，静默不响应（不弹错）
-                            Log.i(LOG_TAG, "翻译引擎不支持此语言对，跳过: ${e.message}")
-                            _isTranslating.value = false
-                        } else {
-                            _runtimeError.value = "翻译失败，请检查网络或配置"
-                            _isTranslating.value = false
-                        }
+                // 失败处理分两类，不再无脑采用半截文本：
+                val partialText = streamed.toString().trim()
+                val stillCurrent = translationVersion.get() == version
+                when {
+                    // ① 首 token 已到、且流被外部中断（网络抖动/代理掐断）→ 已有内容可用，采用之。
+                    //    但仍记录"经流式中断产出"，便于排查（不再声称是完整结果）。
+                    firstTokenArrived && partialText.isNotBlank() && stillCurrent -> {
+                        Log.w(LOG_TAG, "AI 流式中断，采用已输出部分(${partialText.length}字): ${e.message}")
+                        _runtimeError.value = "译文可能不完整（流式连接中断）"
+                        appendTranslationResult(originalText, partialText, state)
                     }
+                    // ② 一个字都没吐出来 → 保留原文，给出可见的失败提示，绝不写历史。
+                    else -> {
+                        Log.w(LOG_TAG, "AI 流式无输出，保留原文: ${e.javaClass.simpleName}: ${e.message}")
+                        _runtimeError.value = buildAiErrorMessage(e)
+                        _isTranslating.value = false
+                    }
+                }
             }
+        }
+
+        /**
+         * 把流式链路的异常翻译成对用户有信息量的文案。
+         *
+         * 历史问题：无论什么错都只说「翻译失败，请检查网络或配置」——用户和开发者都无从下手。
+         * 这里按异常类型给最小但可行动的区分：超时 / 鉴权 / 端点 / 其他。
+         */
+        private fun buildAiErrorMessage(e: Throwable): String {
+            val raw = (e.message ?: "").trim()
+            return when {
+                e is kotlinx.coroutines.TimeoutCancellationException ->
+                    "AI 响应超时（${STREAM_FIRST_TOKEN_TIMEOUT_MS / 1000}s 内无输出），请检查代理节点或换模型"
+                raw.contains("401") || raw.contains("403") ->
+                    "API 鉴权失败（$raw），请检查 Key 与服务商是否匹配"
+                raw.contains("404") ->
+                    "API 地址或模型名不存在（$raw），请检查 Base URL 与模型名称"
+                raw.contains("429") ->
+                    "API 触发限流（$raw），请稍后重试或更换模型"
+                raw.isNotBlank() -> "翻译失败：$raw"
+                else -> "翻译失败，请检查网络或配置"
+            }
+        }
+
+        /**
+         * 流式过程中就地更新当前行译文（不归档、不写历史）。
+         * 仅当最后一行仍是本次请求对应的句子时才更新，避免覆盖新句。
+         */
+        private fun showStreamingTranslation(
+            originalText: String,
+            translatedText: String,
+        ) {
+            val current = _subtitleState.value
+            val lines = current.lines
+            if (lines.isEmpty()) return
+            val last = lines.last()
+            if (last.sourceText != originalText) return
+            val updated = lines.toMutableList()
+            updated[updated.size - 1] = last.copy(translatedText = translatedText)
+            _subtitleState.value = current.copy(lines = updated)
         }
 
         /**
@@ -956,9 +1212,10 @@ class SubtitleManager
                 _subtitleState.value = current.copy(lines = lines)
             }
 
-            _translationResult.value =
-                TranslationResult(sourceText, translatedText, state.sourceLanguage, state.targetLanguage, state.engine, isFinal = true)
             _isTranslating.value = false
+
+            // 记录本句「原文 → 译文」，供下一句做术语译法一致性参考（仅最近 1 句）
+            lastLinePair = sourceText to translatedText
 
             // 保存到历史记录
             scope.launch(Dispatchers.IO) {
@@ -1015,6 +1272,39 @@ class SubtitleManager
 
         fun clearRuntimeError() {
             _runtimeError.value = null
+        }
+
+        /**
+         * 重试翻译模型准备（失败弹窗的"重试"按钮）。
+         * 复用当前语言与引擎，重新走一遍 检查 → 下载 → 轮询 流程。
+         */
+        fun retryTranslationPrep() {
+            val s = _subtitleState.value
+            Log.i(LOG_TAG, "[PREP] 用户手动重试, engine=${s.engine}, ${s.sourceLanguage}→${s.targetLanguage}")
+            scope.launch {
+                runTranslationPrep(
+                    engine = s.engine,
+                    sourceLanguage = s.sourceLanguage,
+                    targetLanguage = s.targetLanguage,
+                    tag = "manual-retry",
+                )
+            }
+        }
+
+        /**
+         * 用户关闭离线翻译模型失败弹窗（不重试，仅收起）。
+         * 必须连 [TranslationModelState.failureKind] 一起清掉：只把 status 置回 IDLE 会留下
+         * 上一次的分类，任何"只看 failureKind 不看 status"的读取方都会拿到过期值。
+         */
+        fun dismissTranslationModelError() {
+            if (_translationModelState.value.status == TranslationModelStatus.FAILED) {
+                _translationModelState.value =
+                    _translationModelState.value.copy(
+                        status = TranslationModelStatus.IDLE,
+                        failureKind = null,
+                        message = "",
+                    )
+            }
         }
 
         /**
@@ -1108,15 +1398,12 @@ class SubtitleManager
                 Log.w(LOG_TAG, "[ENSURE] ===== ASR 模型准备诊断结束, pickedEngine=$asrEngine =====")
 
                 // 1. 翻译模型准备（失败仅告警，不阻断 ASR）
-                modelPreparer
-                    .prepareTranslation(
-                        engine = engine,
-                        sourceLanguage = lang,
-                        targetLanguage = s.targetLanguage,
-                    ).onFailure { e ->
-                        Log.e(LOG_TAG, "[ENSURE] 翻译模型准备失败: ${e.message}")
-                        _runtimeError.value = "翻译模型未就绪：${e.message}"
-                    }
+                runTranslationPrep(
+                    engine = engine,
+                    sourceLanguage = lang,
+                    targetLanguage = s.targetLanguage,
+                    tag = "ensureModelsLoaded",
+                )
                 // 2. ASR 模型准备 —— 严格按映射引擎，无 fallback；但 prepare 前后打印关键信息
                 val prepare: Result<Unit> =
                     when (asrEngine) {
@@ -1192,8 +1479,29 @@ class SubtitleManager
             }
         }
 
+        /** 音频采集实例。录音 IO 协程与主线程停止流程都会读写，故 volatile。 */
+        @Volatile
         private var audioRecord: AudioRecord? = null
+
+        /**
+         * 录音主循环运行标志。
+         *
+         * 跨线程读写：录音循环在 Dispatchers.IO 上读，启动/停止/重启流程在其它线程写。
+         * 未加 @Volatile 时 JIT 可能把 `while (isRecording)` 提升为寄存器读，导致停止信号
+         * 延迟生效甚至不生效 —— 而录音循环整体持有 [audioMutex]，一旦不退出，
+         * [restartAudioProcessing] / [reloadAsrModel] 的 withLock 将永久阻塞。
+         */
+        @Volatile
         private var isRecording = false
+
+        /**
+         * 当前录音主循环的协程句柄。
+         *
+         * 三个入口（首次启动 / 音频源切换重启 / 语种切换重载）都会在这里登记句柄，
+         * 保证停止流程能拿到正在运行的那个协程。
+         * 注意：录音循环持有 [audioMutex]，因此 [isRecording] = false 才是主要退出信号，
+         * 取消句柄只是双保险（用于卡在 [delay] 等挂起点时立即退出）。
+         */
         private var audioProcessingJob: Job? = null
 
         /** 音频采集互斥锁，防止 restartAudioProcessing 被并发调用导致状态错乱 */
@@ -1310,23 +1618,32 @@ class SubtitleManager
 
         /** 重启音频采集（切换音频源时调用） */
         private fun restartAudioProcessing() {
-            scope.launch(Dispatchers.IO) {
-                // 必须在加锁【之前】置 false：录音协程正持有 audioMutex 在 while(isRecording) 中循环，
-                // 若把 isRecording=false 放进 withLock 内部，本协程永远拿不到锁，而录音协程永远等不到
-                // 退出信号 → 死锁。与 stopAudioProcessing() 的 tryLock 分支同一思路（先置标志再取锁）。
-                isRecording = false
-                audioMutex.withLock {
-                    Log.i(LOG_TAG, "restartAudioProcessing: 开始重启音频采集")
-                    audioProcessingJob?.cancel()
-                    audioRecord?.stop()
-                    audioRecord?.release()
-                    audioRecord = null
-                    delay(100)
-                    // 直接在这里启动，复用 startAudioProcessing 的内部逻辑
-                    // 注意：不能调用 startAudioProcessing() 因为它也会尝试锁 mutex
-                    startAudioProcessingLocked()
+            // 先取旧句柄存局部变量：新协程被调度后就会读 audioProcessingJob，
+            // 若直接读字段可能读到自己（刚赋的新值）从而自杀。
+            val previousJob = audioProcessingJob
+            audioProcessingJob =
+                scope.launch(Dispatchers.IO) {
+                    // 必须在加锁【之前】置 false：录音协程正持有 audioMutex 在 while(isRecording) 中循环，
+                    // 若把 isRecording=false 放进 withLock 内部，本协程永远拿不到锁，而录音协程永远等不到
+                    // 退出信号 → 死锁。与 stopAudioProcessing() 的 tryLock 分支同一思路（先置标志再取锁）。
+                    isRecording = false
+                    audioMutex.withLock {
+                        Log.i(LOG_TAG, "restartAudioProcessing: 开始重启音频采集")
+                        previousJob?.cancel()
+                        // 快照后立即置空：避免与其它线程的释放流程重复 stop/release 同一实例，
+                        // 也避免 `audioRecord?.stop()` 的双重读取在字段被置空后抛 NPE。
+                        val oldRecord = audioRecord
+                        audioRecord = null
+                        // stop/release 在未 start 状态下会抛 IllegalStateException，必须容错，
+                        // 否则整个重启协程中断，音频再也起不来（与 reloadAsrModel 保持一致）。
+                        runCatching { oldRecord?.stop() }
+                        runCatching { oldRecord?.release() }
+                        delay(100)
+                        // 直接在这里启动，复用 startAudioProcessing 的内部逻辑
+                        // 注意：不能调用 startAudioProcessing() 因为它也会尝试锁 mutex
+                        startAudioProcessingLocked()
+                    }
                 }
-            }
         }
 
         /**
@@ -1490,91 +1807,119 @@ class SubtitleManager
             var debouncedVadState = false
             var asrPaused = false
 
-            while (isRecording) {
-                val shortsRead = record.read(audioBuffer, 0, audioBuffer.size)
-                if (!isRecording) break
-                if (shortsRead > 0) {
-                    System.arraycopy(audioBuffer, 0, accumulateBuffer, accumulateOffset, shortsRead)
-                    accumulateOffset += shortsRead
+            // 热路径缓存：引擎解析含 map 查找（AsrRoutingTable.forLanguage），不能每帧做
+            // （30ms/帧 ≈ 33Hz，旧实现每帧要算 2 次 isVoskMode + 取 2 次 currentAsrEngine）。
+            // 但语音输入模式会在录音过程中切换 inputModeEngine，故只在它变化时重新解析。
+            var lastInputModeEngine = inputModeEngine
+            var resolvedEngine: AsrEngine = currentAsrEngine
+            var resolvedIsVosk: Boolean = (inputModeEngine ?: currentAsrEngineType) == AsrEngineType.VOSK
 
-                    while (accumulateOffset >= FRAME_SIZE) {
-                        System.arraycopy(accumulateBuffer, 0, frameBuffer, 0, FRAME_SIZE)
-                        System.arraycopy(
-                            accumulateBuffer,
-                            FRAME_SIZE,
-                            accumulateBuffer,
-                            0,
-                            accumulateOffset - FRAME_SIZE,
-                        )
-                        accumulateOffset -= FRAME_SIZE
+            try {
+                while (isRecording) {
+                    if (inputModeEngine !== lastInputModeEngine) {
+                        lastInputModeEngine = inputModeEngine
+                        resolvedEngine = currentAsrEngine
+                        resolvedIsVosk = (inputModeEngine ?: currentAsrEngineType) == AsrEngineType.VOSK
+                    }
 
-                        // ===== VAD 检测 =====
-                        val vadResult = vadEngine.processAudio(frameBuffer)
-                        if (vadResult.hasSpeech) {
-                            vadSpeechFrames++
-                            vadSilentFrames = 0
-                            if (vadSpeechFrames >= VAD_SPEECH_DEBOUNCE_FRAMES && !debouncedVadState) {
-                                debouncedVadState = true
-                                _vadState.value = VadState.LISTENING
-                                if (asrPaused) {
-                                    Log.i(LOG_TAG, "VAD 语音恢复: reset ASR stream, 恢复送音")
-                                    currentAsrEngine.resetStream()
-                                    asrPaused = false
+                    val shortsRead = record.read(audioBuffer, 0, audioBuffer.size)
+                    if (!isRecording) break
+                    if (shortsRead > 0) {
+                        System.arraycopy(audioBuffer, 0, accumulateBuffer, accumulateOffset, shortsRead)
+                        accumulateOffset += shortsRead
+
+                        while (accumulateOffset >= FRAME_SIZE) {
+                            System.arraycopy(accumulateBuffer, 0, frameBuffer, 0, FRAME_SIZE)
+                            System.arraycopy(
+                                accumulateBuffer,
+                                FRAME_SIZE,
+                                accumulateBuffer,
+                                0,
+                                accumulateOffset - FRAME_SIZE,
+                            )
+                            accumulateOffset -= FRAME_SIZE
+
+                            // ===== VAD 检测 =====
+                            val vadResult = vadEngine.processAudio(frameBuffer)
+                            if (vadResult.hasSpeech) {
+                                vadSpeechFrames++
+                                vadSilentFrames = 0
+                                if (vadSpeechFrames >= VAD_SPEECH_DEBOUNCE_FRAMES && !debouncedVadState) {
+                                    debouncedVadState = true
+                                    _vadState.value = VadState.LISTENING
+                                    if (asrPaused) {
+                                        Log.i(LOG_TAG, "VAD 语音恢复: reset ASR stream, 恢复送音")
+                                        resolvedEngine.resetStream()
+                                        asrPaused = false
+                                    }
+                                }
+                            } else {
+                                vadSilentFrames++
+                                vadSpeechFrames = 0
+                                // Vosk 无 endpoint，靠 VAD 软静音补一个 final。
+                                // 必须提交「当前正在显示的那一行」（已确认 final + 未确认 partial）：
+                                // 旧实现提交 currentSourceBuffer（只含上一句 final），会把上一句重复上屏，
+                                // 而当前句永远等不到提交。
+                                // 且必须切回主线程执行：字幕缓冲由主线程的 Flow 收集器维护，
+                                // 在录音线程直接读写 StringBuilder 会与 append 竞争。
+                                if (resolvedIsVosk && vadSilentFrames == VAD_SOFT_SILENCE_FRAMES) {
+                                    scope.launch {
+                                        val pending = currentLineText()
+                                        if (pending.isNotBlank()) {
+                                            if (BuildConfig.DEBUG) {
+                                                Log.d(LOG_TAG, "VAD 软静音: 提交字幕 final, line='$pending'")
+                                            }
+                                            handleFinalResult(pending)
+                                        }
+                                    }
+                                }
+                                if (vadSilentFrames >= VAD_SILENT_DEBOUNCE_FRAMES && debouncedVadState) {
+                                    debouncedVadState = false
+                                    _vadState.value = VadState.SILENT
+                                }
+                                if (vadSilentFrames >= VAD_STOP_ASR_FRAMES && !asrPaused) {
+                                    Log.i(LOG_TAG, "VAD 长时间静音(2s): 暂停 ASR 送音")
+                                    asrPaused = true
                                 }
                             }
-                        } else {
-                            vadSilentFrames++
-                            vadSpeechFrames = 0
-                            val isVoskMode = (inputModeEngine ?: currentAsrEngineType) == AsrEngineType.VOSK
-                            if (isVoskMode &&
-                                vadSilentFrames == VAD_SOFT_SILENCE_FRAMES &&
-                                currentSourceBuffer.isNotEmpty()
-                            ) {
-                                Log.d(LOG_TAG, "VAD 软静音(480ms): 提交字幕 final, buffer='$currentSourceBuffer'")
-                                handleFinalResult(currentSourceBuffer.toString())
-                            }
-                            if (vadSilentFrames >= VAD_SILENT_DEBOUNCE_FRAMES && debouncedVadState) {
-                                Log.d(LOG_TAG, "VAD SILENT 触发: silentFrames=$vadSilentFrames")
-                                debouncedVadState = false
-                                _vadState.value = VadState.SILENT
-                            }
-                            if (vadSilentFrames >= VAD_STOP_ASR_FRAMES && !asrPaused) {
-                                Log.i(LOG_TAG, "VAD 长时间静音(2s): 暂停 ASR 送音")
-                                asrPaused = true
-                            }
-                        }
 
-                        // ===== ASR 送音(静音超 60 帧后跳过) =====
-                        if (!asrPaused) {
-                            currentAsrEngine.feedAudio(frameBuffer)
-                            currentAsrEngine.decodeAndGetResult()
-                        }
+                            // ===== ASR 送音(静音超 60 帧后跳过) =====
+                            if (!asrPaused) {
+                                resolvedEngine.feedAudio(frameBuffer)
+                                // Vosk 的 feedAudio 内部已完成 getPartialResult + 发射 partial，
+                                // 只有 Sherpa-ONNX 需要显式 decode 才会推进 partial/final。
+                                // 旧实现对两者都调 decode，Vosk 下等于每帧多做一次 JNI + 正则解析。
+                                if (!resolvedIsVosk) resolvedEngine.decodeAndGetResult()
+                            }
 
-                        // Vosk 模式 VAD 10s 超时清空字幕；Sherpa 模式 VAD 只做人声检测
-                        val isVoskMode = (inputModeEngine ?: currentAsrEngineType) == AsrEngineType.VOSK
-                        if (isVoskMode && !debouncedVadState && lastFinalTimeMs > 0) {
-                            val elapsed = System.currentTimeMillis() - lastFinalTimeMs
-                            if (elapsed > SUBTITLE_RETENTION_MS && currentSourceBuffer.isNotEmpty()) {
-                                currentSourceBuffer.setLength(0)
-                                currentTranslationBuffer.setLength(0)
-                                historyLines.clear()
-                                lastPartialTranslateLength = 0
-                                _subtitleState.value = _subtitleState.value.copy(lines = emptyList())
-                                lastFinalTimeMs = 0L
+                            // Vosk 模式 VAD 超时清空字幕；Sherpa 模式 VAD 只做人声检测。
+                            // 缓冲清理同样切回主线程；先在录音线程把 lastFinalTimeMs 归零避免重复触发。
+                            if (resolvedIsVosk && !debouncedVadState && lastFinalTimeMs > 0) {
+                                if (System.currentTimeMillis() - lastFinalTimeMs > SUBTITLE_RETENTION_MS) {
+                                    lastFinalTimeMs = 0L
+                                    scope.launch {
+                                        clearSubtitleBuffers()
+                                        _subtitleState.value = _subtitleState.value.copy(lines = emptyList())
+                                    }
+                                }
                             }
                         }
+                    } else if (shortsRead < 0) {
+                        delay(100)
                     }
-                } else if (shortsRead < 0) {
-                    delay(100)
                 }
+            } finally {
+                // 放在 finally：协程被 cancel（audioProcessingJob.cancel()）时也能可靠释放，
+                // 否则会残留未释放的 AudioRecord 与错误的 VAD 状态。
+                Log.i(LOG_TAG, "录音循环退出")
+                isRecording = false
+                val oldRecord = audioRecord
+                audioRecord = null
+                runCatching { oldRecord?.stop() }
+                runCatching { oldRecord?.release() }
+                _vadState.value = VadState.LISTENING
+                Log.i(LOG_TAG, "startAudioProcessingLocked: 资源已释放")
             }
-            Log.i(LOG_TAG, "录音循环退出")
-            isRecording = false
-            runCatching { audioRecord?.stop() }
-            runCatching { audioRecord?.release() }
-            audioRecord = null
-            _vadState.value = VadState.LISTENING
-            Log.i(LOG_TAG, "startAudioProcessingLocked: 资源已释放")
         }
 
         /**
@@ -1602,16 +1947,17 @@ class SubtitleManager
          * 线程安全：通过 audioMutex 确保 start/stop 原子性，防止并发调用导致多录音协程。
          */
         fun startAudioProcessing() {
-            scope.launch(Dispatchers.IO) {
-                audioMutex.withLock {
-                    if (isRecording) {
-                        Log.d(LOG_TAG, "startAudioProcessing: 已在录音，跳过")
-                        return@withLock
+            audioProcessingJob =
+                scope.launch(Dispatchers.IO) {
+                    audioMutex.withLock {
+                        if (isRecording) {
+                            Log.d(LOG_TAG, "startAudioProcessing: 已在录音，跳过")
+                            return@withLock
+                        }
+                        Log.i(LOG_TAG, "startAudioProcessing: 开始启动音频采集...")
+                        startAudioProcessingLocked()
                     }
-                    Log.i(LOG_TAG, "startAudioProcessing: 开始启动音频采集...")
-                    startAudioProcessingLocked()
                 }
-            }
         }
 
         fun stopAudioProcessing() {
@@ -1623,18 +1969,20 @@ class SubtitleManager
                         audioProcessingJob?.cancel()
                         // 翻译任务采用版本号管理，停止时递增版本号使在途结果失效
                         translationVersion.incrementAndGet()
-                        audioRecord?.stop()
-                        audioRecord?.release()
+                        val oldRecord = audioRecord
                         audioRecord = null
+                        // 容错：未 start 状态下 stop/release 会抛 IllegalStateException
+                        runCatching { oldRecord?.stop() }
+                        runCatching { oldRecord?.release() }
                         _vadState.value = VadState.LISTENING
-                        // 停止时清空字幕状态
-                        currentSourceBuffer.setLength(0)
-                        currentTranslationBuffer.setLength(0)
-                        historyLines.clear()
-                        lastPartialTranslateLength = 0
                         lastFinalTimeMs = 0L
-                        _subtitleState.value = _subtitleState.value.copy(lines = emptyList())
-                        _isTranslating.value = false
+                        // 停止时清空字幕状态。字幕缓冲由主线程的 ASR Flow 收集器维护，
+                        // 切回主线程清理，避免与在途 append 竞争（否则可能串字或抛越界）。
+                        scope.launch {
+                            clearSubtitleBuffers()
+                            _subtitleState.value = _subtitleState.value.copy(lines = emptyList())
+                            _isTranslating.value = false
+                        }
                         Log.i(LOG_TAG, "stopAudioProcessing: 音频采集已停止，字幕已清空")
                     } finally {
                         audioMutex.unlock()
@@ -1713,6 +2061,19 @@ class SubtitleManager
         companion object {
             private const val LOG_TAG = "SubtitleManager"
 
+            /** 下载计时刷新间隔：1s（只更新一个 Long 字段，Compose 重绘成本可忽略） */
+            private const val PREP_ELAPSED_TICK_MS = 1_000L
+
+            /**
+             * 是否含至少一个「有意义」字符（字母或数字）。
+             *
+             * CJK 汉字在 [Character.isLetterOrDigit] 下判定为 true，因此中文句子不受影响；
+             * 全角/半角标点（"？"、"。"、" ，"）返回 false。
+             * 用于过滤 ASR 在噪声/静音段吐出的纯标点 final —— 这类内容会白白触发一次
+             * 翻译请求并写进历史记录（实测历史里确实出现过 "？"、"。"、" ，" 三条垃圾行）。
+             */
+            private fun String.hasMeaningfulContent(): Boolean = any { it.isLetterOrDigit() }
+
             /** 采样率：16kHz，Vosk 和 WebRTC VAD 通用采样率 */
             private const val SAMPLE_RATE = 16000
 
@@ -1741,14 +2102,37 @@ class SubtitleManager
             /** 翻译防抖延迟（毫秒）：避免短时间内重复触发翻译请求 */
             private const val TRANSLATE_DEBOUNCE_MS = 200L
 
-            /** 轻量润色超时（毫秒）：超时则跳过润色，直接翻译 */
+            /**
+             * 流式翻译首 token 超时（TTFT，毫秒）。
+             *
+             * 语义：从发起请求到「模型吐出第一个 token」的最长等待。超过则判定链路不通。
+             * 15s 覆盖了「代理握手慢 + 上游排队」的最坏情况，同时远短于旧实现让用户干等的时长。
+             * 注意：这是**等待开始**的预算，与「整条流总时长」无关 —— 一旦开始吐字就不再受它约束。
+             */
+            private const val STREAM_FIRST_TOKEN_TIMEOUT_MS = 15_000L
+
+            /**
+             * 轻量润色超时（毫秒，保留常量以免调用方失配）。
+             * @deprecated 流式改造后已不再作为「超时则跳过润色」的分支条件，
+             *   润色与翻译是合并的单次流式调用，见 [translateWithPolishAndContext]。
+             */
             private const val POLISH_TIMEOUT_MS = 2000L
 
-            /** 翻译超时（毫秒）：智能模式润色+翻译合并调用的总超时 */
+            /**
+             * 翻译超时（毫秒，保留常量以免调用方失配）。
+             * @deprecated 已由 [STREAM_FIRST_TOKEN_TIMEOUT_MS] + 空闲超时替代，不再作总时长上限。
+             */
             private const val TRANSLATE_TIMEOUT_MS = 5000L
 
             /** 轻量润色最小长度：少于此字符不润色，省资源 */
             private const val MIN_POLISH_LENGTH = 5
+
+            /**
+             * 流式译文的最小 UI 刷新间隔（毫秒）。
+             * 逐 token 直接刷新会产生大量状态变更（悬浮窗虽已节流，但状态分发本身有成本），
+             * 因此合并到 100ms 一次，肉眼已是"逐字显示"。
+             */
+            private const val STREAM_UI_MIN_INTERVAL_MS = 100L
 
             /** 字幕文本最大留存时间（毫秒），Vosk 模式下超时后自动清空 */
             private const val SUBTITLE_RETENTION_MS = 10_000L

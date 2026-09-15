@@ -29,5 +29,4 @@ data class SubtitleState(
     val displayMode: DisplayMode = DisplayMode.BILINGUAL,
     val sourceLanguage: String = "en",
     val targetLanguage: String = "zh",
-    val asrEngineType: AsrEngineType = AsrEngineType.VOSK,
 )

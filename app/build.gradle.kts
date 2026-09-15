@@ -20,9 +20,15 @@ android {
         applicationId = "io.github.ztfang.eye"
         minSdk = 24
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.3.0"
+        versionCode = 7
+        versionName = "1.3.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // 支持 arm64-v8a + armeabi-v7a。
+        //
+        // sherpa-onnx / onnxruntime 的 native 库已补全 32 位变体
+        // （engine/src/main/jniLibs/armeabi-v7a/）。
+        // 尽管如此，engine 初始化处仍保留 catch (Throwable) 作为兜底防护，
+        // 防止任何未来库缺失或加载异常导致进程崩溃。
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
     buildTypes {

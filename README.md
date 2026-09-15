@@ -78,17 +78,17 @@ Android 实时语音翻译应用：全局悬浮字幕 + 多引擎 ASR + 多引�
 - JDK 17+
 - Android SDK 36
 - minSdk 24 (Android 7.0)
-- NDK（编译原生库）
 
 ## 原生库
 
 | 库 | 用途 | 来源 |
 |----|------|------|
-| `eye_native` | AGC 音频处理 JNI | `app/src/main/cpp/` |
-| sherpa-onnx-jni | Sherpa-ONNX JNI | 预编译 `jniLibs/` |
-| onnxruntime | ONNX 推理 | 预编译 `jniLibs/` |
+| sherpa-onnx-jni | Sherpa-ONNX JNI | 预编译 `engine/src/main/jniLibs/arm64-v8a/` |
+| onnxruntime | ONNX 推理 | 预编译 `engine/src/main/jniLibs/arm64-v8a/` |
 | vosk-android | Vosk ASR | Maven |
 | Silero VAD | 语音活动检测 | `assets/silero_vad.onnx` |
+
+> 仅支持 **arm64-v8a**：sherpa-onnx / onnxruntime 只提供了 arm64 的预编译库。
 
 ## 联系方式
 

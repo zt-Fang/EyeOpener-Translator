@@ -8,6 +8,7 @@ import com.k2fsa.sherpa.onnx.OnlineStream
 import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 import io.github.ztfang.eye.domain.engine.asr.AsrEngine
 import io.github.ztfang.eye.domain.model.SherpaOnnxModel
+import io.github.ztfang.eye.engine.isCoroutineCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -53,6 +54,15 @@ class SherpaOnnxAsrEngine
         /** Nemotron per-stream language（仅 Nemotron 生效，其余模型忽略） */
         @Volatile
         private var currentLanguage: String = "auto"
+
+        /**
+         * PCM16 → float32 归一化缓冲（复用，避免每帧分配）。
+         *
+         * 长度必须与传入帧严格一致：JNI 的 acceptWaveform 按数组长度取样本，
+         * 复用比帧更长的数组会把上一帧的尾巴当成新音频送进去。
+         * 帧长恒为 480（30ms）时只分配一次。
+         */
+        private var floatBuffer = FloatArray(0)
 
         /** partial/final 结果流，供外部收集 */
         val partialResultFlow =
@@ -139,7 +149,11 @@ class SherpaOnnxAsrEngine
 
                         Log.i(TAG, "init: Sherpa-ONNX recognizer ready, model=$modelPath, type=${model.modelType}")
                         Result.success(Unit)
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
+                        // Throwable 而非 Exception：构造 OnlineRecognizer 会触发
+                        // System.loadLibrary("sherpa-onnx-jni")，native 库缺失时抛的是
+                        // UnsatisfiedLinkError（属 Error），catch(Exception) 捕不到 → 崩溃。
+                        if (e.isCoroutineCancellation()) throw e
                         Log.e(TAG, "init failed: ${e.message}", e)
                         releaseInternal()
                         Result.failure(e)
@@ -198,17 +212,15 @@ class SherpaOnnxAsrEngine
         }
 
         override fun feedAudio(samples: ShortArray) {
-            // PCM16 → float32 [-1, 1]
-            val floatSamples =
-                FloatArray(samples.size) { i ->
-                    samples[i] / 32768.0f
-                }
-
             synchronized(lock) {
                 val s = stream ?: return
-                val rec = recognizer ?: return
                 try {
-                    s.acceptWaveform(floatSamples, SAMPLE_RATE)
+                    // 复用归一化缓冲：帧长不变时零分配（旧实现每帧 new FloatArray，33 次/秒）
+                    if (floatBuffer.size != samples.size) floatBuffer = FloatArray(samples.size)
+                    for (i in samples.indices) {
+                        floatBuffer[i] = samples[i] / 32768.0f
+                    }
+                    s.acceptWaveform(floatBuffer, SAMPLE_RATE)
                 } catch (e: Exception) {
                     Log.e(TAG, "feedAudio failed: ${e.message}", e)
                 }
@@ -250,18 +262,6 @@ class SherpaOnnxAsrEngine
             }
         }
 
-        override fun isEndpoint(): Boolean {
-            synchronized(lock) {
-                val rec = recognizer ?: return false
-                val s = stream ?: return false
-                return try {
-                    rec.isEndpoint(s)
-                } catch (_: Exception) {
-                    false
-                }
-            }
-        }
-
         override fun resetStream() {
             synchronized(lock) {
                 val rec = recognizer ?: return
@@ -274,16 +274,6 @@ class SherpaOnnxAsrEngine
                 }
             }
         }
-
-        /** 检查模型文件是否完整 */
-        fun isModelComplete(
-            modelDir: File,
-            model: SherpaOnnxModel,
-        ): Boolean =
-            File(modelDir, model.encoderFile).exists() &&
-                File(modelDir, model.decoderFile).exists() &&
-                File(modelDir, model.joinerFile).exists() &&
-                File(modelDir, model.tokensFile).exists()
 
         companion object {
             private const val TAG = "SherpaOnnxAsrEngine"

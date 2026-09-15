@@ -9,6 +9,9 @@ import io.github.ztfang.eye.domain.model.TranslationEngine
 import io.github.ztfang.eye.engine.asr.SherpaOnnxAsrEngine
 import io.github.ztfang.eye.engine.asr.VoskAsrEngine
 import io.github.ztfang.eye.engine.asr.VoskLanguageMap
+import io.github.ztfang.eye.engine.translation.TranslationPrepException
+import io.github.ztfang.eye.engine.translation.TranslationPrepFailureKind
+import io.github.ztfang.eye.engine.translation.cloud.CloudTranslationEngine
 import io.github.ztfang.eye.engine.translation.llm.LLMClient
 import io.github.ztfang.eye.engine.translation.mlkit.MlKitTranslationEngine
 import kotlinx.coroutines.Dispatchers
@@ -30,43 +33,61 @@ class ModelPreparer
         private val voskEngine: VoskAsrEngine,
         private val sherpaEngine: SherpaOnnxAsrEngine,
         private val llmClient: LLMClient,
+        private val cloudEngine: CloudTranslationEngine,
         private val modelRepository: io.github.ztfang.eye.domain.repository.ModelRepository,
     ) {
         /**
-         * 预热翻译后端：LOCAL/CLOUD 校验 Google Play Services 后预热 ML Kit；AI 仅校验 LLM 配置。
-         * sourceLanguage 为空时跳过预热。
+         * 预热翻译后端。
+         * - **LOCAL**：校验 Google Play Services 后预热 ML Kit 离线模型（首次需联网下载），
+         *   过程中通过 [onPhase] 上报阶段，供 UI 显示非模态状态条。
+         * - **CLOUD**：云端推理在服务端完成，本地不需要任何模型，**只校验 API Key**。
+         * - **AI**：仅校验 LLM 配置。
+         *
+         * 历史 bug：CLOUD 曾与 LOCAL 合并走 `prepareMlKitPair`，导致用户选云端翻译时
+         * 仍被要求下载本地离线模型，下载失败即弹"翻译模型未就绪"。已拆开。
          */
         suspend fun prepareTranslation(
             engine: TranslationEngine,
             sourceLanguage: String = "",
             targetLanguage: String = "",
+            onPhase: (TranslationPrepPhase) -> Unit = {},
         ): Result<Unit> =
             when (engine) {
-                TranslationEngine.LOCAL, TranslationEngine.CLOUD -> {
-                    // CLOUD 暂复用 ML Kit
+                TranslationEngine.LOCAL -> {
                     val play =
                         GoogleApiAvailability
                             .getInstance()
                             .isGooglePlayServicesAvailable(context)
-                    if (play != com.google.android.gms.common.ConnectionResult.SUCCESS) {
-                        return Result.failure(
-                            IllegalStateException(
-                                "Google Play Services 不可用,需要它来下载翻译模型",
-                            ),
-                        )
-                    }
-                    if (sourceLanguage.isNotEmpty() && targetLanguage.isNotEmpty()) {
-                        if (!mlKitEngine.supportsLanguage(sourceLanguage, targetLanguage)) {
-                            return Result.failure(
-                                IllegalStateException(
-                                    "ML Kit 不支持语言对 $sourceLanguage → $targetLanguage",
+                    when {
+                        play != com.google.android.gms.common.ConnectionResult.SUCCESS -> {
+                            Result.failure(
+                                TranslationPrepException(
+                                    kind = TranslationPrepFailureKind.GMS_UNAVAILABLE,
+                                    detail = "Google Play Services 不可用（状态码 $play），本地离线翻译依赖它下载模型",
                                 ),
                             )
                         }
-                        // 首次下载需联网
-                        return prepareMlKitPair(sourceLanguage, targetLanguage)
+                        sourceLanguage.isEmpty() || targetLanguage.isEmpty() -> {
+                            // 语言尚未确定，跳过预热；待语言确定后由 ensureModelsLoaded 触发
+                            onPhase(TranslationPrepPhase.IDLE)
+                            Result.success(Unit)
+                        }
+                        !mlKitEngine.supportsLanguage(sourceLanguage, targetLanguage) -> {
+                            Result.failure(
+                                TranslationPrepException(
+                                    kind = TranslationPrepFailureKind.UNSUPPORTED_LANGUAGE,
+                                    detail = "ML Kit 不支持语言对 $sourceLanguage → $targetLanguage",
+                                ),
+                            )
+                        }
+                        else -> {
+                            prepareMlKitPair(sourceLanguage, targetLanguage, onPhase)
+                        }
                     }
-                    Result.success(Unit)
+                }
+                TranslationEngine.CLOUD -> {
+                    // 云端翻译在服务端推理，本地无需模型文件，绝不触发 ML Kit 下载
+                    cloudEngine.validateConfig()
                 }
                 TranslationEngine.AI -> {
                     // 仅校验配置，不预下载
@@ -248,11 +269,15 @@ class ModelPreparer
 
         /**
          * 预热 ML Kit 语言对模型（首次需联网下载 30-100MB）。
-         * 通过翻译占位文本触发内部 downloadModelIfNeeded 完成下载。
+         *
+         * 委托 [MlKitTranslationEngine.preparePair]：命中本地则秒回；未命中才下载，
+         * 且下载超时后会继续轮询等待 GMS 完成，避免把"正在下载"误报为失败。
+         * 不再用 `translate("hello")` 蹭下载路径——那会白跑一次推理，且错误信息不清晰。
          */
         suspend fun prepareMlKitPair(
             sourceLanguage: String,
             targetLanguage: String,
+            onPhase: (TranslationPrepPhase) -> Unit = {},
         ): Result<Unit> =
             withContext(Dispatchers.IO) {
                 val play =
@@ -261,41 +286,22 @@ class ModelPreparer
                         .isGooglePlayServicesAvailable(context)
                 if (play != com.google.android.gms.common.ConnectionResult.SUCCESS) {
                     return@withContext Result.failure(
-                        IllegalStateException(
-                            "Google Play Services 不可用,本地翻译需要它来下载模型",
+                        TranslationPrepException(
+                            kind = TranslationPrepFailureKind.GMS_UNAVAILABLE,
+                            detail = "Google Play Services 不可用（状态码 $play），本地离线翻译依赖它下载模型",
                         ),
                     )
                 }
                 if (!mlKitEngine.supportsLanguage(sourceLanguage, targetLanguage)) {
                     return@withContext Result.failure(
-                        IllegalStateException(
-                            "ML Kit 不支持语言对 $sourceLanguage → $targetLanguage",
+                        TranslationPrepException(
+                            kind = TranslationPrepFailureKind.UNSUPPORTED_LANGUAGE,
+                            detail = "ML Kit 不支持语言对 $sourceLanguage → $targetLanguage",
                         ),
                     )
                 }
-                // translate() 内部会触发 downloadModelIfNeeded,用一段空文本预热即可
-                mlKitEngine
-                    .translate("hello", sourceLanguage, targetLanguage)
-                    .map { Unit }
+                mlKitEngine.preparePair(sourceLanguage, targetLanguage, onPhase)
             }
-
-        /** 从 assets 拷贝文件；已存在非空则跳过，失败返回 false */
-        private fun copyFromAssetsIfPresent(
-            assetName: String,
-            dest: File,
-        ): Boolean {
-            if (dest.exists() && dest.length() > 0) return true
-            return try {
-                context.assets.open(assetName).use { input ->
-                    dest.parentFile?.mkdirs()
-                    dest.outputStream().use { output -> input.copyTo(output) }
-                }
-                true
-            } catch (e: Exception) {
-                Log.w(TAG, "Asset $assetName missing: ${e.message}")
-                false
-            }
-        }
 
         private companion object {
             const val TAG = "ModelPreparer"
@@ -307,3 +313,17 @@ class ModelPreparer
             const val SHERPA_ONNX_MODEL_DIR = "models/sherpa-onnx"
         }
     }
+
+/**
+ * 翻译模型准备阶段，供 UI 呈现非模态状态条。
+ * - [IDLE]：无需处理（语言尚未确定等）
+ * - [CHECKING]：正在查询本地是否已有模型
+ * - [DOWNLOADING]：正在下载离线模型（首次约 30-100MB，需 GMS 且网络可达 Google）
+ * - [READY]：模型就绪，可离线翻译
+ */
+enum class TranslationPrepPhase {
+    IDLE,
+    CHECKING,
+    DOWNLOADING,
+    READY,
+}

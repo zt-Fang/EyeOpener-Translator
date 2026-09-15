@@ -6,8 +6,6 @@ import kotlinx.coroutines.flow.Flow
 interface HistoryRepository {
     fun getAllRecords(): Flow<List<HistoryRecord>>
 
-    fun getFavoriteRecords(): Flow<List<HistoryRecord>>
-
     suspend fun insertRecord(record: HistoryRecord)
 
     suspend fun updateRecord(record: HistoryRecord)

@@ -2,6 +2,8 @@ package io.github.ztfang.eye.engine.asr
 
 import android.util.Log
 import io.github.ztfang.eye.domain.engine.asr.AsrEngine
+import io.github.ztfang.eye.engine.BuildConfig
+import io.github.ztfang.eye.engine.isCoroutineCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -73,7 +75,11 @@ class VoskAsrEngine
                         loadedModelPath = modelPath
                         Log.i(TAG, "init: recognizer ready, language=$currentLanguage")
                         Result.success(Unit)
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
+                        // Throwable 而非 Exception：Model/Recognizer 会通过 JNA 加载
+                        // libvosk.so，native 库缺失时抛 UnsatisfiedLinkError（属 Error），
+                        // catch(Exception) 捕不到 → 崩溃。
+                        if (e.isCoroutineCancellation()) throw e
                         Log.e(TAG, "init failed: ${e.message}", e)
                         releaseInternal()
                         Result.failure(e)
@@ -138,13 +144,14 @@ class VoskAsrEngine
                     val hasFinal = rec.acceptWaveForm(samples, samples.size)
                     val partialText = parsePartial(rec.getPartialResult())
                     if (partialText.isNotEmpty()) {
-                        Log.d(TAG, "feedAudio: partial=\"$partialText\"")
+                        // 热路径：每帧都会走到这里，release 构建下不打正文日志
+                        if (BuildConfig.DEBUG) Log.d(TAG, "feedAudio: partial=\"$partialText\"")
                         partialResultFlow.tryEmit(partialText)
                     }
                     if (hasFinal) {
                         val finalText = parseText(rec.getResult())
                         if (finalText.isNotEmpty()) {
-                            Log.d(TAG, "feedAudio: final=\"$finalText\"")
+                            if (BuildConfig.DEBUG) Log.d(TAG, "feedAudio: final=\"$finalText\"")
                             finalResultFlow.tryEmit(finalText)
                         }
                     }
@@ -154,18 +161,14 @@ class VoskAsrEngine
             }
         }
 
-        override fun decodeAndGetResult(): String {
-            synchronized(lock) {
-                val rec = recognizer ?: return ""
-                return try {
-                    parsePartial(rec.getPartialResult())
-                } catch (e: Exception) {
-                    ""
-                }
-            }
-        }
-
-        override fun isEndpoint(): Boolean = false
+        /**
+         * Vosk 不需要显式驱动解码：[feedAudio] 内部已 acceptWaveForm，
+         * 并通过 partial/final Flow 推送结果。
+         *
+         * 旧实现这里又调一次 getPartialResult 并做正则解析，但返回值被调用方丢弃，
+         * 等于每帧白做一次 JNI + 正则。保留空实现仅为满足接口。
+         */
+        override fun decodeAndGetResult(): String = ""
 
         override fun resetStream() {
             synchronized(lock) {

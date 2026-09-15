@@ -8,8 +8,7 @@ import com.k2fsa.sherpa.onnx.VadModelConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.ztfang.eye.domain.engine.vad.VADEngine
 import io.github.ztfang.eye.domain.engine.vad.VadResult
-import io.github.ztfang.eye.domain.engine.vad.VoiceSegment
-import io.github.ztfang.eye.domain.model.AudioData
+import io.github.ztfang.eye.engine.isCoroutineCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -20,7 +19,7 @@ import javax.inject.Singleton
 /**
  * Silero VAD 引擎（sherpa-onnx，silero_vad.onnx 643KB，assets 内置免下载）。
  * Silero 窗口 512 samples(32ms)，项目帧 480 samples(30ms)，内部缓冲攒够一窗再送。
- * 帧级阈值常量见 companion（计数器由 SubtitleManager 维护）。
+ * 只提供逐帧判定 [processAudio]；静音/语音的帧计数与切句阈值由 SubtitleManager 维护。
  */
 @Singleton
 class SileroVadEngine
@@ -37,6 +36,21 @@ class SileroVadEngine
         /** PCM float 缓冲区(累积到 windowSize 才送入 VAD) */
         private val buffer = FloatArray(WINDOW_SIZE * 2)
         private var bufferOffset = 0
+
+        /**
+         * 归一化缓冲（复用，避免每帧分配）。
+         * 录音帧 480 samples、每 30ms 一帧 ≈ 33 次/秒；原实现每帧 new 一次 FloatArray，
+         * 每个 VAD 窗口再 new 一次，全部落在录音线程上。
+         */
+        private var normalized = FloatArray(FRAME_SAMPLES)
+
+        /** 送入 VAD 的窗口缓冲（复用）。acceptWaveform 在 JNI 侧拷贝数据，可安全复用。 */
+        private val windowBuffer = FloatArray(WINDOW_SIZE)
+
+        /** 帧长变化时按需扩容归一化缓冲。 */
+        private fun ensureNormalizedCapacity(size: Int) {
+            if (normalized.size < size) normalized = FloatArray(size)
+        }
 
         /** 当前是否检测到语音(基于最近一次 acceptWaveform 结果) */
         @Volatile
@@ -108,7 +122,13 @@ class SileroVadEngine
                         speechDetected = false
                         Log.i(TAG, "init: Silero VAD 创建成功, window=$WINDOW_SIZE, threshold=$THRESHOLD")
                         Result.success(Unit)
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
+                        // Throwable 而非 Exception：构造 Vad 会触发
+                        // System.loadLibrary("sherpa-onnx-jni")，native 库缺失时抛的是
+                        // UnsatisfiedLinkError（属 Error），catch(Exception) 捕不到 → 崩溃。
+                        // 注意本函数在 App 启动阶段（SubtitleManager.init）就会被调用，
+                        // 所以漏掉这里等于"一开就崩"。
+                        if (e.isCoroutineCancellation()) throw e
                         Log.e(TAG, "init failed: ${e.message}", e)
                         modelReady = false
                         Result.failure(e)
@@ -135,97 +155,37 @@ class SileroVadEngine
          */
         override fun processAudio(audioData: ShortArray): VadResult {
             // VAD 未就绪时回退为"始终判定有语音"，避免 asrPaused 永不送音导致 ASR 哑火
-            val v =
-                vad ?: return VadResult(
-                    hasSpeech = true,
-                    noSpeech = false,
-                    audioData = audioData,
-                )
+            val v = vad ?: return VadResult(hasSpeech = true)
 
             synchronized(lock) {
                 try {
-                    val floatData =
-                        FloatArray(audioData.size) { i ->
-                            audioData[i] / 32768.0f
-                        }
+                    // 复用归一化缓冲，避免每帧分配（33 次/秒）
+                    ensureNormalizedCapacity(audioData.size)
+                    for (i in audioData.indices) {
+                        normalized[i] = audioData[i] / 32768.0f
+                    }
 
                     var inputOffset = 0
-                    while (inputOffset < floatData.size) {
-                        val copyLen = minOf(WINDOW_SIZE - bufferOffset, floatData.size - inputOffset)
-                        System.arraycopy(floatData, inputOffset, buffer, bufferOffset, copyLen)
+                    while (inputOffset < audioData.size) {
+                        val copyLen = minOf(WINDOW_SIZE - bufferOffset, audioData.size - inputOffset)
+                        System.arraycopy(normalized, inputOffset, buffer, bufferOffset, copyLen)
                         bufferOffset += copyLen
                         inputOffset += copyLen
 
                         if (bufferOffset >= WINDOW_SIZE) {
-                            val window = FloatArray(WINDOW_SIZE) { i -> buffer[i] }
-                            v.acceptWaveform(window)
+                            // 复用窗口缓冲：acceptWaveform 在 JNI 侧拷贝，不持有引用
+                            System.arraycopy(buffer, 0, windowBuffer, 0, WINDOW_SIZE)
+                            v.acceptWaveform(windowBuffer)
                             speechDetected = v.isSpeechDetected()
                             bufferOffset = 0
                         }
                     }
 
-                    return VadResult(
-                        hasSpeech = speechDetected,
-                        noSpeech = !speechDetected,
-                        audioData = audioData,
-                    )
+                    return VadResult(hasSpeech = speechDetected)
                 } catch (e: Exception) {
                     Log.e(TAG, "processAudio failed: ${e.message}", e)
                     // 异常时同样回退为"始终有语音"，保证 ASR 持续送音
-                    return VadResult(
-                        hasSpeech = true,
-                        noSpeech = false,
-                        audioData = audioData,
-                    )
-                }
-            }
-        }
-
-        override fun isVoice(audio: AudioData): Boolean {
-            val result = processAudio(audio.samples)
-            return result.hasSpeech
-        }
-
-        /** 整段送 VAD，用内置 segment 切分 */
-        override fun detectVoiceSegments(audio: AudioData): List<VoiceSegment> {
-            val v = vad ?: return emptyList()
-            synchronized(lock) {
-                try {
-                    v.reset()
-                    val floatData =
-                        FloatArray(audio.samples.size) { i ->
-                            audio.samples[i] / 32768.0f
-                        }
-                    var pos = 0
-                    while (pos + WINDOW_SIZE <= floatData.size) {
-                        val window = floatData.copyOfRange(pos, pos + WINDOW_SIZE)
-                        v.acceptWaveform(window)
-                        pos += WINDOW_SIZE
-                    }
-                    v.flush()
-                    val segments = mutableListOf<VoiceSegment>()
-                    while (!v.empty()) {
-                        val seg = v.front()
-                        segments.add(VoiceSegment(seg.start, seg.start + seg.samples.size, true))
-                        v.pop()
-                    }
-                    return segments
-                } catch (e: Exception) {
-                    Log.e(TAG, "detectVoiceSegments failed: ${e.message}", e)
-                    return emptyList()
-                }
-            }
-        }
-
-        /** 重置 VAD 内部状态(清空隐状态和缓冲区) */
-        override fun reset() {
-            synchronized(lock) {
-                try {
-                    vad?.reset()
-                    bufferOffset = 0
-                    speechDetected = false
-                } catch (e: Exception) {
-                    Log.e(TAG, "reset failed: ${e.message}", e)
+                    return VadResult(hasSpeech = true)
                 }
             }
         }
@@ -245,6 +205,13 @@ class SileroVadEngine
             /** Silero VAD 窗口大小(512 samples = 32ms) */
             const val WINDOW_SIZE = 512
 
+            /**
+             * 录音帧长（samples）。
+             * SubtitleManager 以 480 samples（30ms）为一帧调用 [processAudio]，
+             * 与 [WINDOW_SIZE] 不等，故内部需要攒够一窗才送 VAD。
+             */
+            const val FRAME_SAMPLES = 480
+
             /** 语音检测阈值(0.0-1.0, 高于阈值视为语音) */
             const val THRESHOLD = 0.5f
 
@@ -256,20 +223,5 @@ class SileroVadEngine
 
             /** 最大语音时长(秒),超过此值强制切分 */
             const val MAX_SPEECH_DURATION = 5.0f
-
-            // ========== VAD 帧参数(32ms/帧, 供调用方 SubtitleManager 使用) ==========
-            // 注意: 这些是配置常量, 实际计数器在 SubtitleManager 中维护
-
-            /** speech start: 连续 5 帧语音 (160ms) 判定为开始说话 */
-            const val SPEECH_START_FRAMES = 5
-
-            /** soft silence: 连续 15 帧静音 (480ms) 触发软静音 */
-            const val SOFT_SILENCE_FRAMES = 15
-
-            /** subtitle commit: 连续 25~32 帧静音 (800~1024ms) 提交字幕 */
-            const val SUBTITLE_COMMIT_FRAMES = 28 // 取中间值约 896ms
-
-            /** stop ASR: 连续 60 帧静音 (~2s) 停止送入 ASR */
-            const val STOP_ASR_FRAMES = 60
         }
     }

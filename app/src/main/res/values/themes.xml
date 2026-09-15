@@ -1,8 +1,10 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.Eye" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    <!-- 应用主题：仅浅色（Light），不跟随系统深色模式。
+         配合 ui/theme/EyeTheme.kt 的浅色 ColorScheme 使用。
+         说明：此前父主题为 Theme.Material3.DayNight.NoActionBar，会随系统深色切换窗口主题，
+         而 Compose 侧与大量硬编码浅色组件无法同步，导致「浅色文字压浅色底」不可读，故改为 Light。 -->
+    <style name="Base.Theme.Eye" parent="Theme.Material3.Light.NoActionBar">
+        <!-- 浅色主题定制项 -->
     </style>
 
     <style name="Theme.Eye" parent="Base.Theme.Eye" />
