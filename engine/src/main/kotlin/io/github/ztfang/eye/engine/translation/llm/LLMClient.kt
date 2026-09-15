@@ -24,9 +24,9 @@ import io.github.ztfang.eye.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Call
@@ -414,7 +414,7 @@ class LLMClient
             CONFIG_LEVEL_MARKERS.any { detail.contains(it, ignoreCase = true) } ||
                 HTTP_STATUS_ERROR_REGEX.containsMatchIn(detail)
 
-    private fun openAiChatStream(
+        private fun openAiChatStream(
             url: String,
             apiKey: String,
             model: String,
