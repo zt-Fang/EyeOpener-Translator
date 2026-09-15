@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -12,6 +14,27 @@ kotlin {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
+
+// 发布签名配置（可选，不落密文到仓库）。
+//
+// 在仓库根目录放一份 keystore.properties（已 gitignore）即可启用 release 签名：
+//   storeFile=eye-release.jks        # 相对仓库根目录，或绝对路径
+//   storePassword=...
+//   keyAlias=eye
+//   keyPassword=...
+//
+// 文件不存在时 release 包保持未签名（与历史行为一致），CI 仍可只做构建验证。
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+// 取值提到 DSL 之外：signingConfig 作用域里的 get 会解析到 ExtensionContainer.get
+val releaseStoreFile = keystoreProperties.getProperty("storeFile")
+val releaseStorePassword = keystoreProperties.getProperty("storePassword")
+val releaseKeyAlias = keystoreProperties.getProperty("keyAlias")
+val releaseKeyPassword = keystoreProperties.getProperty("keyPassword")
 
 android {
     namespace = "io.github.ztfang.eye"
@@ -31,6 +54,16 @@ android {
         // 防止任何未来库缺失或加载异常导致进程崩溃。
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = releaseStoreFile?.let { rootProject.file(it) }
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             // 开源版本：开启 R8 缩减+优化（移除未用代码/资源），关闭重度混淆
@@ -38,6 +71,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // 未配置 keystore.properties 时为 null → 沿用未签名行为
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             isMinifyEnabled = false
