@@ -131,7 +131,7 @@ Requirements: Android Studio Ladybug+ / JDK 17+ / Android SDK 36.
 
 ## Contact
 
-- Email: 874047656@qq.com
+- Email: t874047656@gmail.com
 - GitHub Issues: <https://github.com/zt-Fang/EyeOpener-Translator/issues>
 
 ## Acknowledgements
