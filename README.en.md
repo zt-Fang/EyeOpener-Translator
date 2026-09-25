@@ -14,17 +14,11 @@ EyeOpener is a real-time speech translation app for Android. The original speech
 
 ## What you can do with it
 
-**Watch videos and livestreams in other languages**
-YouTube, foreign news, TED talks, unsubtitled shows — audio keeps playing, subtitles keep up.
-
-**Attend meetings and online classes**
-Foreign-language calls, lectures and courses, with the translation right next to what you're hearing.
-
-**Play games**
-Foreign-language dialogue and voice chat from other regions, without leaving the game.
-
-**Listen to podcasts and audiobooks**
-No picture needed — audio alone works just fine.
+- 📺 **Watch videos and livestreams in other languages**: YouTube, foreign news, TED talks, unsubtitled shows — audio keeps playing, subtitles keep up.
+- 📞 **Make audio and video calls**: cross-language calls, overseas support lines, voice chat rooms — see the translation of whatever the other person says.
+- 🎓 **Attend meetings and online classes**: foreign-language meetings, lectures and courses, with the translation right next to what you're hearing.
+- 🎮 **Play games**: foreign-language dialogue and voice chat from other regions, without leaving the game.
+- 🎧 **Listen to podcasts and audiobooks**: no picture needed — audio alone works just fine.
 
 The floating subtitle layer doesn't belong to any particular player. It sits above the system: **whichever app you use, it works.**
 
