@@ -206,7 +206,10 @@
     <string name="api_enter_key">Please enter API Key</string>
     <string name="api_enter_url">Please enter Base URL</string>
     <string name="api_enter_model">Please enter model name</string>
+    <string name="api_test_need_input">Please fill in the API Key, Base URL and model name first</string>
     <string name="api_testing">Verifying API connection…</string>
+    <string name="api_test_connection">Test connection (optional)</string>
+    <string name="api_test_ok">Connection OK ✓ (config saved, ready to use)</string>
     <string name="api_saved">Saved ✓</string>
     <string name="api_verify_failed">Verification failed: %1$s</string>
     <string name="api_config_tip">Config is saved locally. Uninstalling or clearing data will erase it. To reconfigure, overwrite and save, or clear below and refill.</string>
