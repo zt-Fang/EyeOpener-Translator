@@ -449,6 +449,13 @@ class FloatingSubtitleService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
             Log.i(TAG, "promoteToForeground: 低版本 Android，直接 startForeground")
+            // API 29–33 没有 FGS 类型约束，但同样需要把已授权的 token 兑换成 MediaProjection 实例，
+            // 否则「应用内声音」永远拿不到投射实例，开关会在几秒后被回滚关闭。
+            val audioSource = subtitleManager.audioSource.value
+            if (audioSource == 1 && !subtitleManager.hasMediaProjection()) {
+                val created = subtitleManager.createMediaProjectionFromFgs(this)
+                Log.i(TAG, "promoteToForeground: createMediaProjectionFromFgs 结果=$created")
+            }
         }
     }
 
