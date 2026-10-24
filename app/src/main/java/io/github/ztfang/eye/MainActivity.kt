@@ -818,7 +818,11 @@ fun SubtitleScreen(
 ) {
     val context = LocalContext.current
     // 悬浮字幕开关状态
-    var isOverlayOn by remember { mutableStateOf(false) }
+    // 初值必须从 SubtitleManager 取：Activity 重建（切换应用/后台被回收再回来）时
+    // remember 会重新执行，若固定为 false 就会出现「服务仍在运行、翻译仍可用，
+    // 但开关显示已关闭」的状态不同步。LaunchedEffect(active) 只在 active 变化时触发，
+    // 重建时 active 一直是 true 不会变化，因此无法靠它回填。
+    var isOverlayOn by remember { mutableStateOf(subtitleManager.isOverlayActive.value) }
     // 从 SubtitleManager 读取字幕状态（翻译引擎、源语言、目标语言）
     val subtitleState by subtitleManager.subtitleState.collectAsState()
     val selectedEngine = subtitleState.engine
