@@ -1752,10 +1752,14 @@ class SubtitleManager
             // ASR 加载耗时可达数秒（真机实测约 2.1s）。期间用户若已关闭浮窗，
             // Service.onDestroy 会调用 releaseMediaProjectionInstance() 把实例置 null，
             // 而本协程不会被取消，恢复执行后会误判「无 MediaProjection 授权」并弹出
-            // 「请先授权屏幕录制权限」。这里先确认浮窗仍处于开启状态，是则继续，否则静默退出。
+            // 「请先授权屏幕录制权限」。这里先确认本次启动仍然需要，否则静默退出。
             // 注意：stopAudioProcessing 里的 isRecording=false 信号在启动阶段无效——
             // isRecording 初始为 false，直到 AudioRecord 创建成功才置 true。
-            if (!_isOverlayActive.value) {
+            // 必须同时判断 isInputMode：本方法也服务聊天输入栏的语音输入
+            //（startVoiceInput() → startAudioProcessing()），那条路径与浮窗无关，
+            // 浮窗关闭时本来就应该能正常录音。只加 _isOverlayActive 判断会让语音输入
+            // 静默 return，表现为点麦克风无任何反应。
+            if (!_isOverlayActive.value && !isInputMode) {
                 Log.i(LOG_TAG, "startAudioProcessingLocked: 启动期间浮窗已关闭，放弃本次启动")
                 return
             }
