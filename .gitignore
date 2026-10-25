@@ -49,6 +49,9 @@ zhihu_article.md
 trae-competition-submission.md
 code_review_report.md
 参考图/
+# docs/ 下本地文档与宣传素材不入库，仅代码进 GitHub
+docs/code-health-report-*.md
+docs/product-hunt/
 # docs/screenshots/ 保留：README 演示图公开
 # docs/screenshots/
 
