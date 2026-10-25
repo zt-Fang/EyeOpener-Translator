@@ -291,9 +291,22 @@ fun EyeOpenerApp(
     val navController = rememberNavController()
     val context = LocalContext.current
 
-    // 首次引导：全屏显示引导页，覆盖所有内容
-    val showOnboarding by settingsViewModel.showOnboarding.collectAsState(initial = true)
-    if (showOnboarding) {
+    // 首次引导：全屏显示引导页，覆盖所有内容。
+    // showOnboarding 底层是 DataStore 的异步 Flow（不是 StateFlow），首帧必然拿不到真实值。
+    // 若 initial 给 true，首帧就会把整页引导画出来，等数据到达后再切走主界面——
+    // 表现为每次冷启动都闪一下引导页（API 33 真机实测 0.632s / 15 帧；Frida 观测到
+    // 根组件与 OnboardingScreen 在同一次组合内相差 3ms，156ms 后才因数据到达而重组）。
+    // 因此初值用 null 表示「未知」：未就绪时只铺一层主题背景，既不闪引导页也不留黑屏。
+    val showOnboarding by settingsViewModel.showOnboarding.collectAsState(initial = null)
+    if (showOnboarding == null) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        )
+        return
+    }
+    if (showOnboarding == true) {
         OnboardingScreen(
             onFinished = { settingsViewModel.setShowOnboarding(false) },
         )
