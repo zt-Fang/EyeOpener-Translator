@@ -43,8 +43,8 @@ android {
         applicationId = "io.github.ztfang.eye"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.3.3"
+        versionCode = 8
+        versionName = "1.3.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // 支持 arm64-v8a + armeabi-v7a。
         //
