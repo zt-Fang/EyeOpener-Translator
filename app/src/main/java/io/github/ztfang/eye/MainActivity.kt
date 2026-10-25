@@ -48,8 +48,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CopyAll
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Person
@@ -1087,7 +1087,7 @@ fun SubtitleScreen(
             // 顶部标题栏（右上角：问号图标，点击重新显示引导页）
             item {
                 TopAppBar(
-                    rightIcon = Icons.Filled.HelpOutline,
+                    rightIcon = Icons.AutoMirrored.Filled.HelpOutline,
                     onRightClick = {
                         settingsViewModel.setShowOnboarding(true)
                     },

@@ -299,7 +299,6 @@ class SubtitleManager
                                 AsrEngineType.SHERPA_ONNX -> "SHERPA_ONNX_ASR_${SherpaOnnxModel.X_ASR_ZH_EN_960MS.modelId}"
                                 AsrEngineType.SHERPA_ONNX_BN -> "SHERPA_ONNX_ASR_${SherpaOnnxModel.BN_VOSK_2026_02_09.modelId}"
                                 AsrEngineType.SHERPA_ONNX_NEMOTRON -> "SHERPA_ONNX_ASR_${SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8.modelId}"
-                                else -> error("unreachable")
                             }
                         val byRepoPath = modelRepository.getModelPath(key)
                         details =

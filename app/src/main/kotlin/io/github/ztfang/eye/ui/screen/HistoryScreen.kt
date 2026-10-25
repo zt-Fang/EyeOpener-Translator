@@ -32,7 +32,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -450,7 +450,7 @@ fun HistoryItem(
             // 译文
             if (record.translatedText.isNotBlank()) {
                 Spacer(modifier = Modifier.height(Dimens.SpaceSm))
-                Divider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
                 Spacer(modifier = Modifier.height(Dimens.SpaceSm))
 
                 Text(

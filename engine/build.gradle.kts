@@ -8,6 +8,9 @@ plugins {
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        // KT-73255：构造参数上的 Java 注解（如 Hilt 的 @ApplicationContext）显式固定为
+        // 「参数 + 属性」双目标，避免未来 Kotlin 升级时默认行为变化影响 Hilt 注入。
+        freeCompilerArgs.add("-Xannotation-default-target=param-property")
     }
 }
 

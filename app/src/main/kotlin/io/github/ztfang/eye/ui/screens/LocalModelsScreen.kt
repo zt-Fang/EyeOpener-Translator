@@ -133,7 +133,6 @@ fun LocalModelsScreen(
                         SherpaOnnxModel.X_ASR_ZH_EN_960MS -> 0
                         SherpaOnnxModel.NEMOTRON_3_5_320MS_INT8 -> 1
                         SherpaOnnxModel.BN_VOSK_2026_02_09 -> 2
-                        else -> 99
                     }
                 },
             )
@@ -237,8 +236,6 @@ fun LocalModelsScreen(
                             Color(0xFF76B900) to Color(0xFF4CAF50)
                         SherpaOnnxModel.BN_VOSK_2026_02_09 ->
                             Color(0xFFFFB74D) to Color(0xFFFF8A65)
-                        else ->
-                            Color(0xFF4DD0E1) to Color(0xFF81C784)
                     }
                 // 标题国际化：X-ASR / Nemotron 走 strings.xml，BN 用原生孟加拉文
                 val modelTitle =
@@ -258,7 +255,6 @@ fun LocalModelsScreen(
                             stringResource(R.string.local_model_subtitle_nemotron)
                         SherpaOnnxModel.BN_VOSK_2026_02_09 ->
                             stringResource(R.string.local_model_subtitle_bn)
-                        else -> null
                     }
                 val sizeText = "${(model.sizeBytes / 1024 / 1024)} MB"
                 ModelRowItem(
@@ -372,7 +368,7 @@ private fun voskAccentEnd(code: String): Color {
 private fun ModelState?.isAvailable(): Boolean {
     if (this == null) return false
     val statusHit = status.ordinal == ModelStatus.AVAILABLE.ordinal
-    val pathHit = localPath != null && File(localPath).exists()
+    val pathHit = localPath?.let { File(it).exists() } == true
     return statusHit && pathHit
 }
 
