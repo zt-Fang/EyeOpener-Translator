@@ -1749,6 +1749,17 @@ class SubtitleManager
             }
             Log.i(LOG_TAG, "startAudioProcessingLocked: ASR 模型加载完成, engine=$engine, modelId=$expectedModelId")
 
+            // ASR 加载耗时可达数秒（真机实测约 2.1s）。期间用户若已关闭浮窗，
+            // Service.onDestroy 会调用 releaseMediaProjectionInstance() 把实例置 null，
+            // 而本协程不会被取消，恢复执行后会误判「无 MediaProjection 授权」并弹出
+            // 「请先授权屏幕录制权限」。这里先确认浮窗仍处于开启状态，是则继续，否则静默退出。
+            // 注意：stopAudioProcessing 里的 isRecording=false 信号在启动阶段无效——
+            // isRecording 初始为 false，直到 AudioRecord 创建成功才置 true。
+            if (!_isOverlayActive.value) {
+                Log.i(LOG_TAG, "startAudioProcessingLocked: 启动期间浮窗已关闭，放弃本次启动")
+                return
+            }
+
             // === 3. 音频采集（麦克风 / 应用内声音） ===
             val currentSource = audioSource.value
             Log.d(LOG_TAG, "startAudioProcessingLocked: 音频源=$currentSource (0=麦克风, 1=应用内声音)")
