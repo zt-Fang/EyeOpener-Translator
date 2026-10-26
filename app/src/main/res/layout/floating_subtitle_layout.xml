@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<io.github.ztfang.eye.OverlayRootLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/floating_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:minHeight="200dp"
     android:elevation="0dp"
     android:outlineProvider="none"
     android:padding="8dp">
@@ -22,6 +21,15 @@
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
+
+            <!-- 拖动示意条：居中在顶部条上，提示「这块可以拖」；随功能区一起显隐 -->
+            <View
+                android:id="@+id/drag_handle"
+                android:layout_width="36dp"
+                android:layout_height="3dp"
+                android:layout_alignParentTop="true"
+                android:layout_centerHorizontal="true"
+                android:background="@drawable/handle_bar" />
 
             <!-- 翻译状态指示器："实时翻译中"文本 -->
             <LinearLayout
@@ -131,20 +139,22 @@
             </LinearLayout>
         </RelativeLayout>
 
-        <!-- 字幕列表滚动区 -->
+        <!-- 字幕列表滚动区：内容不足一屏时贴底显示，最新一条固定在下沿 -->
         <ScrollView
             android:id="@+id/subtitle_scroll"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
             android:layout_marginTop="8dp"
+            android:fillViewport="true"
             android:scrollbars="none"
-            android:minHeight="120dp">
+            android:minHeight="20dp">
 
             <LinearLayout
                 android:id="@+id/subtitle_list"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="bottom"
                 android:orientation="vertical">
             </LinearLayout>
         </ScrollView>
@@ -163,4 +173,15 @@
             android:textSize="11sp"
             android:visibility="gone" />
     </LinearLayout>
-</FrameLayout>
+
+    <!--
+        缩放示意弧：与浮窗外框 20dp 圆角同心，贴在右下角内侧；
+        随功能区一起显隐，本身不参与交互（真实触摸热区见 RESIZE_TOUCH_SIZE_DP，比它大得多）。
+    -->
+    <View
+        android:id="@+id/resize_handle"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_gravity="bottom|end"
+        android:background="@drawable/resize_grip_arc" />
+</io.github.ztfang.eye.OverlayRootLayout>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 浮窗上的小提示条：拖动/缩放示意，半透明白、两端圆角 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#66FFFFFF" />
+    <corners android:radius="2dp" />
+</shape>

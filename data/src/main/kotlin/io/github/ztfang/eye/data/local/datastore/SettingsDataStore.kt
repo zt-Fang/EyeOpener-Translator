@@ -139,10 +139,10 @@ class SettingsDataStore(
     val accentColorIndex: Flow<Int> = context.dataStore.data.map { it[ACCENT_COLOR_INDEX] ?: 1 }
 
     // 背景透明度 0..1，默认 0.75
-    val backgroundTransparency: Flow<Float> = context.dataStore.data.map { it[BACKGROUND_TRANSPARENCY] ?: 0.75f }
+    val backgroundTransparency: Flow<Float> = context.dataStore.data.map { it[BACKGROUND_TRANSPARENCY] ?: 1.0f }
 
     // 字体大小（sp，连续值 12f..32f），默认 18f
-    val fontSize: Flow<Float> = context.dataStore.data.map { it[FONT_SIZE] ?: 18f }
+    val fontSize: Flow<Float> = context.dataStore.data.map { it[FONT_SIZE] ?: 16f }
 
     suspend fun setAccentColorIndex(index: Int) {
         context.dataStore.edit { it[ACCENT_COLOR_INDEX] = index.coerceIn(0, 5) }
