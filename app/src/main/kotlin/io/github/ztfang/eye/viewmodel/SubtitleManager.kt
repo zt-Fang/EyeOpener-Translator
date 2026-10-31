@@ -735,9 +735,8 @@ class SubtitleManager
                 partialDisplayBuilder.append(text)
                 _voiceInputText.value = partialDisplayBuilder.toString()
             } else {
-                // partial 仅作预览：显示为「已确认 final + 本段 partial」，
-                // 不写入 currentSourceBuffer，避免上一句 final 被拼到新句前面。
-                updateSourceText(text, isFinal = false)
+                // 行边界由 app 按句末标点决定（引擎 endpoint 判据是尾静音 0.6s，连读不满足、抖动会断词）
+                consumeSegmentText(text, flushTail = false)
             }
         }
 
@@ -752,28 +751,283 @@ class SubtitleManager
             }
 
             // 纯标点/空白的 final 当作没发生：既不归档、不上屏，也不翻译、不写历史。
-            // 放在最前面，是因为 VAD 软静音提交（Vosk 无 endpoint 时靠它补 final）同样走本函数，
-            // 一处判断即可覆盖「引擎 final」与「VAD 软静音」两条入口。
             if (!text.hasMeaningfulContent()) {
                 if (BuildConfig.DEBUG) Log.d(LOG_TAG, "handleFinalResult: 纯标点 final，忽略")
+                resetSegmentState()
                 currentAsrEngine.resetStream()
                 return
             }
 
-            // 一句 = 一行：先把上一句归档进历史，再把本句作为新的当前行。
-            // 归档条件只看 currentSourceBuffer（已确认的 final 累积）——
-            // 不能用 text 自身判断，否则会把本句归档一次、再当新行显示一次（重复行）。
-            if (currentSourceBuffer.isNotEmpty()) {
-                archiveCurrentLine()
-            }
-            updateSourceText(text, isFinal = true)
-
-            // 移除严格长度限制，所有非空 final 都触发翻译
-            if (text.isNotBlank()) {
-                translate(text)
-            }
+            // 段结束：段内余下的文本按句末标点逐句收口，收不完的尾巴整句收尾成一行。
+            unconfirmedLineSnapshot = ""
+            consumeSegmentText(text, flushTail = true)
+            resetSegmentState()
             currentAsrEngine.resetStream()
         }
+
+        /** 把段内文本按句末标点收口成行；[segmentConsumedChars] 只增不减，保证不重复上屏。 */
+        private fun consumeSegmentText(
+            text: String,
+            flushTail: Boolean,
+        ) {
+            // 文本被改写（引擎修订/裁掉头部）：用上一行末尾的词重新定位已收口位置，
+            // 锚点由长到短依次尝试，避免对不齐时按旧偏移取子串把中间内容漏掉
+            if (lastSegmentText.isNotEmpty() && !text.startsWith(lastSegmentText)) {
+                val reanchored = resyncConsumed(text)
+                if (BuildConfig.DEBUG) {
+                    Log.d(LOG_TAG, "段内文本被改写，重新对齐已收口位置 $segmentConsumedChars → $reanchored")
+                }
+                segmentConsumedChars = reanchored
+            }
+            lastSegmentText = text
+
+            val segStart = if (segmentConsumedChars in 0..text.length) segmentConsumedChars else text.length
+            var segmentRemainder = text.substring(segStart)
+            // reset 后重解码会重复带走的半句：先削掉重复前缀
+            if (carryOverText.isNotEmpty() && segmentRemainder.isNotEmpty()) {
+                when {
+                    segmentRemainder.startsWith(carryOverText) ->
+                        segmentRemainder = segmentRemainder.substring(carryOverText.length).trimStart()
+                    carryOverText.startsWith(segmentRemainder.trim()) -> segmentRemainder = ""
+                }
+            }
+            // 接上上一段没说完的半句，跨段仍按一句处理
+            var rest = if (carryOverText.isEmpty()) segmentRemainder else joinText(carryOverText, segmentRemainder)
+            var carryLen = rest.length - segmentRemainder.length
+            var consumed = segStart
+
+            while (true) {
+                val cut = findCutPoint(rest, flushTail) ?: break
+                val row = rest.substring(0, cut).trim()
+                consumed += maxOf(0, cut - carryLen)
+                carryLen = maxOf(0, carryLen - cut)
+                segmentConsumedChars = consumed
+                rest = rest.substring(cut)
+                if (row.isNotEmpty()) emitRow(row)
+            }
+
+            if (flushTail) {
+                // 段结束仍无句号：半句带到下一段继续成句
+                val tail = rest.trim()
+                segmentConsumedChars = text.length
+                if (tail.isEmpty()) {
+                    carryOverText = ""
+                    rest = ""
+                } else if (tail.length > currentRowLimitChars() * HARD_CAP_RATIO) {
+                    // 太长且一直无标点：先出一行，避免草稿无限长
+                    carryOverText = ""
+                    rest = ""
+                    emitRow(tail)
+                } else {
+                    if (BuildConfig.DEBUG) Log.d(LOG_TAG, "段结束但没等到句号，半句带到下一段: \"$tail\"")
+                    carryOverText = tail
+                    rest = tail
+                }
+            } else {
+                // 段继续：本段余量下次重新取，只保留上一段残留
+                carryOverText = rest.take(minOf(carryLen, rest.length)).trim()
+                rest = rest.trimStart()
+            }
+            updateSourceText(rest, isFinal = false)
+        }
+
+        /**
+         * 找收口位置（返回切点之后的字符数，null = 这次不切）。
+         *
+         * 连读（没有句号）时的优先级：先把草稿里的**逗号**用掉 —— 行尾落在子句边界上，
+         * 不会出现「一句没说完就断在半句」；只有一整段连逗号都没有、且已经超过两行，
+         * 才按空格硬断一行。
+         */
+        private fun findCutPoint(
+            text: String,
+            flushTail: Boolean,
+        ): Int? {
+            val limit = currentRowLimitChars()
+            val mark = findSentenceEnd(text)
+            if (mark != null) {
+                // 标点落在文本末尾时先不切：引擎可能把句号改成逗号
+                if (!flushTail && text.substring(mark).isBlank()) return null
+                if (mark <= limit) return mark
+                // 超容量时在逗号处切；切完只剩标点就整句出
+                val cut = foldCut(text, mark)
+                if (cut == null || mark - cut <= MIN_TAIL_AFTER_FOLD) return mark
+                return cut
+            }
+            // 段结束但还没等到句号：只在逗号处切，剩下的整句带到下一段，绝不按空格把末词切走
+            if (flushTail) return foldCut(text, text.length, allowSpace = false)
+            if (text.length <= limit) return null
+            // 连读：草稿超一行就用最后一个逗号收口（一行最多让它占到两行）
+            val clauseCut = foldCut(text, text.length, allowSpace = false)
+            if (clauseCut != null && clauseCut <= limit * MAX_CLAUSE_ROWS) return clauseCut
+            if (text.length.toFloat() <= limit * HARD_CAP_RATIO) return null
+            return foldCut(text, limit)
+        }
+
+        /** 第一个句末标点之后的位置（跳过 3.14 / U.S. / Mr.）。 */
+        private fun findSentenceEnd(text: String): Int? {
+            var i = 0
+            while (i < text.length) {
+                val c = text[i]
+                if (c in SENTENCE_END_MARKS) {
+                    if (c == '.' || c == '!' || c == '?') {
+                        val next = text.getOrNull(i + 1)
+                        if (next != null && !next.isWhitespace()) {
+                            i++
+                            continue
+                        }
+                        if (c == '.' && isAbbreviationBefore(text, i)) {
+                            i++
+                            continue
+                        }
+                    }
+                    var cut = i + 1
+                    while (cut < text.length && text[cut].isWhitespace()) cut++
+                    return cut
+                }
+                i++
+            }
+            return null
+        }
+
+        /**
+         * 折行位置：优先逗号；[allowSpace] 为 true 时退到空格。没有合适断点返回 null。
+         * 段结束时的收口不允许按空格断 —— 那样会把一句的最后一两个词切到下一条。
+         */
+        private fun foldCut(
+            text: String,
+            maxEnd: Int,
+            allowSpace: Boolean = true,
+        ): Int? {
+            val end = minOf(maxEnd, text.length)
+            if (end <= MIN_ROW_TAIL_CHARS) return null
+            val window = text.substring(0, end)
+            val comma = window.lastIndexOfAny(ROW_SOFT_BREAK_CHARS)
+            if (comma in MIN_ROW_TAIL_CHARS until text.length - 1) return comma + 1
+            if (!allowSpace) return null
+            val space = window.lastIndexOf(' ')
+            if (space in MIN_ROW_TAIL_CHARS until text.length - 1) return space + 1
+            return null
+        }
+
+        /** [index] 处的 `.` 前面是不是 Mr / Dr 这类缩写（不能当作句子结尾）。 */
+        private fun isAbbreviationBefore(
+            text: String,
+            index: Int,
+        ): Boolean {
+            // 识别结果常写成 `Mr .`，先跳过标点前的空白
+            var end = index
+            while (end > 0 && text[end - 1].isWhitespace()) end--
+            var start = end
+            while (start > 0 && !text[start - 1].isWhitespace()) start--
+            val token = text.substring(start, end)
+            if (token.length == 1 && token[0].isUpperCase()) return true
+            // U.S 这类全大写缩写
+            if (token.length > 1 && token.all { it.isUpperCase() || it == '.' }) return true
+            return token.lowercase() in ABBREVIATIONS
+        }
+
+        /** 收口一行：进历史 + 立即翻译。 */
+        private fun emitRow(rowText: String) {
+            if (!rowText.hasMeaningfulContent()) return
+            // 去重：同一句可能从草稿收尾与引擎 final 两条路径到达
+            val normalized = normalizeForCompare(rowText)
+            val duplicated =
+                recentRowTexts.contains(rowText) ||
+                    (normalized.length >= MIN_DUP_CHECK_CHARS &&
+                        recentRowTexts.any { normalizeForCompare(it).contains(normalized) })
+            if (duplicated) {
+                if (BuildConfig.DEBUG) Log.d(LOG_TAG, "emitRow: 跳过重复行 \"$rowText\"")
+                return
+            }
+            // 引擎把半句补全成整句时，替换掉之前那条半句
+            val extended = recentRowTexts.firstOrNull {
+                val old = normalizeForCompare(it)
+                old.length >= MIN_DUP_CHECK_CHARS && normalized.startsWith(old) && normalized.length > old.length
+            }
+            if (extended != null) {
+                historyLines.removeAll { it.sourceText == extended }
+                recentRowTexts.remove(extended)
+                if (BuildConfig.DEBUG) Log.d(LOG_TAG, "emitRow: 用补全后的整句替换 \"$extended\"")
+            }
+            recentRowTexts.addLast(rowText)
+            if (recentRowTexts.size > RECENT_ROWS_MEMORY) recentRowTexts.removeFirst()
+            historyLines.add(
+                SubtitleLine(
+                    sourceText = rowText,
+                    translatedText = "",
+                    subtitleType = SubtitleType.FINAL,
+                ),
+            )
+            // 历史保留到 10 条：收口瞬间屏幕行数不回跳
+            if (historyLines.size > MAX_HISTORY_LINES) {
+                historyLines.removeAt(0)
+            }
+            // 清空当前行与其在途翻译
+            currentSourceBuffer.setLength(0)
+            currentPartialText = ""
+            currentTranslationBuffer.setLength(0)
+            lastPartialTranslateLength = 0
+            unconfirmedLineSnapshot = ""
+            partialTranslationVersion.incrementAndGet()
+            lastEmittedAnchor = rowText.split(" ").filter { it.isNotBlank() }.takeLast(4).joinToString(" ")
+            if (BuildConfig.DEBUG) Log.d(LOG_TAG, "emitRow: \"$rowText\"，历史行数=${historyLines.size}")
+            translate(rowText)
+        }
+
+        /** 段结束时收尾当前草稿（有句号整句成行，没有就在逗号处切）。 */
+        private fun flushPendingDraft() {
+            val pending = currentLineText().trim()
+            // 引擎即将 reset：账目归零后按「段已结束」处理
+            currentSourceBuffer.setLength(0)
+            currentPartialText = ""
+            currentTranslationBuffer.setLength(0)
+            unconfirmedLineSnapshot = ""
+            segmentConsumedChars = 0
+            lastSegmentText = ""
+            if (pending.isEmpty()) {
+                updateSourceText("", isFinal = false)
+                return
+            }
+            if (BuildConfig.DEBUG) Log.d(LOG_TAG, "flushPendingDraft: 草稿收尾 \"$pending\"")
+            consumeSegmentText(pending, flushTail = true)
+            resetSegmentState()
+        }
+
+        /** 段结束（引擎 final / resetStream）：段内计数归零，下一段从 0 开始。 */
+        private fun resetSegmentState() {
+            segmentConsumedChars = 0
+            lastSegmentText = ""
+        }
+
+        /**
+         * 引擎改写文本后重新定位「已收口到哪」：用上一行末尾 4/3/2/1 个词依次当锚点，
+         * 取最后一次出现的位置。都对不上就从头再来（重复内容由去重兜底吃掉）。
+         */
+        private fun resyncConsumed(text: String): Int {
+            val words = lastEmittedAnchor.split(" ").filter { it.isNotBlank() }
+            for (n in intArrayOf(4, 3, 2, 1)) {
+                if (words.size < n) continue
+                val anchor = words.takeLast(n).joinToString(" ")
+                val idx = text.lastIndexOf(anchor)
+                if (idx >= 0) return idx + anchor.length
+            }
+            if (BuildConfig.DEBUG) Log.d(LOG_TAG, "锚点对不上，按新文本从头收口")
+            return 0
+        }
+
+        /** 去重比较用：只保留字母与数字，忽略空格和标点差异。 */
+        private fun normalizeForCompare(text: String): String = text.filter { it.isLetterOrDigit() }.lowercase()
+
+        /** 一行最多放多少字符：英文按字母宽度算，中文按字算。 */
+        private fun currentRowLimitChars(): Int =
+            if (_subtitleState.value.sourceLanguage.startsWith("en", ignoreCase = true)) {
+                MAX_ROW_CHARS_EN
+            } else {
+                MAX_ROW_CHARS_ZH
+            }
+
+        /** 当前语种的一行字符容量（浮窗渲染判断「草稿是否已过半行」时用）。 */
+        fun rowCapacityChars(): Int = currentRowLimitChars()
 
         /**
          * 源语言切换时重载 ASR 模型并重启音频采集。
@@ -857,6 +1111,21 @@ class SubtitleManager
          */
         private var currentPartialText: String = ""
 
+        /** 当前引擎段内已收口成行的字符数，只增不减。 */
+        private var segmentConsumedChars = 0
+
+        /** 上一帧的段文本，用于判断引擎是否改写了已收口区域。 */
+        private var lastSegmentText: String = ""
+
+        /** 上一段没等到句号就结束的半句，带到下一段一起成句。 */
+        private var carryOverText: String = ""
+
+        /** 上一条已上屏字幕的最后两个词，用于引擎改写文本时重新对齐。 */
+        private var lastEmittedAnchor: String = ""
+
+        /** 最近上屏过的原文，用于去重。 */
+        private val recentRowTexts = ArrayDeque<String>()
+
         /** 当前句子累积的译文缓冲。 */
         private val currentTranslationBuffer = StringBuilder()
 
@@ -887,7 +1156,7 @@ class SubtitleManager
             } else {
                 // partial：只更新预览文本，不写入已确认缓冲
                 currentPartialText = text
-                val fullText = currentSourceBuffer.toString() + text
+                val fullText = joinText(currentSourceBuffer.toString(), text)
                 val triggerLen =
                     if (current.sourceLanguage.startsWith("en", ignoreCase = true)) {
                         PARTIAL_TRANSLATE_STEP_EN
@@ -903,12 +1172,13 @@ class SubtitleManager
             // 组装当前行：已确认 final + 未确认 partial
             val currentLine =
                 SubtitleLine(
-                    sourceText = currentSourceBuffer.toString() + currentPartialText,
+                    sourceText = joinText(currentSourceBuffer.toString(), currentPartialText),
                     translatedText = currentTranslationBuffer.toString(),
                     subtitleType = if (isFinal) SubtitleType.FINAL else SubtitleType.PARTIAL,
                 )
 
             _subtitleState.value = current.copy(lines = buildDisplayLines(currentLine))
+            unconfirmedLineSnapshot = currentPartialText
         }
 
         /**
@@ -919,16 +1189,51 @@ class SubtitleManager
          * 这里合并为一次 [buildList]，并按上限截断。
          */
         private fun buildDisplayLines(currentLine: SubtitleLine): List<SubtitleLine> {
-            val overflow = historyLines.size + 1 - MAX_HISTORY_LINES
+            // 当前行可能为空（整段都已收口成行），此时只渲染历史行
+            val hasCurrent = currentLine.sourceText.isNotBlank()
+            val total = historyLines.size + if (hasCurrent) 1 else 0
+            val overflow = total - MAX_HISTORY_LINES
             val fromIndex = if (overflow > 0) overflow else 0
-            return buildList(historyLines.size + 1 - fromIndex) {
+            return buildList(total - fromIndex) {
                 for (i in fromIndex until historyLines.size) add(historyLines[i])
-                add(currentLine)
+                if (hasCurrent) add(currentLine)
             }
         }
 
+        /**
+         * 拼接「已确认 final」与「未确认 partial」。
+         *
+         * 两侧都是可见字符时补一个空格：ASR 输出的句子不带行尾空格，
+         * 直接相加会出现 `conclusionsIn a moment`、`yet .Everyone` 这类粘连（issue #7）。
+         */
+        private fun joinText(
+            prefix: String,
+            suffix: String,
+        ): String {
+            if (prefix.isEmpty()) return suffix
+            if (suffix.isEmpty()) return prefix
+            val last = prefix.last()
+            val first = suffix.first()
+            val boundaryNeedsSpace =
+                !last.isWhitespace() &&
+                    !first.isWhitespace() &&
+                    (last.isLetterOrDigit() || last in PUNCT_TAIL) &&
+                    (first.isLetterOrDigit() || first in PUNCT_TAIL)
+            return if (boundaryNeedsSpace) "$prefix $suffix" else prefix + suffix
+        }
+
         /** 当前显示行的完整文本（已确认 final + 未确认 partial）。仅可在主线程访问。 */
-        private fun currentLineText(): String = currentSourceBuffer.toString() + currentPartialText
+        private fun currentLineText(): String = joinText(currentSourceBuffer.toString(), currentPartialText)
+
+        /**
+         * 「已上屏、但还没等到引擎 final」的未确认文本快照。
+         *
+         * 由主线程在 [updateSourceText] / 归档时维护，供录音线程在 VAD 暂停恢复点判断
+         * 「这次暂停是不是落在句中」——若是，reset 之前必须把这半句补成 final，
+         * 否则用户已经看到的那一行会被 resetStream 静默丢掉（表现为字幕回滚、且没有译文）。
+         */
+        @Volatile
+        private var unconfirmedLineSnapshot: String = ""
 
         /** 清空当前句缓冲与历史行。仅可在主线程访问。 */
         private fun clearSubtitleBuffers() {
@@ -937,33 +1242,21 @@ class SubtitleManager
             currentTranslationBuffer.setLength(0)
             historyLines.clear()
             lastPartialTranslateLength = 0
+            unconfirmedLineSnapshot = ""
+            // 段内账目与跨段残留一起清掉，避免上一次会话的半句串到下一次
+            carryOverText = ""
+            segmentConsumedChars = 0
+            lastSegmentText = ""
         }
 
         /**
-         * 完成当前句并归档到历史（endpoint 切句 / VAD 长停顿触发）。
-         * 归档内容取「当前显示行」的完整文本，清空当前缓冲，新句从空开始。
+         * 完成当前句并归档到历史。
+         *
+         * 行边界现在统一由 [consumeSegmentText] 决定（按句末标点收口），
+         * 因此这里不再使用：保留说明是为了避免后续把「一个引擎 final = 一行」的旧模型搬回来。
          */
-        private fun archiveCurrentLine() {
-            if (currentLineText().isBlank()) return
-            val line =
-                SubtitleLine(
-                    sourceText = currentLineText(),
-                    translatedText = currentTranslationBuffer.toString(),
-                    subtitleType = SubtitleType.FINAL,
-                )
-            historyLines.add(line)
-            if (historyLines.size > MAX_HISTORY_LINES - 1) {
-                historyLines.removeAt(0)
-            }
-            currentSourceBuffer.setLength(0)
-            currentPartialText = ""
-            currentTranslationBuffer.setLength(0)
-            lastPartialTranslateLength = 0
-            if (BuildConfig.DEBUG) Log.d(LOG_TAG, "archiveCurrentLine: 归档句子，历史行数=${historyLines.size}")
-        }
 
-        /**
-         * 滑动窗口 partial 翻译：轻量预览，只更新 UI 不保存历史。
+        /** 滑动窗口 partial 翻译：轻量预览，只更新 UI 不保存历史。
          * 使用版本号管理，避免旧结果覆盖新结果。
          */
         private fun translatePartial(text: String) {
@@ -1029,7 +1322,6 @@ class SubtitleManager
                 if (text.isBlank()) return@launch
 
                 delay(TRANSLATE_DEBOUNCE_MS)
-
                 _isTranslating.value = true
 
                 // AI 引擎：统一走润色+翻译（X-ASR 已带标点时润色规则近似 no-op，Vosk 无标点时润色生效）
@@ -1044,12 +1336,10 @@ class SubtitleManager
                             state.targetLanguage,
                             state.engine,
                         ).onSuccess { result ->
-                            if (translationVersion.get() == version) {
-                                appendTranslationResult(text, result.translatedText, state)
-                            } else {
-                                // 结果属于旧版本，被丢弃时必须收尾，否则"实时翻译中"指示器永远不消失
-                                _isTranslating.value = false
-                            }
+                            // 不做版本丢弃：连读时一次会有多行几乎同时收口，版本门会把除最后一行
+                            // 之外的译文全部丢掉（表现为「只有最后一句有译文」）。
+                            // 写回时按原文定位目标行（见 appendTranslationResult），不会串行。
+                            appendTranslationResult(text, result.translatedText, state)
                         }.onFailure { e ->
                             if (e is UnsupportedOperationException) {
                                 // 引擎不支持该语言对，静默不响应（不弹错）
@@ -1190,24 +1480,44 @@ class SubtitleManager
         }
 
         /**
-         * 追加翻译结果到当前行 + 保存历史记录。
-         * 多行模式：译文替换当前行（最后一行）的 translatedText。
+         * 追加翻译结果并保存历史记录。
+         *
+         * 目标行按「原文」定位，而不是固定写最后一行：译文回来时，本句可能
+         *   · 仍占据当前行（常见），
+         *   · 已经因为下一句 partial 到达被归档进历史（[historyLines]），
+         * 旧实现无条件写 lines.last()，会把上一句的译文盖到下一句那一行上（译文错行），
+         * 而只改显示副本、不改 [historyLines] 时，下一次重排又会换回旧译文（表现为译文回滚）。
          */
         private fun appendTranslationResult(
             sourceText: String,
             translatedText: String,
             state: SubtitleState,
         ) {
-            // 设置当前行译文缓冲
-            currentTranslationBuffer.setLength(0)
-            currentTranslationBuffer.append(translatedText)
+            // 当前行才更新当前行译文缓冲（archiveCurrentLine 与 updateSourceText 都读它）
+            val isCurrentLine =
+                currentSourceBuffer.toString() == sourceText || currentLineText() == sourceText
+            if (isCurrentLine) {
+                currentTranslationBuffer.setLength(0)
+                currentTranslationBuffer.append(translatedText)
+            }
 
-            // 更新最后一行（当前行）译文
+            // 已归档进历史的那一行：连历史缓冲一起改，避免下一次重排把译文换回旧值
+            val historyIdx = historyLines.indexOfLast { it.sourceText == sourceText }
+            if (historyIdx >= 0) {
+                historyLines[historyIdx] = historyLines[historyIdx].copy(translatedText = translatedText)
+            }
+
+            // 更新显示副本：所有原文匹配的行（正常情况下只有一行）
             val current = _subtitleState.value
             val lines = current.lines.toMutableList()
-            if (lines.isNotEmpty()) {
-                val lastIdx = lines.size - 1
-                lines[lastIdx] = lines[lastIdx].copy(translatedText = translatedText)
+            var patched = false
+            for (i in lines.indices) {
+                if (lines[i].sourceText == sourceText) {
+                    lines[i] = lines[i].copy(translatedText = translatedText)
+                    patched = true
+                }
+            }
+            if (patched) {
                 _subtitleState.value = current.copy(lines = lines)
             }
 
@@ -1266,7 +1576,17 @@ class SubtitleManager
 
         fun setOverlayActive(active: Boolean) {
             _isOverlayActive.value = active
-            if (active) _runtimeError.value = null
+            if (active) {
+                _runtimeError.value = null
+            } else {
+                // 关浮窗时立刻清空字幕：否则下次打开会先看到上一次会话残留的行与译文
+                scope.launch {
+                    clearSubtitleBuffers()
+                    _subtitleState.value = _subtitleState.value.copy(lines = emptyList())
+                    _isTranslating.value = false
+                    Log.i(LOG_TAG, "字幕已清空：关闭浮窗")
+                }
+            }
         }
 
         fun clearRuntimeError() {
@@ -1656,6 +1976,14 @@ class SubtitleManager
             if (isRecording) return
             Log.i(LOG_TAG, "startAudioProcessingLocked: 开始启动音频采集...")
 
+            // 每次启动都从空字幕开始：开关关掉再打开时，上一条会话的行/译文/历史不能残留。
+            withContext(Dispatchers.Main) {
+                clearSubtitleBuffers()
+                _subtitleState.value = _subtitleState.value.copy(lines = emptyList())
+                _isTranslating.value = false
+                Log.i(LOG_TAG, "字幕已清空：启动音频采集")
+            }
+
             val sourceLanguage = _subtitleState.value.sourceLanguage
             val engine = currentAsrEngineType
 
@@ -1821,6 +2149,11 @@ class SubtitleManager
             var debouncedVadState = false
             var asrPaused = false
 
+            // 预卷环形缓冲：asrPaused 期间被丢弃的帧按时间顺序留存，VAD 确认语音后整段回填给 ASR。
+            // 没有它，句首要等「Silero 窗口判定 + 5 帧防抖」走过去才开始送音，
+            // 实测句首稳定丢 0.45~0.6s（"Could we wait a moment" → "In a moment"，issue #7）。
+            val preRollFrames = ArrayDeque<ShortArray>(VAD_PREROLL_FRAMES)
+
             // 热路径缓存：引擎解析含 map 查找（AsrRoutingTable.forLanguage），不能每帧做
             // （30ms/帧 ≈ 33Hz，旧实现每帧要算 2 次 isVoskMode + 取 2 次 currentAsrEngine）。
             // 但语音输入模式会在录音过程中切换 inputModeEngine，故只在它变化时重新解析。
@@ -1853,6 +2186,14 @@ class SubtitleManager
                             )
                             accumulateOffset -= FRAME_SIZE
 
+                            // ===== 预卷留存 =====
+                            // ASR 暂停送音期间，每一帧（含语音刚起、VAD 还没确认的那几帧）都按序存下，
+                            // 语音确认后一次性回填，句首音节才不会整段丢掉。
+                            if (asrPaused) {
+                                if (preRollFrames.size >= VAD_PREROLL_FRAMES) preRollFrames.removeFirst()
+                                preRollFrames.addLast(frameBuffer.copyOf())
+                            }
+
                             // ===== VAD 检测 =====
                             val vadResult = vadEngine.processAudio(frameBuffer)
                             if (vadResult.hasSpeech) {
@@ -1862,8 +2203,34 @@ class SubtitleManager
                                     debouncedVadState = true
                                     _vadState.value = VadState.LISTENING
                                     if (asrPaused) {
-                                        Log.i(LOG_TAG, "VAD 语音恢复: reset ASR stream, 恢复送音")
+                                        // 预卷最后一帧就是当前帧，留给下面的正常送音逻辑，避免同一帧送两次
+                                        preRollFrames.removeLastOrNull()
+                                        // 两种情况都要丢掉暂停前的引擎状态：否则下一句的 partial 会把
+                                        // 上一句的文本又带出来（重复行）
                                         resolvedEngine.resetStream()
+                                        val pendingUnconfirmed = unconfirmedLineSnapshot
+                                        if (pendingUnconfirmed.isNotBlank()) {
+                                            // 这次暂停落在句中（VAD 把句尾当成了静音）：
+                                            // 已经上屏的半句还没等到引擎 final，直接 resetStream 会把它
+                                            // 静默丢掉 —— 表现为字幕回滚、且这一句永远没有译文。
+                                            // 这里先补一个 final（归档 + 翻译），并【跳过】预卷回填：
+                                            // 预卷里那段音频已经被同一句识别过，回填会让句尾重复一遍。
+                                            Log.i(
+                                                LOG_TAG,
+                                                "VAD 语音恢复: 暂停前有未完成句，补 final 后 reset（跳过预卷回填）: " +
+                                                    "\"$pendingUnconfirmed\"",
+                                            )
+                                            scope.launch { flushPendingDraft() }
+                                        } else {
+                                            Log.i(
+                                                LOG_TAG,
+                                                "VAD 语音恢复: 回填 ${preRollFrames.size} 帧预卷" +
+                                                    "(~${preRollFrames.size * FRAME_MS}ms), 恢复送音",
+                                            )
+                                            // 干净暂停（停在静音里）：把句首那段音频按序补送，恢复被 VAD 延迟吃掉的音节
+                                            for (frame in preRollFrames) resolvedEngine.feedAudio(frame)
+                                        }
+                                        preRollFrames.clear()
                                         asrPaused = false
                                     }
                                 }
@@ -1878,13 +2245,11 @@ class SubtitleManager
                                 // 在录音线程直接读写 StringBuilder 会与 append 竞争。
                                 if (resolvedIsVosk && vadSilentFrames == VAD_SOFT_SILENCE_FRAMES) {
                                     scope.launch {
-                                        val pending = currentLineText()
-                                        if (pending.isNotBlank()) {
-                                            if (BuildConfig.DEBUG) {
-                                                Log.d(LOG_TAG, "VAD 软静音: 提交字幕 final, line='$pending'")
-                                            }
-                                            handleFinalResult(pending)
+                                        if (BuildConfig.DEBUG) {
+                                            Log.d(LOG_TAG, "VAD 软静音: 收尾当前行, line='${currentLineText()}'")
                                         }
+                                        flushPendingDraft()
+                                        currentAsrEngine.resetStream()
                                     }
                                 }
                                 if (vadSilentFrames >= VAD_SILENT_DEBOUNCE_FRAMES && debouncedVadState) {
@@ -2096,6 +2461,23 @@ class SubtitleManager
              *  保持 480 帧以匹配 ASR 引擎特征提取需求。 */
             private const val FRAME_SIZE = 480
 
+            /** 单帧时长(ms)：480 / 16000 = 30ms，仅用于日志与预卷时长的可读换算。 */
+            private const val FRAME_MS = 30
+
+            /**
+             * 预卷帧数：ASR 暂停送音期间保留的音频长度，语音确认后回填。
+             *
+             * 34 帧 × 30ms ≈ 1.02s，需覆盖三段延迟之和：
+             *   Silero 窗口判定（每 ~32ms 一窗，且需概率连续过阈值）
+             *   + 语音开始防抖（[VAD_SPEECH_DEBOUNCE_FRAMES]，~150ms）
+             *   + 引擎 reset 后冷启动需要的前置上下文。
+             * 实测无预卷时句首稳定丢 0.45~0.6s（issue #7），32KB 级别的内存开销可忽略。
+             */
+            private const val VAD_PREROLL_FRAMES = 34
+
+            /** [joinText] 判定「拼接处需要补空格」时认可的标点尾部字符。 */
+            private const val PUNCT_TAIL = ".,!?;:"
+
             /** VAD 语音开始防抖帧数：连续 5 帧检测到语音才判定开始（~160ms）
              *  Silero VAD 每 ~32ms 一窗口, 480 样本帧约每 1.07 帧送一次 VAD,
              *  因此 5 帧 ≈ 5 × 30ms × 1.07 ≈ 160ms, 符合 5~8 帧(160~256ms) 范围 */
@@ -2151,8 +2533,8 @@ class SubtitleManager
             /** 字幕文本最大留存时间（毫秒），Vosk 模式下超时后自动清空 */
             private const val SUBTITLE_RETENTION_MS = 10_000L
 
-            /** 最大历史字幕行数：保留最近 N 行，自动向上滚动 */
-            private const val MAX_HISTORY_LINES = 3
+            /** 最大字幕行数：最新 1 条 + 历史 9 条 */
+            private const val MAX_HISTORY_LINES = 10
 
             /** Partial 翻译滑动窗口步长（中文）：每增长 N 字触发一次预览翻译 */
             private const val PARTIAL_TRANSLATE_STEP_ZH = 5
@@ -2162,5 +2544,39 @@ class SubtitleManager
 
             /** Partial 翻译最小长度：少于此长度不触发预览翻译 */
             private const val MIN_PARTIAL_TRANSLATE_LENGTH = 5
+
+            /** 一行字幕的字符上限（英文）：约两行英文，保证一条字幕 = 一整句 */
+            private const val MAX_ROW_CHARS_EN = 90
+
+            /** 一行字幕的字符上限（中文等全角字符） */
+            private const val MAX_ROW_CHARS_ZH = 30
+
+            /** 折行切点的最小靠后位置，避免切出碎片 */
+            private const val MIN_ROW_TAIL_CHARS = 12
+
+            /** 句子没说完时草稿允许的最大倍数，超过才强行折一行 */
+            private const val HARD_CAP_RATIO = 2.5f
+
+            /** 连读时按逗号收口，一行最多占到「行容量 × 这个倍数」 */
+            private const val MAX_CLAUSE_ROWS = 2
+
+            /** 折行后剩余字符少于此数时整句一起出 */
+            private const val MIN_TAIL_AFTER_FOLD = 3
+
+            /** 记住最近多少条上屏原文用于去重 */
+            private const val RECENT_ROWS_MEMORY = 8
+
+            /** 去重时参与包含判断的最短长度 */
+            private const val MIN_DUP_CHECK_CHARS = 6
+
+            /** 句末标点：一行的收口位置 */
+            private val SENTENCE_END_MARKS = charArrayOf('。', '．', '.', '！', '!', '？', '?', '…')
+
+            /** 折行软断点（含日文顿号） */
+            private val ROW_SOFT_BREAK_CHARS = charArrayOf(',', '，', ';', '；', '、')
+
+            /** 不当作句子结尾的缩写 */
+            private val ABBREVIATIONS =
+                setOf("mr", "mrs", "ms", "dr", "prof", "st", "vs", "etc", "jr", "sr", "no", "inc", "ltd")
         }
     }
