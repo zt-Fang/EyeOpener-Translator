@@ -17,12 +17,14 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
@@ -71,11 +73,19 @@ class FloatingSubtitleService : Service() {
                 resources.displayMetrics.heightPixels
             }
 
-    // 最小尺寸:宽 240dp / 高 200dp(顶部条 + 字幕区 + padding)
+    // 最小尺寸：宽 140dp；高按功能区状态给下限（显示 108dp / 收起 70dp，收起时只剩一行字幕）
     private val minWidthPx: Int // 窗口最小宽度（像素）
-        get() = (240 * resources.displayMetrics.density).toInt()
+        get() = (MIN_WIDTH_DP * resources.displayMetrics.density).toInt()
     private val minHeightPx: Int // 窗口最小高度（像素）
-        get() = (200 * resources.displayMetrics.density).toInt()
+        get() {
+            val dp =
+                if (topActionsView?.visibility == View.VISIBLE) {
+                    MIN_HEIGHT_WITH_CONTROLS_DP
+                } else {
+                    MIN_HEIGHT_COMPACT_DP
+                }
+            return (dp * resources.displayMetrics.density).toInt()
+        }
 
     // 初始尺寸:宽度占屏幕宽度×90%,高度占屏幕高度×20%
     private val defaultWidthPx: Int // 窗口默认宽度（像素），限制在最小和最大尺寸之间
@@ -98,22 +108,44 @@ class FloatingSubtitleService : Service() {
     private var isMinimized = false
     private var lastNormalHeight = 0
 
-    /** 顶部功能区自动隐藏：语音识别时隐藏，触摸显示，3秒后自动隐藏 */
+    /** 顶部功能区（设置/返回/取消）与拖动/缩放提示条：显隐只由轻点浮窗控制。 */
     private var topActionsView: View? = null
-    private val hideTopActionsRunnable =
+
+    /** 展开顶部功能区前的高度：收起时要还原回去，否则「一行高度→点开→再收起」会永久变大。 */
+    private var preExpandHeightPx = 0
+
+    /** 翻译状态指示器的显隐去抖。 */
+    private var translatingShowAtMs = 0L
+    private val showTranslatingIndicatorRunnable =
         Runnable {
-            topActionsView?.visibility = View.GONE
+            translatingIndicator?.let {
+                setVisibilityIfChanged(it, true)
+                translatingShowAtMs = SystemClock.uptimeMillis()
+            }
         }
+    private val hideTranslatingIndicatorRunnable =
+        Runnable {
+            translatingIndicator?.let { setVisibilityIfChanged(it, false) }
+        }
+
+    /** 顶部功能区显隐（拖动/缩放提示条同步）。 */
+    private fun setTopActionsVisible(visible: Boolean) {
+        val v = topActionsView ?: return
+        setVisibilityIfChanged(v, visible)
+        dragHandleView?.let { setVisibilityIfChanged(it, visible) }
+        resizeHandleView?.let { setVisibilityIfChanged(it, visible) }
+        if (BuildConfig.DEBUG) Log.d(TAG, "topActions -> ${if (visible) "VISIBLE" else "GONE"}")
+    }
 
     // WakeLock so audio recording is not paused when the screen turns off.
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // Reusable TextView pool — avoids removeAllViews()/recreate churn per subtitle emit.
-    private val partialTextView: TextView by lazy { createSubtitleView(partialAlpha = true) }
-    private val finalTextView: TextView by lazy { createSubtitleView(partialAlpha = false) }
-
     /** 翻译状态指示器容器（"实时翻译中"文本） */
     private var translatingIndicator: android.view.View? = null
+
+    /** 拖动/缩放示意条：与顶部功能区同步显隐（轻点浮窗切换）。 */
+    private var dragHandleView: View? = null
+    private var resizeHandleView: View? = null
 
     /**
      * 状态提示条：渲染 runtimeError、离线模型失败态与下载中提示，
@@ -141,8 +173,17 @@ class FloatingSubtitleService : Service() {
     /** 上次渲染使用的显示模式；与行数共同决定是否需要重建视图结构 */
     private var renderedMode: DisplayMode? = null
 
-    /** 上次滚动到底部时的末行签名，避免重复 fullScroll */
+    /** 上次贴底时的末行签名，避免重复滚动 */
     private var lastScrolledTail: String = ""
+
+    /** 上次上屏内容签名，用于 DEBUG 渲染快照去重。 */
+    private var lastRenderSnapshot: String = ""
+
+    /** 上一次贴底的原文，用于判断是否出现新的一条（决定要不要播上滑动画） */
+
+    /** 上滑动画是否正在播（避免叠加导致跳动） */
+    private var slideAnimating = false
+    private var lastBottomSource: String = ""
 
     /** 待渲染的字幕快照（由 [scheduleSubtitleRefresh] 在主线程消费） */
     private var pendingLines: List<SubtitleLine> = emptyList()
@@ -161,7 +202,7 @@ class FloatingSubtitleService : Service() {
     // ============ 个性化设置缓存（来自 SettingsRepository，由 Service 订阅） ============
 
     /** 当前背景透明度 0..1，影响悬浮窗背景 alpha */
-    @Volatile private var bgTransparency: Float = 0.75f
+    @Volatile private var bgTransparency: Float = 1.0f
 
     /** 当前字体大小（sp，连续值 12f..32f），默认 14sp 更紧凑 */
     @Volatile private var fontSize: Float = 14f
@@ -191,9 +232,21 @@ class FloatingSubtitleService : Service() {
         floatingView = LayoutInflater.from(this).inflate(R.layout.floating_subtitle_layout, null)
         subtitleList = floatingView?.findViewById(R.id.subtitle_list)
         subtitleScroll = floatingView?.findViewById(R.id.subtitle_scroll)
+        // 浮窗高度变化（缩放/功能区显隐）后重新贴到底部
+        subtitleScroll?.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (bottom - top != oldBottom - oldTop) scrollToBottom()
+        }
+        // 内容高度变化（新一条上屏）后同样贴底，保证最新一条始终在下沿
+        subtitleList?.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (bottom - top != oldBottom - oldTop) scrollToBottom()
+        }
         translatingIndicator = floatingView?.findViewById(R.id.translating_indicator)
         errorTextView = floatingView?.findViewById(R.id.subtitle_error)
         topActionsView = floatingView?.findViewById(R.id.top_actions)
+        dragHandleView = floatingView?.findViewById(R.id.drag_handle)
+        resizeHandleView = floatingView?.findViewById(R.id.resize_handle)
+        // 文本区的 ScrollView 会消费触摸，所以轻点由根容器旁路观察
+        (floatingView as? OverlayRootLayout)?.onTapListener = { x, y -> onOverlayTap(x, y) }
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
         // 根据 Android 版本选择窗口类型：Android 8+ 使用 TYPE_APPLICATION_OVERLAY，旧版本使用 TYPE_PHONE
@@ -302,31 +355,31 @@ class FloatingSubtitleService : Service() {
         // 滑动悬浮窗时主线程被占用，临时错误（翻译失败/ASR not ready）会误触发 stopSelf
         // 只有用户主动点取消按钮或系统杀死才会关闭 Service
         // VAD 状态提示:字幕为空时显示"正在聆听"/"未检测到声音"
+        // 顶部功能区不随 VAD 自动收放（连读时会反复抖动），只由轻点浮窗切换
         serviceScope.launch {
             subtitleManager.vadState.collectLatest { state ->
-                mainHandler.post {
-                    updateVadHint(state)
-                    // 语音识别中（LISTENING）延迟隐藏功能区；静音时保持显示
-                    if (state == SubtitleManager.VadState.LISTENING) {
-                        mainHandler.removeCallbacks(hideTopActionsRunnable)
-                        mainHandler.postDelayed(hideTopActionsRunnable, HIDE_TOP_ACTIONS_DELAY_MS)
-                    } else {
-                        mainHandler.removeCallbacks(hideTopActionsRunnable)
-                        topActionsView?.visibility = View.VISIBLE
-                    }
-                }
+                mainHandler.post { updateVadHint(state) }
             }
         }
-        // 翻译中状态 - 左上角显示"实时翻译中"文本 + 声纹波动动画
+        // 翻译中指示器：延迟显示 + 最短可见，避免本地引擎 20~40ms 的翻译亮一帧就灭
         serviceScope.launch {
             subtitleManager.isTranslating.collectLatest { isTranslating ->
                 mainHandler.post {
-                    translatingIndicator?.visibility =
-                        if (isTranslating) {
-                            android.view.View.VISIBLE
+                    if (isTranslating) {
+                        mainHandler.removeCallbacks(hideTranslatingIndicatorRunnable)
+                        mainHandler.removeCallbacks(showTranslatingIndicatorRunnable)
+                        mainHandler.postDelayed(showTranslatingIndicatorRunnable, TRANSLATING_INDICATOR_SHOW_DELAY_MS)
+                    } else {
+                        mainHandler.removeCallbacks(showTranslatingIndicatorRunnable)
+                        mainHandler.removeCallbacks(hideTranslatingIndicatorRunnable)
+                        val shownFor = SystemClock.uptimeMillis() - translatingShowAtMs
+                        val keepVisibleMs = TRANSLATING_INDICATOR_MIN_VISIBLE_MS - shownFor
+                        if (translatingIndicator?.visibility == View.VISIBLE && keepVisibleMs > 0) {
+                            mainHandler.postDelayed(hideTranslatingIndicatorRunnable, keepVisibleMs)
                         } else {
-                            android.view.View.GONE
+                            hideTranslatingIndicatorRunnable.run()
                         }
+                    }
                 }
             }
         }
@@ -387,7 +440,8 @@ class FloatingSubtitleService : Service() {
         super.onDestroy()
         // 打印调用栈，定位是谁触发了 onDestroy
         Log.w(TAG, "onDestroy called by: " + Log.getStackTraceString(Exception()))
-        mainHandler.removeCallbacks(hideTopActionsRunnable)
+        mainHandler.removeCallbacks(showTranslatingIndicatorRunnable)
+        mainHandler.removeCallbacks(hideTranslatingIndicatorRunnable)
         serviceScope.cancel()
         subtitleManager.stopAudioProcessing()
         // 只释放 MediaProjection 实例，保留 token（避免下次启动重新弹窗授权）
@@ -658,68 +712,78 @@ class FloatingSubtitleService : Service() {
         layoutParams.y = layoutParams.y.coerceIn(0, max(0, currentMaxHeight - h))
     }
 
-    /** 设置触摸事件：topActions 区不拦截，右下角 24dp 触发缩放，其他区域拖拽。 */
+    /** 触摸点是否落在字幕滚动区内（文本区留给 ScrollView 自己滚）。 */
+    private fun isInsideScrollArea(
+        rawX: Float,
+        rawY: Float,
+    ): Boolean {
+        val scroll = subtitleScroll ?: return false
+        if (scroll.width <= 0 || scroll.height <= 0) return false
+        val loc = IntArray(2)
+        scroll.getLocationOnScreen(loc)
+        return rawX >= loc[0] && rawX <= loc[0] + scroll.width &&
+            rawY >= loc[1] && rawY <= loc[1] + scroll.height
+    }
+
+    /** 拖动/缩放浮窗：右下角 [RESIZE_TOUCH_SIZE_DP] 内起手为缩放，其余为拖动。 */
     private fun setupOverlayDrag() {
-        val rootView = floatingView ?: return
-        val resizeSize = (24 * resources.displayMetrics.density).toInt() // 缩放触发区域大小（24dp）
-        // 拖拽触发阈值：移动超过此距离才进入拖拽/缩放，避免轻点被误判为拖拽
+        val root = floatingView as? OverlayRootLayout ?: return
+        val resizeSize = (RESIZE_TOUCH_SIZE_DP * resources.displayMetrics.density).toInt()
         val dragThreshold = (8 * resources.displayMetrics.density).toInt()
 
-        // 拖拽/缩放状态变量
-        var startX = 0f // 触摸起始点的原始 X 坐标
-        var startY = 0f // 触摸起始点的原始 Y 坐标
-        var startXparam = 0 // 拖拽开始时窗口的 X 坐标
-        var startYparam = 0 // 拖拽开始时窗口的 Y 坐标
-        var startWidth = 0 // 缩放开始时窗口的宽度
-        var startHeight = 0 // 缩放开始时窗口的高度
-        var isDragging = false // 是否正在拖拽
-        var isResizing = false // 是否正在缩放
-        var mayResize = false // DOWN 时在缩放区域，待 MOVE 确认
+        var startRawX = 0f
+        var startRawY = 0f
+        var startXparam = 0
+        var startYparam = 0
+        var startWidth = 0
+        var startHeight = 0
+        var isDragging = false
+        var isResizing = false
+        var mayResize = false
+        // 本次手势是否属于「字幕滚动区」：属于就完全不介入，让 ScrollView 正常滚动
+        var scrollOwnsGesture = false
 
-        rootView.setOnTouchListener { _, event ->
+        root.shouldIntercept = { !scrollOwnsGesture && (isDragging || isResizing) }
+
+        // 用局部函数承载手势状态机：这样内部的 return 就是普通返回（赋给属性时没有 lambda 标签）
+        fun handleGesture(event: MotionEvent) {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    // 全框触发：触摸任意位置都显示功能区
-                    showTopActionsTemporarily()
-                    startX = event.rawX
-                    startY = event.rawY
+                    startRawX = event.rawX
+                    startRawY = event.rawY
                     isDragging = false
                     isResizing = false
-                    // 判断是否在右下角缩放区域
-                    val w = rootView.width
-                    val h = rootView.height
+                    val w = root.width
+                    val h = root.height
                     mayResize = w > 0 && h > 0 && event.x >= w - resizeSize && event.y >= h - resizeSize
-                    true
+                    // 缩放热区优先；其余落在字幕区的触摸交回 ScrollView
+                    scrollOwnsGesture = !mayResize && isInsideScrollArea(event.rawX, event.rawY)
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (!isAttached) {
+                    if (!isAttached || scrollOwnsGesture) {
                         isDragging = false
                         isResizing = false
-                        return@setOnTouchListener true
+                        return
                     }
-                    val dx = event.rawX - startX
-                    val dy = event.rawY - startY
-                    // 移动超过阈值才进入拖拽/缩放模式
+                    val dx = event.rawX - startRawX
+                    val dy = event.rawY - startRawY
                     if (!isDragging && !isResizing) {
-                        if (dx * dx + dy * dy > dragThreshold * dragThreshold) {
-                            if (mayResize) {
-                                isResizing = true
-                                startWidth = layoutParams.width
-                                startHeight = layoutParams.height
-                            } else {
-                                isDragging = true
-                                startXparam = layoutParams.x
-                                startYparam = layoutParams.y
-                            }
+                        if (dx * dx + dy * dy <= dragThreshold * dragThreshold) return
+                        if (mayResize) {
+                            isResizing = true
+                            startWidth = layoutParams.width
+                            startHeight = layoutParams.height
                         } else {
-                            return@setOnTouchListener true // 还没超过阈值，继续等
+                            isDragging = true
+                            startXparam = layoutParams.x
+                            startYparam = layoutParams.y
                         }
                     }
                     if (isResizing) {
-                        val newWidth = (startWidth + dx).toInt()
-                        val newHeight = (startHeight + dy).toInt()
-                        layoutParams.width = newWidth.coerceIn(minWidthPx, maxWidthPx)
-                        layoutParams.height = newHeight.coerceIn(minHeightPx, maxHeightPx)
+                        layoutParams.width =
+                            (startWidth + dx).toInt().coerceIn(minWidthPx, maxWidthPx)
+                        layoutParams.height =
+                            (startHeight + dy).toInt().coerceIn(minHeightPx, maxHeightPx)
                         clampToScreen()
                         updateViewLayoutSafely()
                     } else if (isDragging) {
@@ -728,7 +792,6 @@ class FloatingSubtitleService : Service() {
                         clampToScreen()
                         updateViewLayoutSafely()
                     }
-                    true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     Log.d(
@@ -738,18 +801,21 @@ class FloatingSubtitleService : Service() {
                     )
                     if (isAttached) {
                         if (isDragging) saveOverlayPosition()
-                        if (isResizing) saveOverlaySize()
+                        if (isResizing) {
+                            // 用户手动改了尺寸，之前记下的「展开前高度」就作废了
+                            preExpandHeightPx = 0
+                            saveOverlaySize()
+                        }
                     }
-                    val wasInteracting = isDragging || isResizing
                     isDragging = false
                     isResizing = false
                     mayResize = false
-                    // 轻点（未拖拽/缩放）不拦截事件，让子 view（如按钮）能收到点击
-                    if (wasInteracting) true else false
+                    scrollOwnsGesture = false
                 }
-                else -> false
             }
         }
+
+        root.touchObserver = { event -> handleGesture(event) }
     }
 
     private fun MotionEvent.isWithinView(view: View?): Boolean {
@@ -764,15 +830,15 @@ class FloatingSubtitleService : Service() {
             y <= location[1] + view.height
     }
 
-    private fun createSubtitleView(partialAlpha: Boolean): TextView {
-        val color = if (partialAlpha) 0x80FFFFFF.toInt() else 0xFFFFFFFF.toInt()
-        return TextView(this).apply {
-            textSize = fontSize
-            setTextColor(color)
+    private fun createSubtitleView(textSizeSp: Float = fontSize): TextView =
+        TextView(this).apply {
+            textSize = textSizeSp
             // Empty placeholder so the first setText does not show stale text.
             text = ""
         }
-    }
+
+    /** 原文字号：比译文小 2 号。 */
+    private fun sourceTextSize(): Float = (fontSize - SOURCE_TEXT_SIZE_OFFSET_SP).coerceAtLeast(10f)
 
     /**
      * 主色索引转 ARGB。
@@ -801,15 +867,11 @@ class FloatingSubtitleService : Service() {
         val bgAlpha = 0.4f + bgTransparency * 0.6f
         view.alpha = bgAlpha
 
-        // 2. 字体大小
-        partialTextView.textSize = fontSize
-        finalTextView.textSize = fontSize
-
-        // 3. 字体颜色：恢复纯白（accentColor 仅用于按钮等强调色）
-        try {
-            partialTextView.setTextColor(0x80FFFFFF.toInt())
-            finalTextView.setTextColor(0xFFFFFFFF.toInt())
-        } catch (_: Exception) {
+        // 2. 字体大小：单语模式用默认字号，双语模式原文小 2 号
+        val single = renderedMode != DisplayMode.BILINGUAL
+        renderedRows.forEach {
+            it.sourceTv.textSize = if (single) fontSize else sourceTextSize()
+            it.transTv?.textSize = fontSize
         }
 
         // 4. 重建字幕视图以应用新字号/配色（视图复用缓存需作废）
@@ -904,18 +966,51 @@ class FloatingSubtitleService : Service() {
         }
     }
 
-    /**
-     * 触摸时临时显示顶部功能区，3秒后自动隐藏（仅在语音识别中生效）。
-     * 静音状态下保持常显，不触发自动隐藏。
-     */
-    private fun showTopActionsTemporarily() {
+    /** 轻点浮窗：切换顶部功能区与提示条显隐，无自动显隐。 */
+    private fun toggleTopActions() {
         val view = topActionsView ?: return
-        view.visibility = View.VISIBLE
-        // 只有在语音识别中（LISTENING）才自动隐藏；静音时常显
-        if (subtitleManager.vadState.value == SubtitleManager.VadState.LISTENING) {
-            mainHandler.removeCallbacks(hideTopActionsRunnable)
-            mainHandler.postDelayed(hideTopActionsRunnable, HIDE_TOP_ACTIONS_DELAY_MS)
+        val willShow = view.visibility != View.VISIBLE
+        if (willShow) {
+            // 收起态可能比「带功能区的下限」矮，先记下当前高度，收起时还原
+            preExpandHeightPx = layoutParams.height
         }
+        setTopActionsVisible(willShow)
+        if (!isAttached) return
+        if (!willShow && preExpandHeightPx > 0) {
+            // 收起后还原到展开前的高度（仍受收起态最小高度约束）
+            layoutParams.height = preExpandHeightPx.coerceIn(minHeightPx, maxHeightPx)
+            preExpandHeightPx = 0
+        }
+        // 最小高度随功能区显隐变化，切换后重新收敛一次尺寸
+        clampToScreen()
+        updateViewLayoutSafely()
+    }
+
+    /** 轻点浮窗：落在功能区按钮上交给按钮，其余位置切换显隐（浮窗内坐标）。 */
+    private fun onOverlayTap(
+        x: Float,
+        y: Float,
+    ) {
+        val actions = topActionsView
+        if (actions != null &&
+            actions.visibility == View.VISIBLE &&
+            x >= actions.left &&
+            x <= actions.right &&
+            y >= actions.top &&
+            y <= actions.bottom
+        ) {
+            return
+        }
+        toggleTopActions()
+    }
+
+    /** 集中式显隐：状态没变就不动 view，避免无意义的重绘（也避免 setVisibility 抖动）。 */
+    private fun setVisibilityIfChanged(
+        view: View,
+        visible: Boolean,
+    ) {
+        val target = if (visible) View.VISIBLE else View.GONE
+        if (view.visibility != target) view.visibility = target
     }
 
     /**
@@ -940,10 +1035,7 @@ class FloatingSubtitleService : Service() {
 
     /** 丢弃缓存的字幕视图（字体/配色变化后调用，强制下次刷新重建） */
     private fun invalidateSubtitleViews() {
-        renderedRows.clear()
-        renderedMode = null
-        lastScrolledTail = ""
-        subtitleList?.removeAllViews()
+        clearSubtitleRows()
     }
 
     /**
@@ -957,14 +1049,10 @@ class FloatingSubtitleService : Service() {
         displayMode: DisplayMode,
     ) {
         val list = subtitleList ?: return
-        val hasContent = lines.isNotEmpty()
-        hasSubtitleContent = hasContent
+        hasSubtitleContent = lines.isNotEmpty()
 
-        if (!hasContent) {
-            if (list.childCount > 0) list.removeAllViews()
-            renderedRows.clear()
-            renderedMode = null
-            lastScrolledTail = ""
+        if (lines.isEmpty()) {
+            clearSubtitleRows()
             updateVadHint(subtitleManager.vadState.value)
             return
         }
@@ -973,74 +1061,158 @@ class FloatingSubtitleService : Service() {
             list.removeView(vadHintTextView)
         }
 
-        // 结构变化才重建视图（行数或显示模式改变）
-        if (renderedMode != displayMode || renderedRows.size != lines.size) {
-            list.removeAllViews()
-            renderedRows.clear()
-            lastScrolledTail = ""
-            val density = resources.displayMetrics.density
-            for ((index, line) in lines.withIndex()) {
-                val holder = buildLineRow(line, displayMode, density)
-                list.addView(holder.row)
-                if (index < lines.size - 1) {
-                    list.addView(
-                        View(this).apply {
-                            layoutParams =
-                                LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.MATCH_PARENT,
-                                    (6 * density).toInt(),
-                                )
-                        },
-                    )
-                }
-                renderedRows.add(holder)
-            }
-            renderedMode = displayMode
-        }
+        ensureSlotRows(displayMode)
 
-        // 仅更新文本：partial 半透明、final 不透明
-        for ((index, line) in lines.withIndex()) {
-            val holder = renderedRows.getOrNull(index) ?: continue
-            val isPartial = line.subtitleType == SubtitleType.PARTIAL
-            // 字体颜色：纯白，partial 半透明、final 不透明
-            val textColor = ((if (isPartial) 0x80 else 0xFF) shl 24) or 0x00FFFFFF
+        // 固定 5 格从下往上填：最新一条固定在最下沿，其余依次向上
+        val visible = lines.takeLast(MAX_SUBTITLE_ROWS)
+        val startSlot = MAX_SUBTITLE_ROWS - visible.size
+        for (slot in 0 until MAX_SUBTITLE_ROWS) {
+            val holder = renderedRows[slot]
+            val line = visible.getOrNull(slot - startSlot)
+            if (line == null) {
+                if (holder.row.visibility != View.GONE) holder.row.visibility = View.GONE
+                continue
+            }
+            if (holder.row.visibility != View.VISIBLE) holder.row.visibility = View.VISIBLE
+            val isDraft = line.subtitleType == SubtitleType.PARTIAL
+            // 草稿过半行就提前变亮，不必等到整句收口
+            val halfDoneDraft =
+                isDraft && line.sourceText.length * 2 >= subtitleManager.rowCapacityChars()
+            // 原文始终偏暗；译文草稿未过半行时更暗，其余（含过半行草稿）最亮
+            val translationColor =
+                if (isDraft && !halfDoneDraft) TRANSLATION_DRAFT_COLOR else TRANSLATION_TEXT_COLOR
             when (displayMode) {
                 DisplayMode.SOURCE_ONLY ->
-                    setTextIfChanged(holder.sourceTv, line.sourceText, textColor)
-                DisplayMode.TRANSLATION_ONLY ->
-                    setTextIfChanged(
-                        holder.sourceTv,
-                        line.translatedText.ifBlank { line.sourceText },
-                        textColor,
-                    )
+                    // 只看原文时用最亮，方便阅读
+                    setTextIfChanged(holder.sourceTv, line.sourceText, TRANSLATION_TEXT_COLOR)
+                DisplayMode.TRANSLATION_ONLY -> {
+                    // 只显示译文：译文没到时用占位符，不能拿原文顶上（否则「仅译文」会冒出英文）
+                    val shown = line.translatedText.ifBlank { TRANSLATION_PLACEHOLDER }
+                    setTextIfChanged(holder.sourceTv, shown, translationColor)
+                }
                 DisplayMode.BILINGUAL -> {
-                    setTextIfChanged(holder.sourceTv, line.sourceText, textColor)
+                    setTextIfChanged(holder.sourceTv, line.sourceText, SOURCE_TEXT_COLOR)
                     val transTv = holder.transTv
                     if (transTv != null) {
-                        val translated = line.translatedText
-                        if (translated.isBlank()) {
-                            if (transTv.visibility != View.GONE) transTv.visibility = View.GONE
-                        } else {
-                            if (transTv.visibility != View.VISIBLE) transTv.visibility = View.VISIBLE
-                            if (transTv.text.toString() != translated) {
-                                transTv.text = translated
-                            }
-                            if (transTv.currentTextColor != 0xFFFFFFFF.toInt()) {
-                                transTv.setTextColor(0xFFFFFFFF.toInt())
-                            }
-                        }
+                        // 译文没到时也占住一行（不可见占位符），否则译文到达时整行变高、原文会跳一下
+                        val shown = line.translatedText.ifBlank { TRANSLATION_PLACEHOLDER }
+                        if (transTv.visibility != View.VISIBLE) transTv.visibility = View.VISIBLE
+                        setTextIfChanged(transTv, shown, translationColor)
                     }
                 }
             }
         }
 
-        // 自动滚动到底部：仅当末行内容变化时才滚动，避免重复 fullScroll
-        val tail = lines.last().sourceText + "\u0000" + lines.last().translatedText
+        // DEBUG：记录真正上屏的行数、原文与译文（uiautomator 抓不到浮窗文本）
+        if (BuildConfig.DEBUG) {
+            val signature =
+                lines.joinToString("\u241E") {
+                    "${it.subtitleType}|${it.sourceText}|${it.translatedText}"
+                }
+            if (signature != lastRenderSnapshot) {
+                lastRenderSnapshot = signature
+                Log.d(TAG, "render[${lines.size}]: " + lines.joinToString(" ⏎ ") { line ->
+                    val kind = if (line.subtitleType == SubtitleType.PARTIAL) "草稿" else "定稿"
+                    "[$kind]原=${line.sourceText}｜译=${line.translatedText.ifBlank { "—" }}"
+                })
+                // 排版后记录折行、溢出、贴底位置与字号/配色（延迟一拍，等 scroll 落位）
+                list.postDelayed({
+                    val viewportH = subtitleScroll?.height ?: 0
+                    val contentH = list.height
+                    val scrollY = subtitleScroll?.scrollY ?: 0
+                    val maxScroll = (contentH - viewportH).coerceAtLeast(0)
+                    val styles =
+                        renderedRows.joinToString(" ") { holder ->
+                            val s = holder.sourceTv
+                            val t = holder.transTv
+                            val sAlpha = (s.currentTextColor ushr 24).toString(16)
+                            val tAlpha = t?.let { (it.currentTextColor ushr 24).toString(16) } ?: "--"
+                            val shown = s.text.toString().replace('\u00A0', '·').take(14)
+                            "${s.lineCount}/${t?.lineCount ?: 0}" +
+                                "@${s.textSize.toInt()}/${t?.textSize?.toInt() ?: 0}px" +
+                                ":${sAlpha}/${tAlpha}='$shown'"
+                        }
+                    Log.d(
+                        TAG,
+                        "visual: 可视=${viewportH}px 内容=${contentH}px 溢出=${contentH - viewportH}px " +
+                            "滚动=${scrollY}/${maxScroll} 每行=[$styles]",
+                    )
+                }, 80)
+            }
+        }
+
+        // 出现新的一条（不是同一行继续变长）才整列上滑，距离 = 新增那一行的高度
+        val bottomSource = lines.last().sourceText
+        val isNewRow = bottomSource.isNotEmpty() && !bottomSource.startsWith(lastBottomSource)
+        lastBottomSource = bottomSource
+        if (isNewRow) {
+            slideUpByNewRow()
+        }
+
+        // 贴底：内容或窗口高度变化都滚动到最下沿（最新一条固定在下沿）
+        val tail = bottomSource + "\u0000" + lines.last().translatedText
         if (tail != lastScrolledTail) {
             lastScrolledTail = tail
-            subtitleScroll?.post {
-                subtitleScroll?.fullScroll(View.FOCUS_DOWN)
-            }
+            scrollToBottom()
+        }
+    }
+
+    /** 滚到内容最底部（ScrollView 会自行收敛到合法范围）。 */
+    private fun scrollToBottom() {
+        subtitleScroll?.post { subtitleScroll?.scrollTo(0, subtitleList?.height ?: 0) }
+    }
+
+    /** 固定 5 格视图（1 条最新 + 4 条历史），只在显示模式变化时重建。 */
+    private fun ensureSlotRows(displayMode: DisplayMode) {
+        if (renderedMode == displayMode && renderedRows.size == MAX_SUBTITLE_ROWS) return
+        val list = subtitleList ?: return
+        clearSubtitleRows()
+        val density = resources.displayMetrics.density
+        val gapPx = (LINE_ROW_GAP_DP * density).toInt()
+        for (index in 0 until MAX_SUBTITLE_ROWS) {
+            val holder = buildLineRow(displayMode, density)
+            holder.row.layoutParams =
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = if (index == 0) 0 else gapPx }
+            holder.row.visibility = View.GONE
+            list.addView(holder.row)
+            renderedRows.add(holder)
+        }
+        renderedMode = displayMode
+        if (BuildConfig.DEBUG) Log.d(TAG, "slotRows: 重建 $MAX_SUBTITLE_ROWS 格 (mode=$displayMode)")
+    }
+
+    /** 清空字幕行视图与相关缓存。 */
+    private fun clearSubtitleRows() {
+        subtitleList?.let { if (it.childCount > 0) it.removeAllViews() }
+        renderedRows.clear()
+        renderedMode = null
+        lastScrolledTail = ""
+        lastBottomSource = ""
+    }
+
+    /**
+     * 新一条字幕落位时整列上滑：先把内容整体下移「新增行的高度」，再动画回原位。
+     * 位移量按实际新增高度算，动画进行中不重复触发。
+     */
+    private fun slideUpByNewRow() {
+        val list = subtitleList ?: return
+        val density = resources.displayMetrics.density
+        list.post {
+            if (slideAnimating) return@post
+            val shift = (renderedRows.lastOrNull { it.row.visibility == View.VISIBLE }?.row?.height ?: 0)
+                .takeIf { it > 0 }?.toFloat() ?: (SUB_SLIDE_FALLBACK_DP * density)
+            slideAnimating = true
+            list.translationY = shift
+            list
+                .animate()
+                .translationY(0f)
+                .setDuration(SUB_SLIDE_IN_MS)
+                .setInterpolator(DecelerateInterpolator())
+                .withEndAction { slideAnimating = false }
+                .start()
         }
     }
 
@@ -1049,30 +1221,38 @@ class FloatingSubtitleService : Service() {
      * 只在视图结构需要重建时调用（见 [refreshSubtitleDisplay]）。
      */
     private fun buildLineRow(
-        line: SubtitleLine,
         displayMode: DisplayMode,
         density: Float,
     ): LineRowViews {
-        val isPartial = line.subtitleType == SubtitleType.PARTIAL
-        val textColor = ((if (isPartial) 0x80 else 0xFF) shl 24) or 0x00FFFFFF
-
         val textContainer =
             LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
             }
 
-        val sourceTv = createSubtitleView(isPartial).apply { setTextColor(textColor) }
+        // 单语模式（仅原文 / 仅译文）只有一个文本，用默认字号；双语模式下原文才小 2 号
+        val singleLineMode = displayMode != DisplayMode.BILINGUAL
+        val sourceTv =
+            createSubtitleView(if (singleLineMode) fontSize else sourceTextSize()).apply {
+                setTextColor(SOURCE_TEXT_COLOR)
+            }
         var transTv: TextView? = null
         when (displayMode) {
             DisplayMode.SOURCE_ONLY,
             DisplayMode.TRANSLATION_ONLY,
             -> textContainer.addView(sourceTv)
             DisplayMode.BILINGUAL -> {
-                // 原文在上，译文在下；都用纯白
+                // 原文在上（字号小 2 号、恒暗）、译文在下（草稿暗、定稿亮）
                 textContainer.addView(sourceTv)
                 transTv =
-                    createSubtitleView(false).apply {
-                        setTextColor(0xFFFFFFFF.toInt())
+                    createSubtitleView().apply {
+                        setTextColor(TRANSLATION_TEXT_COLOR)
+                        // 原文与译文之间留一点间距，否则中英两行贴在一起看着像「粘连」
+                        layoutParams =
+                            LinearLayout
+                                .LayoutParams(
+                                    LinearLayout.LayoutParams.MATCH_PARENT,
+                                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                                ).apply { topMargin = (TRANSLATION_TOP_GAP_DP * density).toInt() }
                         // 始终挂载、用 GONE 控制显隐，避免译文到达时重建整行
                         visibility = View.GONE
                     }
@@ -1142,8 +1322,55 @@ class FloatingSubtitleService : Service() {
         // 8h: longest sensible meeting / lecture session.
         const val WAKE_LOCK_TIMEOUT_MS = 8L * 60L * 60L * 1000L
 
-        // 顶部功能区自动隐藏延迟（毫秒）
-        const val HIDE_TOP_ACTIONS_DELAY_MS = 3000L
+        // 顶部功能区不再自动显隐，原先的 3s 自动隐藏与静音重显常量已删除
+
+        /** 翻译耗时超过这个值才显示「实时翻译中」，避免本地引擎 20~40ms 的翻译亮一帧就灭。 */
+        const val TRANSLATING_INDICATOR_SHOW_DELAY_MS = 400L
+
+        /** 原文颜色：始终偏暗 */
+        val SOURCE_TEXT_COLOR = 0xB3FFFFFF.toInt()
+
+        /** 译文定稿后的颜色。 */
+        val TRANSLATION_TEXT_COLOR = 0xFFFFFFFF.toInt()
+
+        /** 译文草稿时的颜色：半透明 */
+        val TRANSLATION_DRAFT_COLOR = 0x80FFFFFF.toInt()
+
+        /** 字幕固定 10 行：1 条最新 + 9 条历史 */
+        const val MAX_SUBTITLE_ROWS = 10
+
+        /** 原文字号比译文小 2 号 */
+        const val SOURCE_TEXT_SIZE_OFFSET_SP = 2f
+
+        /** 新一条字幕滑入动画时长（ms） */
+        const val SUB_SLIDE_IN_MS = 200L
+
+        /** 拿不到行高时的滑入位移（dp） */
+        const val SUB_SLIDE_FALLBACK_DP = 24f
+
+        /** 译文还没到时占位用的不可见字符：占住一行高度，避免译文到达时整行跳动 */
+        const val TRANSLATION_PLACEHOLDER = "\u00A0"
+
+        /** 右下角缩放热区边长（dp）：48dp 是常见的可点最小尺寸 */
+        const val RESIZE_TOUCH_SIZE_DP = 48
+
+        /** 原文与译文的行间距（dp）：太小会显得中英两行「粘」在一起。 */
+        const val TRANSLATION_TOP_GAP_DP = 3
+
+        /** 相邻两条字幕之间的间距（dp）。 */
+        const val LINE_ROW_GAP_DP = 10
+
+        /** 浮窗最小宽度（dp）。 */
+        const val MIN_WIDTH_DP = 140
+
+        /** 顶部功能区显示时的最小高度（dp）：padding + 顶部条 + 一行字幕。 */
+        const val MIN_HEIGHT_WITH_CONTROLS_DP = 108
+
+        /** 顶部功能区收起时的最小高度（dp）：padding + 一行字幕。 */
+        const val MIN_HEIGHT_COMPACT_DP = 70
+
+        /** 「实时翻译中」一旦显示，至少保持这么久，避免快速闪烁。 */
+        const val TRANSLATING_INDICATOR_MIN_VISIBLE_MS = 600L
 
         /**
          * 字幕 UI 刷新最小间隔（毫秒）。

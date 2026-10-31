@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    右下角缩放提示弧：与浮窗外框的 20dp 圆角平行（同心），所以是「贴着圆角的一条弧」。
+    几何：视口 28dp 对齐浮窗右下角，圆心取 (8,8)（= 28 - 20，即圆角圆心），
+    半径 15dp（比圆角半径小 5dp，留出一圈内缩），弧从 (23,8) 扫到 (8,23)，朝角的方向凸。
+    端点圆头，观感柔和。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp"
+    android:height="28dp"
+    android:viewportWidth="28"
+    android:viewportHeight="28">
+    <path
+        android:pathData="M23,8 A15,15 0 0 1 8,23"
+        android:strokeColor="#73FFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round" />
+</vector>
