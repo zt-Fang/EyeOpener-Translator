@@ -70,7 +70,8 @@ import io.github.ztfang.eye.viewmodel.SubtitleManager
  * 个性化设置详情页。
  *
  * 4 个分区(自上而下):
- *  1. 侧边栏颜色 — 6 个色块,带对勾高亮（持久化：accent_color_index）
+ *  1. 字体颜色 — 6 个色块,带对勾高亮（持久化：accent_color_index，默认 5=白，
+ *     应用于悬浮字幕原文/译文文本，见 FloatingSubtitleService.accentColor）
  *  2. 背景透明度 — 滑动条 + 浮标式百分比提示（持久化：background_transparency）
  *  3. 字体大小 — 3 档(小/中/大)（持久化：font_size_index）
  *  4. 结果显示模式 — 原文 / 译文 / 双语,带图标 + 描述 + 单选圆点（持久化：display_mode）
@@ -86,7 +87,7 @@ fun PersonalizationScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     // 个性化 3 项全部从 DataStore 读取，初始值与 DataStore 默认值一致
-    val persistedColorIndex by settingsViewModel.accentColorIndex.collectAsStateWithLifecycle(initialValue = 1)
+    val persistedColorIndex by settingsViewModel.accentColorIndex.collectAsStateWithLifecycle(initialValue = 5)
     val persistedTransparency by settingsViewModel.backgroundTransparency.collectAsStateWithLifecycle(initialValue = 0.75f)
     val persistedFontSize by settingsViewModel.fontSize.collectAsStateWithLifecycle(initialValue = 18f)
 

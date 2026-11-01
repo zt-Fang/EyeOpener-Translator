@@ -135,8 +135,8 @@ class SettingsDataStore(
     }
 
     // ============ 个性化设置 ============
-    // 颜色索引 0-5（对应 SwatchPalette 6 色），默认 1（蓝）
-    val accentColorIndex: Flow<Int> = context.dataStore.data.map { it[ACCENT_COLOR_INDEX] ?: 1 }
+    // 颜色索引 0-5（对应 SwatchPalette 6 色），默认 5（白）：与悬浮字幕历史渲染色一致
+    val accentColorIndex: Flow<Int> = context.dataStore.data.map { it[ACCENT_COLOR_INDEX] ?: 5 }
 
     // 背景透明度 0..1，默认 0.75
     val backgroundTransparency: Flow<Float> = context.dataStore.data.map { it[BACKGROUND_TRANSPARENCY] ?: 1.0f }

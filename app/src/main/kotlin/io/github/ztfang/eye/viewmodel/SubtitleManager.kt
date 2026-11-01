@@ -205,10 +205,10 @@ class SubtitleManager
             settingsRepository.overlayHeight
                 .stateIn(scope, SharingStarted.Eagerly, 0)
 
-        /** 个性化设置：暴露给悬浮窗 Service 实时应用 */
+        /** 个性化设置：暴露给悬浮窗 Service 实时应用（颜色默认 5=白，与 DataStore 对齐） */
         val accentColorIndex: StateFlow<Int> =
             settingsRepository.accentColorIndex
-                .stateIn(scope, SharingStarted.Eagerly, 1)
+                .stateIn(scope, SharingStarted.Eagerly, 5)
         val backgroundTransparency: StateFlow<Float> =
             settingsRepository.backgroundTransparency
                 .stateIn(scope, SharingStarted.Eagerly, 0.75f)

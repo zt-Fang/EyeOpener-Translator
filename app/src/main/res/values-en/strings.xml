@@ -120,7 +120,7 @@
     <string name="personalization_title">Personalization</string>
     <string name="personalization_back_cd">Back</string>
     <string name="personalization_entry">Personalization</string>
-    <string name="personalization_section_color">Accent Color</string>
+    <string name="personalization_section_color">Font Color</string>
     <string name="personalization_section_transparency">Background</string>
     <string name="personalization_section_font_size">Font Size</string>
     <string name="personalization_font_size_small">Small</string>

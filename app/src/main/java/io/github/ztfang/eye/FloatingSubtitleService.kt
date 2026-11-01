@@ -207,8 +207,8 @@ class FloatingSubtitleService : Service() {
     /** 当前字体大小（sp，连续值 12f..32f），默认 14sp 更紧凑 */
     @Volatile private var fontSize: Float = 14f
 
-    /** 当前主色 ARGB，影响按钮图标和译文颜色 */
-    @Volatile private var accentColor: Int = 0xFF1A73E8.toInt()
+    /** 当前字体颜色 ARGB（个性化「字体颜色」设置），应用于字幕原文/译文文本 */
+    @Volatile private var accentColor: Int = DEFAULT_FONT_COLOR
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -398,10 +398,13 @@ class FloatingSubtitleService : Service() {
                 mainHandler.post { applyPersonalization() }
             }
         }
-        // 主色变化 → 更新按钮/译文颜色
+        // 字体颜色变化 → 推导三档文本色并刷新字幕视图
         serviceScope.launch {
             subtitleManager.accentColorIndex.collectLatest { idx ->
                 accentColor = accentColorFromIndex(idx)
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "accentColor -> #${Integer.toHexString(accentColor)} (idx=$idx)")
+                }
                 mainHandler.post { applyPersonalization() }
             }
         }
@@ -841,9 +844,9 @@ class FloatingSubtitleService : Service() {
     private fun sourceTextSize(): Float = (fontSize - SOURCE_TEXT_SIZE_OFFSET_SP).coerceAtLeast(10f)
 
     /**
-     * 主色索引转 ARGB。
+     * 字体颜色索引转 ARGB。
      * 与 PersonalizationScreen 的 SwatchPalette 6 色保持一致：
-     * 0=紫 1=蓝 2=绿 3=橙 4=红 5=黑
+     * 0=紫 1=蓝 2=绿 3=橙 4=红 5=白
      */
     private fun accentColorFromIndex(index: Int): Int =
         when (index) {
@@ -852,13 +855,29 @@ class FloatingSubtitleService : Service() {
             2 -> 0xFF2EB89A.toInt() // 绿
             3 -> 0xFFFF8F00.toInt() // 橙
             4 -> 0xFFE53935.toInt() // 红
-            5 -> 0xFF2C2C2C.toInt() // 黑
-            else -> 0xFF1A73E8.toInt()
+            5 -> 0xFFFFFFFF.toInt() // 白
+            else -> DEFAULT_FONT_COLOR
         }
+
+    /** 原文文本色：字体颜色压暗一档（70% alpha），双语对照时弱于译文。 */
+    private fun sourceTextColor(): Int = fontColorWithAlpha(SOURCE_TEXT_ALPHA)
+
+    /** 译文定稿文本色（含仅原文模式）：字体颜色全亮。 */
+    private fun translationTextColor(): Int = accentColor
+
+    /** 译文草稿文本色：字体颜色 50% alpha，与定稿拉开层次。 */
+    private fun draftTextColor(): Int = fontColorWithAlpha(DRAFT_TEXT_ALPHA)
+
+    /** 把当前字体颜色的 alpha 通道替换为 [alphaFraction]（0..1），RGB 保持不变。 */
+    private fun fontColorWithAlpha(alphaFraction: Float): Int =
+        (accentColor and 0x00FFFFFF) or
+            ((alphaFraction.coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255) shl 24)
 
     /**
      * 应用个性化设置到悬浮窗 UI。
-     * 在主线程调用：更新背景透明度、字幕字体大小、按钮图标颜色。
+     * 在主线程调用：更新背景透明度、字幕字体大小；「字体颜色」经
+     * invalidateSubtitleViews() 作废缓存行后由下一次刷新按新颜色重建/回写
+     * （buildLineRow 与 setTextIfChanged 均取自 accentColor 推导的三档文本色）。
      */
     private fun applyPersonalization() {
         val view = floatingView ?: return
@@ -1079,19 +1098,20 @@ class FloatingSubtitleService : Service() {
             val halfDoneDraft =
                 isDraft && line.sourceText.length * 2 >= subtitleManager.rowCapacityChars()
             // 原文始终偏暗；译文草稿未过半行时更暗，其余（含过半行草稿）最亮
+            // （层级颜色由个性化「字体颜色」推导，白色时即旧版的纯白三档）
             val translationColor =
-                if (isDraft && !halfDoneDraft) TRANSLATION_DRAFT_COLOR else TRANSLATION_TEXT_COLOR
+                if (isDraft && !halfDoneDraft) draftTextColor() else translationTextColor()
             when (displayMode) {
                 DisplayMode.SOURCE_ONLY ->
                     // 只看原文时用最亮，方便阅读
-                    setTextIfChanged(holder.sourceTv, line.sourceText, TRANSLATION_TEXT_COLOR)
+                    setTextIfChanged(holder.sourceTv, line.sourceText, translationTextColor())
                 DisplayMode.TRANSLATION_ONLY -> {
                     // 只显示译文：译文没到时用占位符，不能拿原文顶上（否则「仅译文」会冒出英文）
                     val shown = line.translatedText.ifBlank { TRANSLATION_PLACEHOLDER }
                     setTextIfChanged(holder.sourceTv, shown, translationColor)
                 }
                 DisplayMode.BILINGUAL -> {
-                    setTextIfChanged(holder.sourceTv, line.sourceText, SOURCE_TEXT_COLOR)
+                    setTextIfChanged(holder.sourceTv, line.sourceText, sourceTextColor())
                     val transTv = holder.transTv
                     if (transTv != null) {
                         // 译文没到时也占住一行（不可见占位符），否则译文到达时整行变高、原文会跳一下
@@ -1125,12 +1145,12 @@ class FloatingSubtitleService : Service() {
                         renderedRows.joinToString(" ") { holder ->
                             val s = holder.sourceTv
                             val t = holder.transTv
-                            val sAlpha = (s.currentTextColor ushr 24).toString(16)
-                            val tAlpha = t?.let { (it.currentTextColor ushr 24).toString(16) } ?: "--"
+                            val sColor = Integer.toHexString(s.currentTextColor)
+                            val tColor = t?.let { Integer.toHexString(it.currentTextColor) } ?: "--"
                             val shown = s.text.toString().replace('\u00A0', '·').take(14)
                             "${s.lineCount}/${t?.lineCount ?: 0}" +
                                 "@${s.textSize.toInt()}/${t?.textSize?.toInt() ?: 0}px" +
-                                ":${sAlpha}/${tAlpha}='$shown'"
+                                ":${sColor}/${tColor}='$shown'"
                         }
                     Log.d(
                         TAG,
@@ -1233,7 +1253,7 @@ class FloatingSubtitleService : Service() {
         val singleLineMode = displayMode != DisplayMode.BILINGUAL
         val sourceTv =
             createSubtitleView(if (singleLineMode) fontSize else sourceTextSize()).apply {
-                setTextColor(SOURCE_TEXT_COLOR)
+                setTextColor(sourceTextColor())
             }
         var transTv: TextView? = null
         when (displayMode) {
@@ -1245,7 +1265,7 @@ class FloatingSubtitleService : Service() {
                 textContainer.addView(sourceTv)
                 transTv =
                     createSubtitleView().apply {
-                        setTextColor(TRANSLATION_TEXT_COLOR)
+                        setTextColor(translationTextColor())
                         // 原文与译文之间留一点间距，否则中英两行贴在一起看着像「粘连」
                         layoutParams =
                             LinearLayout
@@ -1327,14 +1347,14 @@ class FloatingSubtitleService : Service() {
         /** 翻译耗时超过这个值才显示「实时翻译中」，避免本地引擎 20~40ms 的翻译亮一帧就灭。 */
         const val TRANSLATING_INDICATOR_SHOW_DELAY_MS = 400L
 
-        /** 原文颜色：始终偏暗 */
-        val SOURCE_TEXT_COLOR = 0xB3FFFFFF.toInt()
+        /** 默认字体颜色：白色（与个性化默认索引 5 对齐，未改设置时保持既有观感） */
+        const val DEFAULT_FONT_COLOR = 0xFFFFFFFF.toInt()
 
-        /** 译文定稿后的颜色。 */
-        val TRANSLATION_TEXT_COLOR = 0xFFFFFFFF.toInt()
+        /** 原文字体颜色 alpha 层级：旧版硬编码 0xB3（≈70%） */
+        const val SOURCE_TEXT_ALPHA = 0xB3 / 255f
 
-        /** 译文草稿时的颜色：半透明 */
-        val TRANSLATION_DRAFT_COLOR = 0x80FFFFFF.toInt()
+        /** 译文草稿字体颜色 alpha 层级：旧版硬编码 0x80（≈50%） */
+        const val DRAFT_TEXT_ALPHA = 0x80 / 255f
 
         /** 字幕固定 10 行：1 条最新 + 9 条历史 */
         const val MAX_SUBTITLE_ROWS = 10
